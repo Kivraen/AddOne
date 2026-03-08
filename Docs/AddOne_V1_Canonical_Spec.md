@@ -173,18 +173,19 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Shared boards screen exists.
 - Onboarding and recovery screens exist.
 - Onboarding now has a real cloud-side claim-session flow, even though AP firmware provisioning is not wired yet.
+- The app now builds the exact AP provisioning payload and reflects the intended Wi-Fi handoff flow, even though firmware transport is still pending.
 - History, settings, and rewards modals exist.
 - UI currently runs on mock data.
 - Real Supabase auth now exists with `demo mode` fallback.
 - Initial Supabase schema and migration foundation now exist locally under [supabase/migrations/20260308113000_init_addone_schema.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260308113000_init_addone_schema.sql).
 - Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
-- AP provisioning and firmware/cloud redemption are still not implemented.
+- AP provisioning transport and firmware/cloud redemption are still not implemented in firmware.
 
 ## Canonical Next Steps
 1. Apply the new schema to `addone-staging`.
 2. Generate typed cloud models and add the real API/query layer.
 3. Replace mock store data with live device/account data.
-4. Define local AP setup/recovery API contract and the exact AP payload the app sends to the device.
-5. Rework firmware around the locked AddOne single-button model and wire it to the device/cloud sync RPCs.
+4. Implement the device-side AP setup/recovery API contract that the app now targets.
+5. Rework firmware around the locked AddOne single-button model and wire it to the AP and cloud sync contracts.
 6. Replace remaining mock/demo board state with fully live device data.

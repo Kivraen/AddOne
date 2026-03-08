@@ -9,6 +9,8 @@ This document defines the v1 contract between:
 
 This is the current target contract. Some parts are implemented in staging already, and some still need firmware to consume them.
 
+For the local AP HTTP contract, see [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
+
 ## Identity Model
 - Every device has an internal `hardware_uid`.
 - Every device should also have a device-local auth secret generated during manufacturing / flashing.
@@ -41,24 +43,10 @@ This is the current target contract. Some parts are implemented in staging alrea
 9. Backend binds the device to the signed-in user.
 10. App sees the session move to `claimed` and finishes setup.
 
-## AP Provisioning Payload
-Target payload from app to device:
-
-```json
-{
-  "schema_version": 1,
-  "claim_token": "opaque-one-time-token",
-  "onboarding_session_id": "uuid",
-  "wifi_ssid": "Home WiFi",
-  "wifi_password": "secret",
-  "hardware_profile_hint": "addone-v1"
-}
-```
-
-Rules:
+## AP Provisioning Handoff
+- The exact local payload and endpoint contract now live in [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
 - Wi-Fi credentials stay local to the device and are not stored in Supabase.
 - `claim_token` is one-time and short-lived.
-- `onboarding_session_id` is for logging/debugging and future support flows.
 - Deeper settings like habit name, target, or rewards are not required during AP provisioning.
 
 ## Cloud RPCs
@@ -180,6 +168,7 @@ Purpose:
 ## Current Implementation Status
 - App-side onboarding sessions are implemented.
 - Backend claim-session and device sync RPCs are implemented in staging schema.
-- AP transport is not implemented yet.
+- The app-side AP payload builder and local endpoint contract are now implemented.
+- AP HTTP transport is not implemented in firmware yet.
 - Firmware does not consume this contract yet.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.

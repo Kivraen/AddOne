@@ -6,6 +6,12 @@ import { ScreenFrame } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { IconButton } from "@/components/ui/icon-button";
 import { theme } from "@/constants/theme";
+import {
+  buildDeviceApInfoUrl,
+  buildDeviceApProvisioningEndpoint,
+  maskProvisioningSecret,
+} from "@/lib/ap-provisioning";
+import { useApProvisioning } from "@/hooks/use-ap-provisioning";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { withAlpha } from "@/lib/color";
@@ -165,10 +171,24 @@ export default function OnboardingScreen() {
     session,
     simulateRedeemForTesting,
   } = useOnboarding();
+  const {
+    clearDraft,
+    draft,
+    preparedRequest,
+    setWifiPassword,
+    setWifiSsid,
+    validation,
+  } = useApProvisioning({
+    claimToken,
+    hardwareProfileHint: session?.hardwareProfileHint ?? null,
+    onboardingSessionId: session?.id ?? null,
+  });
   const [devError, setDevError] = useState<string | null>(null);
   const [devMessage, setDevMessage] = useState<string | null>(null);
   const [hardwareUid, setHardwareUid] = useState("");
   const [habitName, setHabitName] = useState("");
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [showDevTools, setShowDevTools] = useState(false);
 
   const currentStatusTone = useMemo(() => statusTone(session), [session]);
@@ -189,17 +209,35 @@ export default function OnboardingScreen() {
   }, [session]);
 
   async function handleStartSession() {
+    setSetupError(null);
+    setSetupMessage(null);
     await createSession({
       hardwareProfileHint: "addone-v1",
     });
   }
 
-  async function handleMarkWaiting() {
+  async function handleStageProvisioning() {
     if (!session) {
       return;
     }
 
-    await markWaiting(session.id);
+    try {
+      setSetupError(null);
+      setSetupMessage(null);
+
+      if (!preparedRequest) {
+        const firstError = Object.values(validation.errors)[0];
+        setSetupError(firstError ?? "The AP handoff is incomplete.");
+        return;
+      }
+
+      await markWaiting(session.id);
+      setSetupMessage(
+        "The exact AP payload is staged for firmware integration. In staging today, the app validates the handoff locally and moves into cloud confirmation.",
+      );
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : "Failed to continue the onboarding session.");
+    }
   }
 
   async function handleSimulateRedeem() {
@@ -362,6 +400,32 @@ export default function OnboardingScreen() {
             </Text>
           ) : null}
 
+          {setupMessage ? (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              {setupMessage}
+            </Text>
+          ) : null}
+
+          {setupError ? (
+            <Text
+              style={{
+                color: theme.colors.statusErrorMuted,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              {setupError}
+            </Text>
+          ) : null}
+
           {!session || session.isExpired || session.status === "cancelled" || session.status === "failed" || (session.status === "awaiting_ap" && !hasClaimToken) ? (
             <Pressable
               disabled={isBusy}
@@ -394,20 +458,170 @@ export default function OnboardingScreen() {
             </Pressable>
           ) : null}
 
-          {session?.status === "awaiting_ap" && !session.isExpired ? (
+          {session?.status === "awaiting_ap" && !session.isExpired && hasClaimToken ? (
             <View style={{ gap: 10 }}>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                }}
+              >
+                Home Wi-Fi details
+              </Text>
+
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={(value) => {
+                  setWifiSsid(value);
+                  setSetupError(null);
+                  setSetupMessage(null);
+                }}
+                placeholder="Home Wi-Fi name"
+                placeholderTextColor={theme.colors.textTertiary}
+                style={{
+                  borderRadius: theme.radius.sheet,
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                  backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                }}
+                value={draft.wifiSsid}
+              />
+
+              {validation.errors.wifiSsid ? (
+                <Text
+                  style={{
+                    color: theme.colors.statusErrorMuted,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  {validation.errors.wifiSsid}
+                </Text>
+              ) : null}
+
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={(value) => {
+                  setWifiPassword(value);
+                  setSetupError(null);
+                  setSetupMessage(null);
+                }}
+                placeholder="Home Wi-Fi password"
+                placeholderTextColor={theme.colors.textTertiary}
+                secureTextEntry
+                style={{
+                  borderRadius: theme.radius.sheet,
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                  backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                }}
+                value={draft.wifiPassword}
+              />
+
+              {validation.errors.wifiPassword ? (
+                <Text
+                  style={{
+                    color: theme.colors.statusErrorMuted,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  {validation.errors.wifiPassword}
+                </Text>
+              ) : null}
+
+              <GlassCard
+                style={{
+                  gap: 8,
+                  paddingHorizontal: 14,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.colors.textTertiary,
+                    fontFamily: theme.typography.micro.fontFamily,
+                    fontSize: theme.typography.micro.fontSize,
+                    lineHeight: theme.typography.micro.lineHeight,
+                    letterSpacing: theme.typography.micro.letterSpacing,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Local AP handoff
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  Device info endpoint: {buildDeviceApInfoUrl()}
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  Device provisioning endpoint: {buildDeviceApProvisioningEndpoint()}
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  Payload preview: session {session.claimTokenPrefix} · Wi-Fi {draft.wifiSsid.trim() || "Not set"} · password{" "}
+                  {maskProvisioningSecret(draft.wifiPassword)}
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  Wi-Fi credentials stay in app-local state and the temporary AP handoff. They are not stored in Supabase.
+                </Text>
+              </GlassCard>
+
               <Pressable
-                disabled={isBusy || !hasClaimToken}
+                disabled={isBusy || !preparedRequest}
                 onPress={() => {
-                  void handleMarkWaiting();
+                  void handleStageProvisioning();
                 }}
                 style={{
                   alignItems: "center",
                   justifyContent: "center",
                   minHeight: 56,
                   borderRadius: theme.radius.sheet,
-                  backgroundColor: isBusy || !hasClaimToken ? withAlpha(theme.colors.textPrimary, 0.12) : theme.colors.textPrimary,
-                  opacity: isBusy || !hasClaimToken ? 0.6 : 1,
+                  backgroundColor: isBusy || !preparedRequest ? withAlpha(theme.colors.textPrimary, 0.12) : theme.colors.textPrimary,
+                  opacity: isBusy || !preparedRequest ? 0.6 : 1,
                 }}
               >
                 {isBusy ? (
@@ -421,10 +635,66 @@ export default function OnboardingScreen() {
                       lineHeight: theme.typography.label.lineHeight,
                     }}
                   >
-                    I finished the AP step
+                    Continue after AP handoff
                   </Text>
                 )}
               </Pressable>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    clearDraft();
+                    setSetupError(null);
+                    setSetupMessage(null);
+                  }}
+                  style={{
+                    alignItems: "center",
+                    borderRadius: theme.radius.sheet,
+                    borderWidth: 1,
+                    borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+                    flex: 1,
+                    justifyContent: "center",
+                    minHeight: 50,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.label.fontFamily,
+                      fontSize: theme.typography.label.fontSize,
+                      lineHeight: theme.typography.label.lineHeight,
+                    }}
+                  >
+                    Clear Wi-Fi
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    void handleStartSession();
+                  }}
+                  style={{
+                    alignItems: "center",
+                    borderRadius: theme.radius.sheet,
+                    borderWidth: 1,
+                    borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+                    flex: 1,
+                    justifyContent: "center",
+                    minHeight: 50,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.label.fontFamily,
+                      fontSize: theme.typography.label.fontSize,
+                      lineHeight: theme.typography.label.lineHeight,
+                    }}
+                  >
+                    Start fresh session
+                  </Text>
+                </Pressable>
+              </View>
+
               <Text
                 style={{
                   color: theme.colors.textSecondary,
@@ -433,7 +703,8 @@ export default function OnboardingScreen() {
                   lineHeight: theme.typography.body.lineHeight,
                 }}
               >
-                Once AP provisioning is wired, this is where the app will send Wi-Fi credentials and the one-time claim token to the device.
+                The local endpoint contract is now locked. Firmware still needs to expose the AP HTTP server before the app can POST this payload
+                for real.
               </Text>
             </View>
           ) : null}

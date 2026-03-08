@@ -8,7 +8,7 @@ It follows the canonical v1 product spec and assumes:
 - legacy prototype backend stays separate
 - AddOne uses its own staging and production Supabase projects
 
-For the firmware-facing RPC and provisioning handshake, see [AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md).
+For the firmware-facing RPC and provisioning handshake, see [AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md) and [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
 
 ## Project Strategy
 - Keep the existing prototype Supabase project alive for already-distributed legacy devices.
@@ -232,10 +232,10 @@ These functions are important because they keep multi-table mutations atomic and
    - settings updates
    - day history reads and writes
 4. Replace the mock device store with real Supabase-backed reads.
-5. Finalize the AP payload and claim-token handoff contract between app and firmware.
+5. Implement the device-side AP HTTP server for the locked local provisioning contract.
 6. Define the firmware cloud sync contract around:
    - claim
    - heartbeat / last seen
    - command pull / ack
    - day-event push
-7. Integrate firmware against that contract.
+7. Integrate firmware against those contracts.

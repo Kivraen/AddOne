@@ -5,6 +5,8 @@ export type PixelGridMode = "display" | "edit" | "preview" | "shared";
 export type PixelCellState = "future" | "socket" | "done" | "weekSuccess" | "weekFail" | "todayFocus";
 export type WeekStart = "locale" | "monday" | "sunday";
 export type DeviceOnboardingStatus = "awaiting_ap" | "awaiting_cloud" | "claimed" | "expired" | "cancelled" | "failed";
+export type DeviceApProvisioningState = "ready" | "busy" | "provisioned";
+export type DeviceApProvisioningNextStep = "connect_to_cloud" | "retry";
 
 export interface BoardPalette {
   id: string;
@@ -105,4 +107,50 @@ export interface DeviceOnboardingSession {
   lastError: string | null;
   status: DeviceOnboardingStatus;
   waitingForDeviceAt: string | null;
+}
+
+export interface ApProvisioningDraft {
+  wifiPassword: string;
+  wifiSsid: string;
+}
+
+export interface ApProvisioningPayload {
+  schema_version: 1;
+  claim_token: string;
+  hardware_profile_hint: string | null;
+  onboarding_session_id: string;
+  wifi_password: string;
+  wifi_ssid: string;
+}
+
+export interface ApProvisioningRequest {
+  endpoint: string;
+  method: "POST";
+  payload: ApProvisioningPayload;
+}
+
+export interface ApProvisioningValidationResult {
+  errors: {
+    claimToken?: string;
+    onboardingSessionId?: string;
+    wifiPassword?: string;
+    wifiSsid?: string;
+  };
+  isValid: boolean;
+}
+
+export interface DeviceApProvisioningInfo {
+  device_ap_ssid: string;
+  firmware_version: string | null;
+  hardware_profile: string | null;
+  provisioning_state: DeviceApProvisioningState;
+  schema_version: 1;
+}
+
+export interface DeviceApProvisioningResponse {
+  accepted: boolean;
+  message?: string | null;
+  next_step: DeviceApProvisioningNextStep;
+  reboot_required: boolean;
+  schema_version: 1;
 }
