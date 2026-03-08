@@ -1,0 +1,149 @@
+import { create } from "zustand";
+
+import { boardPalettes } from "@/constants/palettes";
+import { initialDevices, initialSharedBoards } from "@/lib/mock-data";
+import { toggleHistoryCell, toggleToday } from "@/lib/board";
+import { AddOneDevice, BoardPalette, RewardTrigger, RewardType, SharedBoard, SyncState } from "@/types/addone";
+
+interface AddOneState {
+  activeDeviceId: string;
+  devices: AddOneDevice[];
+  sharedBoards: SharedBoard[];
+  activeDevice: () => AddOneDevice;
+  activePalette: () => BoardPalette;
+  setActiveDevice: (deviceId: string) => void;
+  toggleToday: () => void;
+  toggleHistoryCell: (row: number, col: number) => void;
+  cycleSyncState: () => void;
+  toggleReward: () => void;
+  setRewardType: (value: RewardType) => void;
+  setRewardTrigger: (value: RewardTrigger) => void;
+  setPalette: (paletteId: string) => void;
+  setWeeklyTarget: (value: number) => void;
+  setWeekStart: (value: AddOneDevice["weekStart"]) => void;
+  setReminderEnabled: (value: boolean) => void;
+  setAutoBrightness: (value: boolean) => void;
+}
+
+function updateDevice(devices: AddOneDevice[], activeDeviceId: string, updater: (device: AddOneDevice) => AddOneDevice) {
+  return devices.map((device) => (device.id === activeDeviceId ? updater(device) : device));
+}
+
+function nextSyncState(current: SyncState): SyncState {
+  switch (current) {
+    case "online":
+      return "syncing";
+    case "syncing":
+      return "offline";
+    case "offline":
+      return "queued";
+    default:
+      return "online";
+  }
+}
+
+export const useAddOneStore = create<AddOneState>((set, get) => ({
+  activeDeviceId: initialDevices[0].id,
+  devices: initialDevices,
+  sharedBoards: initialSharedBoards,
+  activeDevice: () => get().devices.find((device) => device.id === get().activeDeviceId) ?? get().devices[0],
+  activePalette: () => {
+    const device = get().activeDevice();
+    return boardPalettes.find((palette) => palette.id === device.paletteId) ?? boardPalettes[0];
+  },
+  setActiveDevice: (deviceId) => set({ activeDeviceId: deviceId }),
+  toggleToday: () =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => {
+        const updated = toggleToday(device);
+        const queueing = device.syncState === "offline" || device.syncState === "queued";
+
+        return {
+          ...updated,
+          syncState: queueing ? "queued" : "syncing",
+          queueCount: queueing ? device.queueCount + 1 : 0,
+          lastSyncedLabel: queueing ? `${device.queueCount + 1} actions queued` : "Syncing now",
+        };
+      }),
+    })),
+  toggleHistoryCell: (row, col) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => toggleHistoryCell(device, row, col)),
+    })),
+  cycleSyncState: () =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => {
+        const syncState = nextSyncState(device.syncState);
+
+        return {
+          ...device,
+          syncState,
+          queueCount: syncState === "queued" ? Math.max(device.queueCount, 1) : 0,
+          lastSyncedLabel:
+            syncState === "online"
+              ? "Synced moments ago"
+              : syncState === "syncing"
+                ? "Pushing latest changes"
+                : syncState === "offline"
+                  ? "Device offline"
+                  : `${Math.max(device.queueCount, 1)} actions queued`,
+        };
+      }),
+    })),
+  toggleReward: () =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        rewardEnabled: !device.rewardEnabled,
+      })),
+    })),
+  setRewardType: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        rewardType: value,
+      })),
+    })),
+  setRewardTrigger: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        rewardTrigger: value,
+      })),
+    })),
+  setPalette: (paletteId) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        paletteId,
+      })),
+    })),
+  setWeeklyTarget: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        weeklyTarget: value,
+      })),
+    })),
+  setWeekStart: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        weekStart: value,
+      })),
+    })),
+  setReminderEnabled: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        reminderEnabled: value,
+      })),
+    })),
+  setAutoBrightness: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        autoBrightness: value,
+      })),
+    })),
+}));
