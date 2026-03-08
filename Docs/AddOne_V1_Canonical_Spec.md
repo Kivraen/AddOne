@@ -40,15 +40,29 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Remote app completion is allowed.
 - If the device is offline, remote completion is `queued and synced later`.
 - The app requires sign-in.
-- Auth method is `email magic link`.
+- Current app auth flow is `email OTP`.
+- Future auth can add Google or password-based login later without changing the data model.
 - Sharing v1 is `code + approval + view-only`.
 - Ownership model is `single owner + approved viewers`.
 - Ownership transfer requires `factory reset / re-pair`.
+
+## Future Domain And Branding
+- Reserved production domain: `addone.studio`.
+- This domain is not required for current staging/dev auth.
+- Planned future use:
+  - marketing/site URL
+  - branded auth landing pages if needed
+  - branded sender identities such as `hello@addone.studio`
+  - future production Supabase URL configuration
 
 ## Nearby Local Mode
 - Local nearby mode exists only for `setup, Wi-Fi recovery, settings, and history edit`.
 - Local nearby mode is not a second full everyday control system.
 - Local nearby transport is `temporary AP mode`, not LAN discovery.
+- Customer-facing device QR in v1 is `generic`, pointing to `addone.studio/start`.
+- The generic QR is for setup instructions and app/web handoff, not for encoding a unique public claim identifier.
+- Each device still has an internal `hardware_uid` and device-local secret material for manufacturing, claim, and support flows.
+- `hardware_uid` is not a normal user-facing onboarding field.
 - AP starts on:
   - first boot
   - manual power-up hold
@@ -61,6 +75,27 @@ If another doc conflicts with this one, this file wins until an explicit new dec
   - settings
   - history edit
   - palette changes
+
+## Onboarding Contract
+- Devices may be pre-registered during manufacturing / firmware flashing.
+- Factory flow can run QA checks such as:
+  - LED matrix test
+  - RTC / timekeeping check
+  - ambient sensor check
+  - button check
+  - firmware version verification
+- Devices are factory-reset before shipping so the customer receives an unprovisioned unit.
+- The v1 customer onboarding flow is:
+  1. scan the printed QR or open `addone.studio/start`
+  2. sign in to the app
+  3. power the device and join its temporary `AddOne-XXXX` Wi-Fi access point
+  4. app sends Wi-Fi credentials and a one-time claim token to the device over AP
+  5. device joins home Wi-Fi and connects to cloud
+  6. backend binds the device to the signed-in user when the device redeems the claim
+  7. app confirms ownership and continues with habit setup
+- v1 does **not** rely on LAN discovery as the primary claim or onboarding mechanism.
+- LAN discovery can exist later as a support or nearby-maintenance convenience, but not as the first-boot dependency.
+- The first AP step should collect only what is necessary to get the device online; habit naming and deeper settings happen after cloud confirmation.
 
 ## App Structure
 - Main screen is the `last-viewed device board`.
@@ -137,13 +172,18 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Board-first home screen exists.
 - Shared boards screen exists.
 - Onboarding and recovery screens exist.
+- Onboarding now has a real cloud-side claim-session flow, even though AP firmware provisioning is not wired yet.
 - History, settings, and rewards modals exist.
 - UI currently runs on mock data.
-- Real Supabase auth, cloud data model, and device API integration are not implemented yet.
+- Real Supabase auth now exists with `demo mode` fallback.
+- Initial Supabase schema and migration foundation now exist locally under [supabase/migrations/20260308113000_init_addone_schema.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260308113000_init_addone_schema.sql).
+- Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
+- AP provisioning and firmware/cloud redemption are still not implemented.
 
 ## Canonical Next Steps
-1. Add real auth and session handling.
-2. Add real cloud data model and typed API layer.
+1. Apply the new schema to `addone-staging`.
+2. Generate typed cloud models and add the real API/query layer.
 3. Replace mock store data with live device/account data.
-4. Define local AP setup/recovery API contract.
+4. Define local AP setup/recovery API contract and the device/cloud claim handshake.
 5. Rework firmware around the locked AddOne single-button model.
+6. Replace remaining mock/demo board state with fully live device data.

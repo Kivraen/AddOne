@@ -40,6 +40,8 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(app)" />
             <Stack.Screen name="(modals)" options={{ animation: "fade", presentation: "transparentModal" }} />
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="auth/callback" />
           </Stack>
         </AppProviders>
       </SafeAreaProvider>

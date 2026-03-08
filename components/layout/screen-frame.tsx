@@ -14,7 +14,12 @@ interface ScreenFrameProps extends PropsWithChildren {
 
 export function ScreenFrame({ children, header, scroll = false }: ScreenFrameProps) {
   const content = scroll ? (
-    <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 32 }}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       {children}
     </ScrollView>
   ) : (

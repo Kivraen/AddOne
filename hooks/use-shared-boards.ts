@@ -1,5 +1,5 @@
-import { useAddOneStore } from "@/store/addone-store";
+import { useSharedBoardsData } from "@/hooks/use-devices";
 
 export function useSharedBoards() {
-  return useAddOneStore((state) => state.sharedBoards);
+  return useSharedBoardsData().sharedBoards;
 }

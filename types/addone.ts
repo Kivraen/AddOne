@@ -4,6 +4,7 @@ export type RewardTrigger = "daily" | "weekly";
 export type PixelGridMode = "display" | "edit" | "preview" | "shared";
 export type PixelCellState = "future" | "socket" | "done" | "weekSuccess" | "weekFail" | "todayFocus";
 export type WeekStart = "locale" | "monday" | "sunday";
+export type DeviceOnboardingStatus = "awaiting_ap" | "awaiting_cloud" | "claimed" | "expired" | "cancelled" | "failed";
 
 export interface BoardPalette {
   id: string;
@@ -46,6 +47,7 @@ export interface AddOneDevice {
   sharedViewers: number;
   queueCount: number;
   days: boolean[][];
+  dateGrid?: string[][];
   today: TodayPointer;
   lastSyncedLabel: string;
 }
@@ -58,10 +60,49 @@ export interface SharedBoard {
   weeklyTarget: number;
   paletteId: string;
   days: boolean[][];
+  dateGrid?: string[][];
   today: TodayPointer;
+}
+
+export interface DeviceViewer {
+  approvedAt: string | null;
+  avatarUrl?: string | null;
+  displayName: string;
+  membershipId: string;
+  userId: string;
+}
+
+export interface DeviceShareRequest {
+  createdAt: string;
+  id: string;
+  requesterAvatarUrl?: string | null;
+  requesterDisplayName: string;
+  requesterUserId: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+}
+
+export interface DeviceSharingState {
+  code: string | null;
+  pendingRequests: DeviceShareRequest[];
+  viewers: DeviceViewer[];
 }
 
 export interface HighlightTarget {
   row: number;
   col: number;
+}
+
+export interface DeviceOnboardingSession {
+  id: string;
+  claimToken?: string | null;
+  claimTokenPrefix: string;
+  claimedAt: string | null;
+  createdAt: string;
+  deviceId: string | null;
+  expiresAt: string;
+  hardwareProfileHint: string | null;
+  isExpired: boolean;
+  lastError: string | null;
+  status: DeviceOnboardingStatus;
+  waitingForDeviceAt: string | null;
 }

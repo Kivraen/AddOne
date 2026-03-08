@@ -5,14 +5,12 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { GlassSheet } from "@/components/ui/glass-sheet";
 import { theme } from "@/constants/theme";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useDeviceActions } from "@/hooks/use-devices";
 import { withAlpha } from "@/lib/color";
-import { useAddOneStore } from "@/store/addone-store";
 
 export default function RewardsModal() {
   const device = useActiveDevice();
-  const toggleReward = useAddOneStore((state) => state.toggleReward);
-  const setRewardTrigger = useAddOneStore((state) => state.setRewardTrigger);
-  const setRewardType = useAddOneStore((state) => state.setRewardType);
+  const { setRewardTrigger, setRewardType, toggleReward } = useDeviceActions();
 
   return (
     <GlassSheet
@@ -45,7 +43,9 @@ export default function RewardsModal() {
             </Text>
           </View>
           <Switch
-            onValueChange={toggleReward}
+            onValueChange={() => {
+              void toggleReward();
+            }}
             thumbColor={device.rewardEnabled ? theme.colors.textPrimary : theme.colors.textSecondary}
             trackColor={{ false: withAlpha(theme.colors.textPrimary, 0.12), true: withAlpha(theme.colors.accentAmber, 0.34) }}
             value={device.rewardEnabled}
@@ -65,8 +65,8 @@ export default function RewardsModal() {
           Trigger
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <ChoicePill label="Daily completion" onPress={() => setRewardTrigger("daily")} selected={device.rewardTrigger === "daily"} />
-          <ChoicePill label="Weekly success" onPress={() => setRewardTrigger("weekly")} selected={device.rewardTrigger === "weekly"} />
+          <ChoicePill label="Daily completion" onPress={() => void setRewardTrigger("daily")} selected={device.rewardTrigger === "daily"} />
+          <ChoicePill label="Weekly success" onPress={() => void setRewardTrigger("weekly")} selected={device.rewardTrigger === "weekly"} />
         </View>
       </GlassCard>
 
@@ -92,7 +92,7 @@ export default function RewardsModal() {
           >
             Quiet ambient reward.
           </Text>
-          <ChoicePill label="Select" onPress={() => setRewardType("clock")} selected={device.rewardType === "clock"} />
+          <ChoicePill label="Select" onPress={() => void setRewardType("clock")} selected={device.rewardType === "clock"} />
         </GlassCard>
 
         <GlassCard style={{ flex: 1, gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
@@ -116,7 +116,7 @@ export default function RewardsModal() {
           >
             Saved art or AI-generated static reward.
           </Text>
-          <ChoicePill label="Select" onPress={() => setRewardType("paint")} selected={device.rewardType === "paint"} />
+          <ChoicePill label="Select" onPress={() => void setRewardType("paint")} selected={device.rewardType === "paint"} />
         </GlassCard>
       </View>
 

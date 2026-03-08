@@ -1,18 +1,18 @@
 import { Text, View } from "react-native";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
+import { ChoicePill } from "@/components/ui/choice-pill";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlassSheet } from "@/components/ui/glass-sheet";
-import { ChoicePill } from "@/components/ui/choice-pill";
 import { theme } from "@/constants/theme";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useDeviceActions } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, getTodayHighlight } from "@/lib/board";
-import { useAddOneStore } from "@/store/addone-store";
 
 export default function HistoryModal() {
   const device = useActiveDevice();
   const palette = getMergedPalette(device.paletteId, device.customPalette);
-  const toggleHistoryCell = useAddOneStore((state) => state.toggleHistoryCell);
+  const { toggleHistoryCell } = useDeviceActions();
 
   return (
     <GlassSheet
@@ -25,7 +25,9 @@ export default function HistoryModal() {
           cells={buildBoardCells(device)}
           highlightToday={getTodayHighlight(device)}
           mode="edit"
-          onCellPress={toggleHistoryCell}
+          onCellPress={(row, col) => {
+            void toggleHistoryCell(row, col);
+          }}
           palette={palette}
         />
       </GlassCard>

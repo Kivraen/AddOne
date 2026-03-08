@@ -1,5 +1,11 @@
-import { useAddOneStore } from "@/store/addone-store";
+import { useDevices } from "@/hooks/use-devices";
 
 export function useActiveDevice() {
-  return useAddOneStore((state) => state.activeDevice());
+  const { activeDevice } = useDevices();
+
+  if (!activeDevice) {
+    throw new Error("No active AddOne device is available.");
+  }
+
+  return activeDevice;
 }

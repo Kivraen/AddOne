@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
 import { DevicePager } from "@/components/layout/device-pager";
@@ -11,8 +11,9 @@ import { IconButton } from "@/components/ui/icon-button";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
 import { SyncBadge } from "@/components/ui/sync-badge";
 import { theme } from "@/constants/theme";
+import { useAuth } from "@/hooks/use-auth";
+import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, getTodayHighlight, targetStatusLabel } from "@/lib/board";
-import { useAddOneStore } from "@/store/addone-store";
 import { SyncState } from "@/types/addone";
 
 function boardButtonState(isDone: boolean, syncState: SyncState): PrimaryActionState {
@@ -25,14 +26,113 @@ function boardButtonState(isDone: boolean, syncState: SyncState): PrimaryActionS
 
 export default function HomeScreen() {
   const router = useRouter();
-  const devices = useAddOneStore((state) => state.devices);
-  const activeDeviceId = useAddOneStore((state) => state.activeDeviceId);
-  const setActiveDevice = useAddOneStore((state) => state.setActiveDevice);
-  const toggleToday = useAddOneStore((state) => state.toggleToday);
-  const cycleSyncState = useAddOneStore((state) => state.cycleSyncState);
+  const { mode, userEmail } = useAuth();
+  const { activeDevice, activeDeviceId, devices, isLoading, setActiveDevice } = useDevices();
+  const { cycleSyncState, toggleToday } = useDeviceActions();
 
-  const activeDevice = devices.find((device) => device.id === activeDeviceId) ?? devices[0];
+  if (isLoading) {
+    return (
+      <ScreenFrame>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <ActivityIndicator color={theme.colors.textPrimary} />
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            Loading your boards…
+          </Text>
+        </View>
+      </ScreenFrame>
+    );
+  }
+
+  if (!activeDevice) {
+    return (
+      <ScreenFrame
+        header={
+          <View className="pb-5">
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontFamily: theme.typography.micro.fontFamily,
+                fontSize: theme.typography.micro.fontSize,
+                lineHeight: theme.typography.micro.lineHeight,
+                letterSpacing: theme.typography.micro.letterSpacing,
+                textTransform: "uppercase",
+              }}
+            >
+              {mode === "demo" ? "AddOne demo" : "AddOne cloud"}
+            </Text>
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.display.fontFamily,
+                fontSize: theme.typography.display.fontSize,
+                lineHeight: theme.typography.display.lineHeight,
+                marginTop: 4,
+              }}
+            >
+              No devices yet
+            </Text>
+          </View>
+        }
+      >
+        <View style={{ flex: 1, justifyContent: "center", gap: 16 }}>
+          <GlassCard style={{ gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.title.fontFamily,
+                fontSize: theme.typography.title.fontSize,
+                lineHeight: theme.typography.title.lineHeight,
+              }}
+            >
+              Connect your first AddOne
+            </Text>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              Use onboarding to claim a device into this account. In demo mode, the board uses mock data instead.
+            </Text>
+          </GlassCard>
+
+          <Pressable
+            onPress={() => router.push("/onboarding")}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 58,
+              borderRadius: theme.radius.sheet,
+              backgroundColor: theme.colors.textPrimary,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.bgBase,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: theme.typography.label.fontSize,
+                lineHeight: theme.typography.label.lineHeight,
+              }}
+            >
+              Open onboarding
+            </Text>
+          </Pressable>
+        </View>
+      </ScreenFrame>
+    );
+  }
+
   const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
+  const statusLine = mode === "demo" ? `Demo preview · ${activeDevice.lastSyncedLabel}` : `${userEmail ?? "Signed in"} · ${activeDevice.lastSyncedLabel}`;
 
   const header = (
     <View className="pb-5">
@@ -48,7 +148,7 @@ export default function HomeScreen() {
               textTransform: "uppercase",
             }}
           >
-            AddOne
+            {mode === "demo" ? "AddOne demo" : "AddOne cloud"}
           </Text>
           <Text
             style={{
@@ -68,11 +168,11 @@ export default function HomeScreen() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            {activeDevice.lastSyncedLabel}
+            {statusLine}
           </Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 10 }}>
-          <SyncBadge onPress={cycleSyncState} state={activeDevice.syncState} />
+          <SyncBadge onPress={() => void cycleSyncState()} state={activeDevice.syncState} />
           <View style={{ flexDirection: "row", gap: 8 }}>
             <IconButton icon="people-outline" onPress={() => router.push("/shared")} />
             <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
@@ -89,11 +189,11 @@ export default function HomeScreen() {
         const todayDone = device.days[device.today.weekIndex][device.today.dayIndex];
 
         return {
-          device,
-          palette,
           cells: buildBoardCells(device),
-          todayDone,
+          device,
           highlightToday: getTodayHighlight(device),
+          palette,
+          todayDone,
         };
       }),
     [devices],
@@ -244,9 +344,9 @@ export default function HomeScreen() {
 
               <View style={{ gap: 16, paddingBottom: 8 }}>
                 <PrimaryActionButton
-                  onPress={() => {
+                  onPress={async () => {
                     setActiveDevice(device.id);
-                    toggleToday();
+                    await toggleToday();
                   }}
                   state={boardButtonState(todayDone, device.syncState)}
                 />

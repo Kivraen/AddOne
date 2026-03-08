@@ -18,7 +18,10 @@ interface AddOneState {
   toggleReward: () => void;
   setRewardType: (value: RewardType) => void;
   setRewardTrigger: (value: RewardTrigger) => void;
+  setHabitName: (value: string) => void;
   setPalette: (paletteId: string) => void;
+  setResetTime: (value: string) => void;
+  setTimezone: (value: string) => void;
   setWeeklyTarget: (value: number) => void;
   setWeekStart: (value: AddOneDevice["weekStart"]) => void;
   setReminderEnabled: (value: boolean) => void;
@@ -40,6 +43,10 @@ function nextSyncState(current: SyncState): SyncState {
     default:
       return "online";
   }
+}
+
+function nextResetLabel(resetTime: string) {
+  return resetTime === "00:00" ? "Resets at midnight" : `Resets at ${resetTime}`;
 }
 
 export const useAddOneStore = create<AddOneState>((set, get) => ({
@@ -111,11 +118,33 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
         rewardTrigger: value,
       })),
     })),
+  setHabitName: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        name: value.trim() || device.name,
+      })),
+    })),
   setPalette: (paletteId) =>
     set((state) => ({
       devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
         ...device,
         paletteId,
+      })),
+    })),
+  setResetTime: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        nextResetLabel: nextResetLabel(value),
+        resetTime: value,
+      })),
+    })),
+  setTimezone: (value) =>
+    set((state) => ({
+      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
+        ...device,
+        timezone: value.trim() || device.timezone,
       })),
     })),
   setWeeklyTarget: (value) =>
