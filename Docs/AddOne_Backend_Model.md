@@ -8,6 +8,8 @@ It follows the canonical v1 product spec and assumes:
 - legacy prototype backend stays separate
 - AddOne uses its own staging and production Supabase projects
 
+For the firmware-facing RPC and provisioning handshake, see [AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md).
+
 ## Project Strategy
 - Keep the existing prototype Supabase project alive for already-distributed legacy devices.
 - Create a clean `addone-staging` Supabase project for development and testing.
@@ -40,6 +42,7 @@ Purpose:
 
 Key fields:
 - `hardware_uid`
+- `device_auth_token_hash`
 - `hardware_profile`
 - `name`
 - `timezone`
@@ -63,6 +66,7 @@ Notes:
 - `hardware_uid` is the durable identifier used for claim/migration logic.
 - `hardware_uid` stays internal; the normal user-facing flow should not require typing it.
 - devices can be pre-registered during factory flashing / QA before customer shipment.
+- `device_auth_token_hash` stores the hashed device-local secret used for device/cloud authentication.
 
 ### `device_onboarding_sessions`
 Purpose:
@@ -190,6 +194,14 @@ The onboarding migration adds helper functions for:
 - redeeming a claim session once the device comes online
 - claiming a device for an explicit owner user internally
 
+The device sync migration adds helper functions for:
+- registering a factory device with its auth token
+- authenticating device-originated calls
+- heartbeat / last seen updates
+- device command pull
+- device command acknowledgement
+- device-originated day-state event writes
+
 These functions are important because they keep multi-table mutations atomic and reduce client-side mistakes.
 
 ## Security Model
@@ -226,3 +238,4 @@ These functions are important because they keep multi-table mutations atomic and
    - heartbeat / last seen
    - command pull / ack
    - day-event push
+7. Integrate firmware against that contract.

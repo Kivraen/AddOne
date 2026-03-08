@@ -362,6 +362,7 @@ export type Database = {
           brightness: number
           created_at: string
           day_reset_time: string
+          device_auth_token_hash: string | null
           firmware_version: string
           hardware_profile: string
           hardware_uid: string
@@ -385,6 +386,7 @@ export type Database = {
           brightness?: number
           created_at?: string
           day_reset_time?: string
+          device_auth_token_hash?: string | null
           firmware_version?: string
           hardware_profile?: string
           hardware_uid: string
@@ -408,6 +410,7 @@ export type Database = {
           brightness?: number
           created_at?: string
           day_reset_time?: string
+          device_auth_token_hash?: string | null
           firmware_version?: string
           hardware_profile?: string
           hardware_uid?: string
@@ -512,6 +515,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ack_device_command: {
+        Args: {
+          p_command_id: string
+          p_device_auth_token: string
+          p_hardware_uid: string
+          p_last_error?: string
+          p_status: Database["public"]["Enums"]["device_command_status"]
+        }
+        Returns: {
+          applied_at: string | null
+          delivered_at: string | null
+          device_id: string
+          failed_at: string | null
+          id: string
+          kind: Database["public"]["Enums"]["device_command_kind"]
+          last_error: string | null
+          payload: Json
+          request_key: string | null
+          requested_at: string
+          requested_by_user_id: string | null
+          status: Database["public"]["Enums"]["device_command_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_commands"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       approve_device_view_request: {
         Args: { p_request_id: string }
         Returns: {
@@ -532,6 +564,39 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      authenticate_device: {
+        Args: { p_device_auth_token: string; p_hardware_uid: string }
+        Returns: {
+          ambient_auto: boolean
+          brightness: number
+          created_at: string
+          day_reset_time: string
+          device_auth_token_hash: string | null
+          firmware_version: string
+          hardware_profile: string
+          hardware_uid: string
+          id: string
+          last_seen_at: string | null
+          last_sync_at: string | null
+          name: string
+          palette_custom: Json
+          palette_preset: string
+          reward_artwork_id: string | null
+          reward_enabled: boolean
+          reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
+          reward_type: Database["public"]["Enums"]["device_reward_type"]
+          timezone: string
+          updated_at: string
+          week_start: Database["public"]["Enums"]["device_week_start"]
+          weekly_target: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "devices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_access_profile: { Args: { p_user_id: string }; Returns: boolean }
       claim_device: {
         Args: {
@@ -544,6 +609,7 @@ export type Database = {
           brightness: number
           created_at: string
           day_reset_time: string
+          device_auth_token_hash: string | null
           firmware_version: string
           hardware_profile: string
           hardware_uid: string
@@ -582,6 +648,7 @@ export type Database = {
           brightness: number
           created_at: string
           day_reset_time: string
+          device_auth_token_hash: string | null
           firmware_version: string
           hardware_profile: string
           hardware_uid: string
@@ -617,6 +684,45 @@ export type Database = {
           id: string
           status: Database["public"]["Enums"]["device_onboarding_status"]
         }[]
+      }
+      device_heartbeat: {
+        Args: {
+          p_device_auth_token: string
+          p_firmware_version?: string
+          p_hardware_profile?: string
+          p_hardware_uid: string
+          p_last_sync_at?: string
+        }
+        Returns: {
+          ambient_auto: boolean
+          brightness: number
+          created_at: string
+          day_reset_time: string
+          device_auth_token_hash: string | null
+          firmware_version: string
+          hardware_profile: string
+          hardware_uid: string
+          id: string
+          last_seen_at: string | null
+          last_sync_at: string | null
+          name: string
+          palette_custom: Json
+          palette_preset: string
+          reward_artwork_id: string | null
+          reward_enabled: boolean
+          reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
+          reward_type: Database["public"]["Enums"]["device_reward_type"]
+          timezone: string
+          updated_at: string
+          week_start: Database["public"]["Enums"]["device_week_start"]
+          weekly_target: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "devices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       generate_share_code: { Args: { p_length?: number }; Returns: string }
       hash_claim_token: { Args: { p_claim_token: string }; Returns: string }
@@ -673,6 +779,33 @@ export type Database = {
           to: "device_onboarding_sessions"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      pull_device_commands: {
+        Args: {
+          p_device_auth_token: string
+          p_hardware_uid: string
+          p_limit?: number
+        }
+        Returns: {
+          applied_at: string | null
+          delivered_at: string | null
+          device_id: string
+          failed_at: string | null
+          id: string
+          kind: Database["public"]["Enums"]["device_command_kind"]
+          last_error: string | null
+          payload: Json
+          request_key: string | null
+          requested_at: string
+          requested_by_user_id: string | null
+          status: Database["public"]["Enums"]["device_command_status"]
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "device_commands"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       queue_device_command: {
@@ -732,9 +865,38 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_day_state_from_device: {
+        Args: {
+          p_device_auth_token: string
+          p_device_event_id: string
+          p_effective_at?: string
+          p_hardware_uid: string
+          p_is_done: boolean
+          p_local_date: string
+        }
+        Returns: {
+          actor_user_id: string | null
+          client_event_id: string | null
+          created_at: string
+          desired_state: boolean
+          device_event_id: string | null
+          device_id: string
+          effective_at: string
+          id: string
+          local_date: string
+          source: Database["public"]["Enums"]["device_event_source"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_day_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       redeem_device_onboarding_claim: {
         Args: {
           p_claim_token: string
+          p_device_auth_token?: string
           p_firmware_version?: string
           p_hardware_profile?: string
           p_hardware_uid: string
@@ -759,6 +921,45 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "device_onboarding_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      register_factory_device: {
+        Args: {
+          p_device_auth_token: string
+          p_firmware_version?: string
+          p_hardware_profile?: string
+          p_hardware_uid: string
+          p_name?: string
+        }
+        Returns: {
+          ambient_auto: boolean
+          brightness: number
+          created_at: string
+          day_reset_time: string
+          device_auth_token_hash: string | null
+          firmware_version: string
+          hardware_profile: string
+          hardware_uid: string
+          id: string
+          last_seen_at: string | null
+          last_sync_at: string | null
+          name: string
+          palette_custom: Json
+          palette_preset: string
+          reward_artwork_id: string | null
+          reward_enabled: boolean
+          reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
+          reward_type: Database["public"]["Enums"]["device_reward_type"]
+          timezone: string
+          updated_at: string
+          week_start: Database["public"]["Enums"]["device_week_start"]
+          weekly_target: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "devices"
           isOneToOne: true
           isSetofReturn: false
         }
