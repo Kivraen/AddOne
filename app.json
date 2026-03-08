@@ -14,6 +14,11 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "ios": {
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "AddOne uses your local network during first-boot and recovery to send Wi-Fi credentials to your device."
+      }
+    }
   }
 }

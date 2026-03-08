@@ -174,6 +174,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Onboarding and recovery screens exist.
 - Onboarding now has a real cloud-side claim-session flow, even though AP firmware provisioning is not wired yet.
 - The app now builds the exact AP provisioning payload and reflects the intended Wi-Fi handoff flow, even though firmware transport is still pending.
+- The app now probes the configured local AP endpoints and can send the provisioning payload when firmware exposes them.
 - History, settings, and rewards modals exist.
 - UI currently runs on mock data.
 - Real Supabase auth now exists with `demo mode` fallback.

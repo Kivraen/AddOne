@@ -169,6 +169,7 @@ Purpose:
 - App-side onboarding sessions are implemented.
 - Backend claim-session and device sync RPCs are implemented in staging schema.
 - The app-side AP payload builder and local endpoint contract are now implemented.
+- The app now probes the local AP and can POST the provisioning payload to firmware once those endpoints exist.
 - AP HTTP transport is not implemented in firmware yet.
 - Firmware does not consume this contract yet.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.

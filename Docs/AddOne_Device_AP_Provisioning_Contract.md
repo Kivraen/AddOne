@@ -127,6 +127,7 @@ Suggested failure categories:
 
 ## Current Implementation Status
 - The app now builds and validates the exact `POST /session` payload locally.
+- The app now attempts the real `GET /info` and `POST /session` calls against the configured AddOne AP base URL.
 - The app stores Wi-Fi details only in local UI state during staging.
 - The app UI now reflects the real AP handoff flow.
 - Firmware still needs to expose the AP HTTP server and consume this contract.

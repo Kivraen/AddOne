@@ -1,10 +1,10 @@
+import { runtimeConfig } from "@/lib/env";
 import {
   ApProvisioningDraft,
   ApProvisioningRequest,
   ApProvisioningValidationResult,
 } from "@/types/addone";
 
-export const ADDONE_DEVICE_AP_BASE_URL = "http://192.168.4.1";
 export const ADDONE_DEVICE_AP_INFO_PATH = "/api/v1/provisioning/info";
 export const ADDONE_DEVICE_AP_SESSION_PATH = "/api/v1/provisioning/session";
 
@@ -25,11 +25,11 @@ export function maskProvisioningSecret(secret: string) {
 }
 
 export function buildDeviceApInfoUrl() {
-  return `${ADDONE_DEVICE_AP_BASE_URL}${ADDONE_DEVICE_AP_INFO_PATH}`;
+  return `${runtimeConfig.deviceApBaseUrl}${ADDONE_DEVICE_AP_INFO_PATH}`;
 }
 
 export function buildDeviceApProvisioningEndpoint() {
-  return `${ADDONE_DEVICE_AP_BASE_URL}${ADDONE_DEVICE_AP_SESSION_PATH}`;
+  return `${runtimeConfig.deviceApBaseUrl}${ADDONE_DEVICE_AP_SESSION_PATH}`;
 }
 
 export function validateApProvisioningDraft(params: {

@@ -12,6 +12,7 @@ import {
   maskProvisioningSecret,
 } from "@/lib/ap-provisioning";
 import { useApProvisioning } from "@/hooks/use-ap-provisioning";
+import { useDeviceAp } from "@/hooks/use-device-ap";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { withAlpha } from "@/lib/color";
@@ -190,6 +191,16 @@ export default function OnboardingScreen() {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [showDevTools, setShowDevTools] = useState(false);
+  const {
+    apInfo,
+    apInfoError,
+    checkAp,
+    isCheckingAp,
+    isSubmittingProvisioning,
+    provisioningError,
+    provisioningResponse,
+    submitProvisioning,
+  } = useDeviceAp();
 
   const currentStatusTone = useMemo(() => statusTone(session), [session]);
   const activeStepIndex = useMemo(() => {
@@ -216,7 +227,23 @@ export default function OnboardingScreen() {
     });
   }
 
-  async function handleStageProvisioning() {
+  async function handleCheckDeviceAp() {
+    try {
+      setSetupError(null);
+      setSetupMessage(null);
+
+      const info = await checkAp();
+      setSetupMessage(
+        `Connected to ${info.device_ap_ssid}${info.firmware_version ? ` · firmware ${info.firmware_version}` : ""}${
+          info.hardware_profile ? ` · ${info.hardware_profile}` : ""
+        }.`,
+      );
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : "Failed to reach the AddOne AP.");
+    }
+  }
+
+  async function handleProvisionDeviceAp() {
     if (!session) {
       return;
     }
@@ -231,12 +258,32 @@ export default function OnboardingScreen() {
         return;
       }
 
+      const response = await submitProvisioning(preparedRequest);
+
+      if (!response.accepted) {
+        setSetupError(response.message ?? "The AddOne AP rejected the provisioning payload.");
+        return;
+      }
+
       await markWaiting(session.id);
-      setSetupMessage(
-        "The exact AP payload is staged for firmware integration. In staging today, the app validates the handoff locally and moves into cloud confirmation.",
-      );
+      setSetupMessage(response.message ?? "Provisioning accepted. Waiting for the device to reconnect and claim in cloud.");
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Failed to continue the onboarding session.");
+    }
+  }
+
+  async function handleDeveloperBypassAp() {
+    if (!session) {
+      return;
+    }
+
+    try {
+      setSetupError(null);
+      setSetupMessage(null);
+      await markWaiting(session.id);
+      setSetupMessage("Developer bypass used. The session moved to cloud waiting without a local AP request.");
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : "Failed to move the onboarding session forward.");
     }
   }
 
@@ -608,37 +655,126 @@ export default function OnboardingScreen() {
                 >
                   Wi-Fi credentials stay in app-local state and the temporary AP handoff. They are not stored in Supabase.
                 </Text>
-              </GlassCard>
-
-              <Pressable
-                disabled={isBusy || !preparedRequest}
-                onPress={() => {
-                  void handleStageProvisioning();
-                }}
-                style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 56,
-                  borderRadius: theme.radius.sheet,
-                  backgroundColor: isBusy || !preparedRequest ? withAlpha(theme.colors.textPrimary, 0.12) : theme.colors.textPrimary,
-                  opacity: isBusy || !preparedRequest ? 0.6 : 1,
-                }}
-              >
-                {isBusy ? (
-                  <ActivityIndicator color={theme.colors.bgBase} />
-                ) : (
+                {apInfo ? (
                   <Text
                     style={{
-                      color: theme.colors.bgBase,
-                      fontFamily: theme.typography.label.fontFamily,
-                      fontSize: theme.typography.label.fontSize,
-                      lineHeight: theme.typography.label.lineHeight,
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
                     }}
                   >
-                    Continue after AP handoff
+                    Last device probe: {apInfo.device_ap_ssid} · {apInfo.provisioning_state}
+                    {apInfo.firmware_version ? ` · firmware ${apInfo.firmware_version}` : ""}
+                    {apInfo.hardware_profile ? ` · ${apInfo.hardware_profile}` : ""}
                   </Text>
-                )}
-              </Pressable>
+                ) : null}
+                {apInfoError ? (
+                  <Text
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    {apInfoError}
+                  </Text>
+                ) : null}
+                {provisioningResponse ? (
+                  <Text
+                    style={{
+                      color: provisioningResponse.accepted ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    Local device response: {provisioningResponse.next_step}
+                    {provisioningResponse.reboot_required ? " · reboot required" : ""}
+                    {provisioningResponse.message ? ` · ${provisioningResponse.message}` : ""}
+                  </Text>
+                ) : null}
+                {provisioningError ? (
+                  <Text
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    {provisioningError}
+                  </Text>
+                ) : null}
+              </GlassCard>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  disabled={isCheckingAp}
+                  onPress={() => {
+                    void handleCheckDeviceAp();
+                  }}
+                  style={{
+                    alignItems: "center",
+                    borderRadius: theme.radius.sheet,
+                    borderWidth: 1,
+                    borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+                    flex: 1,
+                    justifyContent: "center",
+                    minHeight: 52,
+                    opacity: isCheckingAp ? 0.6 : 1,
+                  }}
+                >
+                  {isCheckingAp ? (
+                    <ActivityIndicator color={theme.colors.textPrimary} />
+                  ) : (
+                    <Text
+                      style={{
+                        color: theme.colors.textPrimary,
+                        fontFamily: theme.typography.label.fontFamily,
+                        fontSize: theme.typography.label.fontSize,
+                        lineHeight: theme.typography.label.lineHeight,
+                      }}
+                    >
+                      Check AddOne AP
+                    </Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  disabled={isBusy || !preparedRequest || isSubmittingProvisioning}
+                  onPress={() => {
+                    void handleProvisionDeviceAp();
+                  }}
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minHeight: 52,
+                    borderRadius: theme.radius.sheet,
+                    backgroundColor:
+                      isBusy || !preparedRequest || isSubmittingProvisioning
+                        ? withAlpha(theme.colors.textPrimary, 0.12)
+                        : theme.colors.textPrimary,
+                    flex: 1,
+                    opacity: isBusy || !preparedRequest || isSubmittingProvisioning ? 0.6 : 1,
+                  }}
+                >
+                  {isBusy || isSubmittingProvisioning ? (
+                    <ActivityIndicator color={theme.colors.bgBase} />
+                  ) : (
+                    <Text
+                      style={{
+                        color: theme.colors.bgBase,
+                        fontFamily: theme.typography.label.fontFamily,
+                        fontSize: theme.typography.label.fontSize,
+                        lineHeight: theme.typography.label.lineHeight,
+                      }}
+                    >
+                      Send to device
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
 
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <Pressable
@@ -695,6 +831,36 @@ export default function OnboardingScreen() {
                 </Pressable>
               </View>
 
+              {mode === "cloud" && typeof __DEV__ !== "undefined" && __DEV__ ? (
+                <Pressable
+                  disabled={isBusy}
+                  onPress={() => {
+                    void handleDeveloperBypassAp();
+                  }}
+                  style={{
+                    alignItems: "center",
+                    borderRadius: theme.radius.sheet,
+                    borderWidth: 1,
+                    borderColor: withAlpha(theme.colors.accentAmber, 0.18),
+                    backgroundColor: withAlpha(theme.colors.accentAmber, 0.08),
+                    justifyContent: "center",
+                    minHeight: 50,
+                    opacity: isBusy ? 0.6 : 1,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.label.fontFamily,
+                      fontSize: theme.typography.label.fontSize,
+                      lineHeight: theme.typography.label.lineHeight,
+                    }}
+                  >
+                    Developer bypass AP request
+                  </Text>
+                </Pressable>
+              ) : null}
+
               <Text
                 style={{
                   color: theme.colors.textSecondary,
@@ -703,8 +869,8 @@ export default function OnboardingScreen() {
                   lineHeight: theme.typography.body.lineHeight,
                 }}
               >
-                The local endpoint contract is now locked. Firmware still needs to expose the AP HTTP server before the app can POST this payload
-                for real.
+                The app now targets the real AP endpoints. Until firmware exposes them, the developer bypass keeps staging usable without pretending the
+                local device request succeeded.
               </Text>
             </View>
           ) : null}
