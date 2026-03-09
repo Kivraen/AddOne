@@ -15,8 +15,26 @@ import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice, RewardTrigger, RewardType, SharedBoard, WeekStart } from "@/types/addone";
 
+function randomHexSegment(length: number) {
+  let output = "";
+
+  while (output.length < length) {
+    output += Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .padStart(8, "0");
+  }
+
+  return output.slice(0, length);
+}
+
 function makeClientEventId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return [
+    randomHexSegment(8),
+    randomHexSegment(4),
+    `4${randomHexSegment(3)}`,
+    `${((Math.floor(Math.random() * 4) + 8).toString(16))}${randomHexSegment(3)}`,
+    randomHexSegment(12),
+  ].join("-");
 }
 
 export function useDevices() {

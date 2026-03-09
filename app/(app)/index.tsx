@@ -29,6 +29,28 @@ export default function HomeScreen() {
   const { mode, userEmail } = useAuth();
   const { activeDevice, activeDeviceId, devices, isLoading, setActiveDevice } = useDevices();
   const { cycleSyncState, toggleToday } = useDeviceActions();
+  const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
+  const statusLine = activeDevice
+    ? mode === "demo"
+      ? `Demo preview · ${activeDevice.lastSyncedLabel}`
+      : `${userEmail ?? "Signed in"} · ${activeDevice.lastSyncedLabel}`
+    : null;
+  const pages = useMemo(
+    () =>
+      devices.map((device) => {
+        const palette = getMergedPalette(device.paletteId, device.customPalette);
+        const todayDone = device.days[device.today.weekIndex][device.today.dayIndex];
+
+        return {
+          cells: buildBoardCells(device),
+          device,
+          highlightToday: getTodayHighlight(device),
+          palette,
+          todayDone,
+        };
+      }),
+    [devices],
+  );
 
   if (isLoading) {
     return (
@@ -131,9 +153,6 @@ export default function HomeScreen() {
     );
   }
 
-  const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
-  const statusLine = mode === "demo" ? `Demo preview · ${activeDevice.lastSyncedLabel}` : `${userEmail ?? "Signed in"} · ${activeDevice.lastSyncedLabel}`;
-
   const header = (
     <View className="pb-5">
       <View style={{ alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
@@ -180,23 +199,6 @@ export default function HomeScreen() {
         </View>
       </View>
     </View>
-  );
-
-  const pages = useMemo(
-    () =>
-      devices.map((device) => {
-        const palette = getMergedPalette(device.paletteId, device.customPalette);
-        const todayDone = device.days[device.today.weekIndex][device.today.dayIndex];
-
-        return {
-          cells: buildBoardCells(device),
-          device,
-          highlightToday: getTodayHighlight(device),
-          palette,
-          todayDone,
-        };
-      }),
-    [devices],
   );
 
   return (
