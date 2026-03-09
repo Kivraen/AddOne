@@ -181,12 +181,14 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Initial Supabase schema and migration foundation now exist locally under [supabase/migrations/20260308113000_init_addone_schema.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260308113000_init_addone_schema.sql).
 - Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
-- AP provisioning transport and firmware/cloud redemption are still not implemented in firmware.
+- A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
+- AP provisioning transport and firmware/cloud redemption are still not implemented in firmware v2.
 
 ## Canonical Next Steps
 1. Apply the new schema to `addone-staging`.
 2. Generate typed cloud models and add the real API/query layer.
 3. Replace mock store data with live device/account data.
-4. Implement the device-side AP setup/recovery API contract that the app now targets.
-5. Rework firmware around the locked AddOne single-button model and wire it to the AP and cloud sync contracts.
-6. Replace remaining mock/demo board state with fully live device data.
+4. Build the new AddOne firmware v2 around the locked state model and contract surface.
+5. Implement the device-side AP setup/recovery API contract that the app now targets.
+6. Wire firmware v2 to cloud claim redemption, heartbeat, command pull/ack, and day-event sync.
+7. Replace remaining mock/demo board state with fully live device data.
