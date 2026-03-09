@@ -456,7 +456,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
       .from("device_commands")
       .select("device_id, status")
       .in("device_id", deviceIds)
-      .in("status", ["queued", "delivered"]),
+      .eq("status", "queued"),
   ]);
 
   const viewerData = assertData(
