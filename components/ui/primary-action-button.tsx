@@ -29,13 +29,13 @@ const stateStyle: Record<PrimaryActionState, { background: string; text: string;
     background: withAlpha("#C7904A", 0.15),
     text: "#F2EEE6",
     border: withAlpha("#C7904A", 0.24),
-    label: "Queued for sync",
+    label: "Waiting for device",
   },
   syncing: {
     background: withAlpha("#C7904A", 0.15),
     text: "#F2EEE6",
     border: withAlpha("#C7904A", 0.24),
-    label: "Syncing now",
+    label: "Applying…",
   },
   disabled: {
     background: withAlpha("#F2EEE6", 0.04),

@@ -134,27 +134,30 @@ Payload:
 Purpose:
 - acknowledges execution results for cloud-originated commands
 
-### `record_day_state_from_device(...)`
+### `upload_device_runtime_snapshot(...)`
 Called by:
 - device firmware
 
 Payload:
 - `hardware_uid`
 - `device_auth_token`
-- `local_date`
-- `is_done`
-- `device_event_id`
-- optional `effective_at`
+- `revision`
+- `current_week_start`
+- `today_row`
+- full `board_days`
+- device-confirmed `settings`
+- optional `generated_at`
 
 Purpose:
-- writes append-only device-originated day events
-- updates the materialized day state
-- advances device sync timestamps
+- heals cloud/app state back to the exact current device board
+- rewrites the mirrored `device_day_states` read model from the device snapshot
+- mirrors device-confirmed runtime settings
+- advances device sync timestamps and runtime revision metadata
 
 ## Command Semantics
 - Device commands are at-least-once, not exactly-once.
 - `request_key` is used on the cloud side to avoid duplicate queueing.
-- `device_event_id` is used on the device-originated event side to avoid duplicate history writes.
+- `set_day_state` and `apply_history_draft` carry `base_revision` so the device can reject stale requests.
 - Firmware should tolerate receiving the same command more than once.
 
 ## Firmware Expectations
@@ -171,7 +174,7 @@ Purpose:
   - process realtime commands immediately when online
   - periodically pull commands only as fallback / backlog recovery
   - ack command results
-  - push local button-driven day events
+  - upload runtime snapshots after accepted runtime changes and after reconnect
 
 ## Current Implementation Status
 - App-side onboarding sessions are implemented.
@@ -179,10 +182,14 @@ Purpose:
 - The app-side AP payload builder and local endpoint contract are now implemented.
 - The app now probes the local AP and can POST the provisioning payload to firmware.
 - Firmware v2 now exposes the AP HTTP provisioning endpoints and can persist the local handoff payload.
-- Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and device-originated day-event sync plumbing against the cloud RPC surface.
+- Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and runtime snapshot upload plumbing against the cloud RPC surface.
 - Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
-- Firmware v2 now also applies `sync_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
+- Firmware v2 now also applies `apply_device_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
 - Firmware v2 now has a real reward state for local button-triggered `clock` and `paint` display.
 - A dedicated realtime transport contract now exists for MQTT-based online command delivery, with fallback polling retained for reliability.
+- Runtime snapshots should now use the same realtime lane whenever possible:
+  - `device -> MQTT -> gateway -> upload_device_runtime_snapshot(...)`
+  - direct device -> Supabase HTTP snapshot upload is fallback only
+- `device_runtime_snapshots` must be in the `supabase_realtime` publication or the app can miss live device-confirmed state and fall back to polling.
 - The remaining firmware gap is custom reward asset sync and end-to-end hardware validation.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.

@@ -270,6 +270,53 @@ export type Database = {
           },
         ]
       }
+      device_runtime_snapshots: {
+        Row: {
+          board_days: Json
+          board_hash: string
+          created_at: string
+          current_week_start: string
+          device_id: string
+          generated_at: string
+          id: string
+          revision: number
+          settings: Json
+          today_row: number
+        }
+        Insert: {
+          board_days: Json
+          board_hash: string
+          created_at?: string
+          current_week_start: string
+          device_id: string
+          generated_at?: string
+          id?: string
+          revision: number
+          settings?: Json
+          today_row: number
+        }
+        Update: {
+          board_days?: Json
+          board_hash?: string
+          created_at?: string
+          current_week_start?: string
+          device_id?: string
+          generated_at?: string
+          id?: string
+          revision?: number
+          settings?: Json
+          today_row?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_runtime_snapshots_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_share_codes: {
         Row: {
           code: string
@@ -373,7 +420,10 @@ export type Database = {
           hardware_profile: string
           hardware_uid: string
           id: string
+          last_runtime_revision: number
           last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
           last_sync_at: string | null
           name: string
           palette_custom: Json
@@ -397,7 +447,10 @@ export type Database = {
           hardware_profile?: string
           hardware_uid: string
           id?: string
+          last_runtime_revision?: number
           last_seen_at?: string | null
+          last_snapshot_at?: string | null
+          last_snapshot_hash?: string | null
           last_sync_at?: string | null
           name?: string
           palette_custom?: Json
@@ -421,7 +474,10 @@ export type Database = {
           hardware_profile?: string
           hardware_uid?: string
           id?: string
+          last_runtime_revision?: number
           last_seen_at?: string | null
+          last_snapshot_at?: string | null
+          last_snapshot_hash?: string | null
           last_sync_at?: string | null
           name?: string
           palette_custom?: Json
@@ -550,6 +606,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      apply_device_settings_from_app: {
+        Args: { p_device_id: string; p_patch: Json; p_request_id?: string }
+        Returns: Json
+      }
+      apply_history_draft_from_app: {
+        Args: {
+          p_base_revision: number
+          p_device_id: string
+          p_draft_id?: string
+          p_updates: Json
+        }
+        Returns: Json
+      }
       approve_device_view_request: {
         Args: { p_request_id: string }
         Returns: {
@@ -582,7 +651,10 @@ export type Database = {
           hardware_profile: string
           hardware_uid: string
           id: string
+          last_runtime_revision: number
           last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
           last_sync_at: string | null
           name: string
           palette_custom: Json
@@ -620,7 +692,10 @@ export type Database = {
           hardware_profile: string
           hardware_uid: string
           id: string
+          last_runtime_revision: number
           last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
           last_sync_at: string | null
           name: string
           palette_custom: Json
@@ -659,7 +734,10 @@ export type Database = {
           hardware_profile: string
           hardware_uid: string
           id: string
+          last_runtime_revision: number
           last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
           last_sync_at: string | null
           name: string
           palette_custom: Json
@@ -713,7 +791,10 @@ export type Database = {
           hardware_profile: string
           hardware_uid: string
           id: string
+          last_runtime_revision: number
           last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
           last_sync_at: string | null
           name: string
           palette_custom: Json
@@ -957,7 +1038,10 @@ export type Database = {
           hardware_profile: string
           hardware_uid: string
           id: string
+          last_runtime_revision: number
           last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
           last_sync_at: string | null
           name: string
           palette_custom: Json
@@ -1000,20 +1084,12 @@ export type Database = {
       }
       request_day_state_from_app: {
         Args: {
+          p_base_revision?: number
           p_client_event_id?: string
           p_device_id: string
           p_effective_at?: string
           p_is_done: boolean
           p_local_date: string
-        }
-        Returns: Json
-      }
-      request_day_states_batch_from_app: {
-        Args: {
-          p_batch_event_id?: string
-          p_device_id: string
-          p_effective_at?: string
-          p_updates: Json
         }
         Returns: Json
       }
@@ -1036,6 +1112,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      request_runtime_snapshot_from_app: {
+        Args: { p_device_id: string; p_request_id?: string }
+        Returns: Json
       }
       rotate_device_share_code: {
         Args: { p_device_id: string }
@@ -1083,14 +1163,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      set_day_states_batch_from_app: {
+      upload_device_runtime_snapshot: {
         Args: {
-          p_batch_event_id?: string
-          p_device_id: string
-          p_effective_at?: string
-          p_updates: Json
+          p_board_days: Json
+          p_board_hash?: string
+          p_current_week_start: string
+          p_device_auth_token: string
+          p_generated_at?: string
+          p_hardware_uid: string
+          p_revision: number
+          p_settings?: Json
+          p_today_row: number
         }
-        Returns: Json
+        Returns: {
+          board_days: Json
+          board_hash: string
+          created_at: string
+          current_week_start: string
+          device_id: string
+          generated_at: string
+          id: string
+          revision: number
+          settings: Json
+          today_row: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_runtime_snapshots"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
@@ -1098,6 +1200,9 @@ export type Database = {
         | "set_day_state"
         | "sync_settings"
         | "sync_day_states_batch"
+        | "request_runtime_snapshot"
+        | "apply_history_draft"
+        | "apply_device_settings"
       device_command_status:
         | "queued"
         | "delivered"
@@ -1254,6 +1359,9 @@ export const Constants = {
         "set_day_state",
         "sync_settings",
         "sync_day_states_batch",
+        "request_runtime_snapshot",
+        "apply_history_draft",
+        "apply_device_settings",
       ],
       device_command_status: [
         "queued",

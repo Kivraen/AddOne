@@ -2,10 +2,12 @@ import { paletteById } from "@/constants/palettes";
 import {
   AddOneDevice,
   BoardPalette,
+  DeviceSettingsPatch,
   DeviceOnboardingSession,
   DeviceSharingState,
   DeviceShareRequest,
   DeviceViewer,
+  HistoryDraftUpdate,
   SharedBoard,
   SyncState,
   WeekStart,
@@ -13,9 +15,14 @@ import {
 import { Database, Enums, Json, Tables, TablesUpdate } from "@/lib/supabase/database.types";
 import { getSupabaseClient } from "@/lib/supabase";
 
-type DeviceRow = Tables<"devices">;
+type DeviceRow = Tables<"devices"> & {
+  last_runtime_revision?: number | null;
+  last_snapshot_at?: string | null;
+  last_snapshot_hash?: string | null;
+};
 type MembershipRow = Tables<"device_memberships">;
 type DayStateRow = Tables<"device_day_states">;
+type RuntimeSnapshotRow = Tables<"device_runtime_snapshots">;
 type CommandRow = Tables<"device_commands">;
 type DeviceOnboardingSessionRow = Tables<"device_onboarding_sessions">;
 type ProfileRow = Tables<"profiles">;
@@ -92,7 +99,7 @@ function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   const lastSyncAt = device.last_sync_at ? new Date(device.last_sync_at).getTime() : 0;
   const now = Date.now();
 
-  return (lastSeenAt && now - lastSeenAt < 120_000) || (lastSyncAt && now - lastSyncAt < 120_000);
+  return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
 }
 
 function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">, queueCount: number) {
@@ -133,15 +140,7 @@ function deriveSyncState(device: DeviceRow, queueCount: number): SyncState {
     return deviceSeemsOnline(device) ? "syncing" : "queued";
   }
 
-  const lastSeenAt = device.last_seen_at ? new Date(device.last_seen_at).getTime() : 0;
-  const lastSyncAt = device.last_sync_at ? new Date(device.last_sync_at).getTime() : 0;
-  const now = Date.now();
-
-  if (lastSyncAt && now - lastSyncAt < 90_000) {
-    return "syncing";
-  }
-
-  if (lastSeenAt && now - lastSeenAt < 15 * 60_000) {
+  if (deviceSeemsOnline(device)) {
     return "online";
   }
 
@@ -259,6 +258,35 @@ function buildDays(dateGrid: string[][], stateMap: Map<string, boolean>) {
   return dateGrid.map((week) => week.map((localDate) => stateMap.get(localDate) ?? false));
 }
 
+function buildBoardFrameFromSnapshot(snapshot: Pick<RuntimeSnapshotRow, "current_week_start" | "today_row">) {
+  const currentWeekStart = snapshot.current_week_start;
+  const dateGrid = Array.from({ length: 21 }, (_, weekIndex) => {
+    const weekStartDate = addDays(currentWeekStart, weekIndex * -7);
+    return Array.from({ length: 7 }, (_, dayIndex) => addDays(weekStartDate, dayIndex));
+  });
+
+  return {
+    dateGrid,
+    todayDayIndex: snapshot.today_row,
+  };
+}
+
+function parseSnapshotBoardDays(snapshot: Pick<RuntimeSnapshotRow, "board_days">) {
+  if (!Array.isArray(snapshot.board_days) || snapshot.board_days.length !== 21) {
+    return null;
+  }
+
+  const days = snapshot.board_days.map((week) => {
+    if (!Array.isArray(week) || week.length !== 7) {
+      return null;
+    }
+
+    return week.map((day) => Boolean(day));
+  });
+
+  return days.every(Boolean) ? (days as boolean[][]) : null;
+}
+
 function buildStateMap(dayStates: DayStateRow[]) {
   return new Map(dayStates.map((row) => [row.local_date, row.is_done]));
 }
@@ -273,16 +301,25 @@ function mapDeviceRowToAppDevice(input: {
   dayStates: DayStateRow[];
   membership: MembershipWithDevice;
   queueCount: number;
+  snapshot?: RuntimeSnapshotRow | null;
   sharedViewers: number;
 }): AddOneDevice {
-  const { currentUserName, dayStates, device, membership, queueCount, sharedViewers } = input;
-  const { dateGrid, todayDayIndex } = buildBoardFrame(device);
-  const days = buildDays(dateGrid, buildStateMap(dayStates));
+  const { currentUserName, dayStates, device, membership, queueCount, sharedViewers, snapshot } = input;
+  const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
+  const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
+  const fallbackFrame = buildBoardFrame(device);
+  const dateGrid = snapshotFrame?.dateGrid ?? fallbackFrame.dateGrid;
+  const todayDayIndex = snapshotFrame?.todayDayIndex ?? fallbackFrame.todayDayIndex;
+  const days = snapshotDays ?? buildDays(dateGrid, buildStateMap(dayStates));
 
   return {
     id: device.id,
+    isLive: deviceSeemsOnline(device),
+    lastSeenAt: device.last_seen_at,
+    lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
     name: device.name,
     ownerName: currentUserName,
+    runtimeRevision: Number(snapshot?.revision ?? device.last_runtime_revision ?? 0),
     syncState: deriveSyncState(device, queueCount),
     weeklyTarget: device.weekly_target,
     weekStart: normalizeWeekStart(device.week_start),
@@ -316,18 +353,24 @@ function mapDeviceRowToSharedBoard(input: {
   device: DeviceRow;
   dayStates: DayStateRow[];
   ownerName: string;
+  snapshot?: RuntimeSnapshotRow | null;
 }): SharedBoard {
-  const { dayStates, device, ownerName } = input;
-  const { dateGrid, todayDayIndex } = buildBoardFrame(device);
+  const { dayStates, device, ownerName, snapshot } = input;
+  const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
+  const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
+  const fallbackFrame = buildBoardFrame(device);
+  const dateGrid = snapshotFrame?.dateGrid ?? fallbackFrame.dateGrid;
+  const todayDayIndex = snapshotFrame?.todayDayIndex ?? fallbackFrame.todayDayIndex;
 
   return {
     id: device.id,
     ownerName,
     habitName: device.name,
+    lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
     syncState: deriveSyncState(device, 0),
     weeklyTarget: device.weekly_target,
     paletteId: paletteIdForDevice(device),
-    days: buildDays(dateGrid, buildStateMap(dayStates)),
+    days: snapshotDays ?? buildDays(dateGrid, buildStateMap(dayStates)),
     dateGrid,
     today: {
       weekIndex: 0,
@@ -353,6 +396,21 @@ async function fetchDeviceDayStates(deviceIds: string[]) {
     .gte("local_date", getMinBoardDate());
 
   return assertData(error, data ?? [], "Failed to load device day states.");
+}
+
+async function fetchLatestRuntimeSnapshots(deviceIds: string[]) {
+  if (deviceIds.length === 0) {
+    return [] as RuntimeSnapshotRow[];
+  }
+
+  const supabase = ensureSupabase();
+  const { data, error } = await supabase
+    .from("device_runtime_snapshots")
+    .select("*")
+    .in("device_id", deviceIds)
+    .order("revision", { ascending: false });
+
+  return assertData(error, (data ?? []) as RuntimeSnapshotRow[], "Failed to load device runtime snapshots.");
 }
 
 async function fetchProfiles(userIds: string[]) {
@@ -448,8 +506,8 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     return [] as AddOneDevice[];
   }
 
-  const [dayStates, viewerRows, queuedCommands] = await Promise.all([
-    fetchDeviceDayStates(deviceIds),
+  const [snapshots, viewerRows, queuedCommands] = await Promise.all([
+    fetchLatestRuntimeSnapshots(deviceIds),
     supabase
       .from("device_memberships")
       .select("device_id, user_id")
@@ -474,6 +532,13 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     "Failed to load command queue state.",
   );
 
+  const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
+    accumulator[row.device_id] ??= row;
+    return accumulator;
+  }, {});
+
+  const fallbackDeviceIds = deviceIds.filter((deviceId) => !snapshotByDevice[deviceId]);
+  const dayStates = await fetchDeviceDayStates(fallbackDeviceIds);
   const dayStateByDevice = dayStates.reduce<Record<string, DayStateRow[]>>((accumulator, row) => {
     accumulator[row.device_id] ??= [];
     accumulator[row.device_id].push(row);
@@ -497,6 +562,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
       device: membership.device as DeviceRow,
       membership,
       queueCount: queuedCountByDevice[membership.device_id] ?? 0,
+      snapshot: snapshotByDevice[membership.device_id] ?? null,
       sharedViewers: viewerCountByDevice[membership.device_id] ?? 0,
     }),
   );
@@ -524,8 +590,8 @@ export async function fetchSharedBoards(userId: string) {
     return [] as SharedBoard[];
   }
 
-  const [dayStates, ownerMembershipsResponse] = await Promise.all([
-    fetchDeviceDayStates(deviceIds),
+  const [snapshots, ownerMembershipsResponse] = await Promise.all([
+    fetchLatestRuntimeSnapshots(deviceIds),
     supabase
       .from("device_memberships")
       .select("device_id, user_id")
@@ -547,6 +613,13 @@ export async function fetchSharedBoards(userId: string) {
     return accumulator;
   }, {});
 
+  const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
+    accumulator[row.device_id] ??= row;
+    return accumulator;
+  }, {});
+
+  const fallbackDeviceIds = deviceIds.filter((deviceId) => !snapshotByDevice[deviceId]);
+  const dayStates = await fetchDeviceDayStates(fallbackDeviceIds);
   const dayStateByDevice = dayStates.reduce<Record<string, DayStateRow[]>>((accumulator, row) => {
     accumulator[row.device_id] ??= [];
     accumulator[row.device_id].push(row);
@@ -558,6 +631,7 @@ export async function fetchSharedBoards(userId: string) {
       dayStates: dayStateByDevice[device.id] ?? [],
       device,
       ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
+      snapshot: snapshotByDevice[device.id] ?? null,
     }),
   );
 }
@@ -700,6 +774,7 @@ export async function redeemDeviceOnboardingClaimForTesting(params: {
 }
 
 export async function setDayStateFromApp(params: {
+  baseRevision: number;
   clientEventId: string;
   deviceId: string;
   isDone: boolean;
@@ -707,6 +782,7 @@ export async function setDayStateFromApp(params: {
 }) {
   const supabase = ensureSupabase();
   const { data, error } = await (supabase.rpc as any)("request_day_state_from_app", {
+    p_base_revision: params.baseRevision,
     p_client_event_id: params.clientEventId,
     p_device_id: params.deviceId,
     p_is_done: params.isDone,
@@ -720,10 +796,28 @@ export async function setDayStateFromApp(params: {
   );
 }
 
-export async function setDayStatesBatchFromApp(params: {
-  batchEventId: string;
+export async function requestRuntimeSnapshotFromApp(params: {
   deviceId: string;
-  updates: Array<{ isDone: boolean; localDate: string }>;
+  requestId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("request_runtime_snapshot_from_app", {
+    p_device_id: params.deviceId,
+    p_request_id: params.requestId,
+  });
+
+  return assertData(
+    error,
+    data as { command_id: string; status: string },
+    "Failed to request a fresh device snapshot.",
+  );
+}
+
+export async function applyHistoryDraftFromApp(params: {
+  baseRevision: number;
+  deviceId: string;
+  draftId: string;
+  updates: HistoryDraftUpdate[];
 }) {
   const supabase = ensureSupabase();
   const updates = params.updates.map((update) => ({
@@ -731,23 +825,47 @@ export async function setDayStatesBatchFromApp(params: {
     local_date: update.localDate,
   }));
 
-  const { data, error } = await (supabase.rpc as any)("request_day_states_batch_from_app", {
-    p_batch_event_id: params.batchEventId,
+  const { data, error } = await (supabase.rpc as any)("apply_history_draft_from_app", {
+    p_base_revision: params.baseRevision,
     p_device_id: params.deviceId,
     p_updates: updates,
+    p_draft_id: params.draftId,
   });
 
   return assertData(
     error,
-    data as { batch_event_id: string; command_id: string; effective_at: string; status: string },
-    "Failed to request history sync.",
+    data as { command_id: string; status: string },
+    "Failed to save history draft.",
   );
 }
 
-export async function updateDevice(deviceId: string, patch: TablesUpdate<"devices">) {
+export async function applyDeviceSettingsFromApp(deviceId: string, patch: DeviceSettingsPatch) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.from("devices") as any).update(patch).eq("id", deviceId).select("*").single();
-  return assertData(error, data as DeviceRow, "Failed to update device settings.");
+  const { data, error } = await (supabase.rpc as any)("apply_device_settings_from_app", {
+    p_device_id: deviceId,
+    p_patch: patch,
+  });
+
+  return assertData(
+    error,
+    data as { command_id: string; status: string },
+    "Failed to request device settings update.",
+  );
+}
+
+export async function fetchDeviceCommandStatus(commandId: string) {
+  const supabase = ensureSupabase();
+  const { data, error } = await supabase
+    .from("device_commands")
+    .select("id, status, last_error, applied_at, failed_at")
+    .eq("id", commandId)
+    .single();
+
+  return assertData(
+    error,
+    data as Pick<CommandRow, "applied_at" | "failed_at" | "id" | "last_error" | "status">,
+    "Failed to load command status.",
+  );
 }
 
 export async function updateMembershipReminder(params: {

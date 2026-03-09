@@ -9,7 +9,7 @@
 namespace {
 constexpr unsigned long kClaimRetryIntervalMs = 3000;
 constexpr unsigned long kFallbackCommandPollWhenNoRealtimeMs = 5000;
-constexpr unsigned long kDeviceSyncIntervalMs = 250;
+constexpr unsigned long kRuntimeSnapshotSyncIntervalMs = 250;
 constexpr unsigned long kHeartbeatIntervalMs = 60000;
 constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
 
@@ -24,6 +24,57 @@ const char* stateName(FirmwareState state) {
     default:
       return "Unknown";
   }
+}
+
+String buildBoardDaysJson(const HabitTracker& tracker) {
+  DynamicJsonDocument doc(4096);
+  JsonArray weeks = doc.to<JsonArray>();
+  const HabitTracker::WeeklyGrid& grid = tracker.grid();
+
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    JsonArray weekDays = weeks.createNestedArray();
+    for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
+      weekDays.add(grid.days[day][week]);
+    }
+  }
+
+  String json;
+  serializeJson(weeks, json);
+  return json;
+}
+
+String buildBoardDaysJson(const HabitTracker::WeeklyGrid& grid) {
+  DynamicJsonDocument doc(4096);
+  JsonArray weeks = doc.to<JsonArray>();
+
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    JsonArray weekDays = weeks.createNestedArray();
+    for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
+      weekDays.add(grid.days[day][week]);
+    }
+  }
+
+  String json;
+  serializeJson(weeks, json);
+  return json;
+}
+
+String buildSettingsJson(const DeviceSettingsState& settings) {
+  DynamicJsonDocument doc(512);
+  doc["ambient_auto"] = settings.ambientAuto;
+  doc["brightness"] = settings.brightness;
+  doc["day_reset_time"] = settings.dayResetTime;
+  doc["name"] = settings.name;
+  doc["palette_preset"] = settings.palettePreset;
+  doc["reward_enabled"] = settings.rewardEnabled;
+  doc["reward_trigger"] = settings.rewardTrigger == RewardTrigger::Weekly ? "weekly" : "daily";
+  doc["reward_type"] = settings.rewardType == RewardType::Clock ? "clock" : "paint";
+  doc["timezone"] = settings.timezone;
+  doc["weekly_target"] = settings.weeklyTarget;
+
+  String json;
+  serializeJson(doc, json);
+  return json;
 }
 } // namespace
 
@@ -41,6 +92,14 @@ void FirmwareApp::begin() {
   timeService_.begin();
   timeService_.applySettings(deviceSettings_.current());
   rewardEngine_.clear();
+
+  queueMutex_ = xSemaphoreCreateMutex();
+  stateMutex_ = xSemaphoreCreateMutex();
+  if (!queueMutex_ || !stateMutex_) {
+    Serial.println("Failed to create firmware mutexes.");
+  } else if (!syncTaskHandle_) {
+    xTaskCreatePinnedToCore(syncTaskEntry_, "addone_sync", 8192, this, 1, &syncTaskHandle_, 0);
+  }
 
   Serial.printf("AddOne firmware %s\n", Config::kFirmwareVersion);
   Serial.printf("Hardware UID: %s\n", identity_.hardwareUid().c_str());
@@ -70,31 +129,59 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   enteredStateAtMs_ = millis();
   lastClaimAttemptAtMs_ = 0;
   lastCommandPollAtMs_ = 0;
-  lastDeviceSyncAttemptAtMs_ = 0;
+  lastRuntimeSnapshotAttemptAtMs_ = 0;
   lastHeartbeatAtMs_ = 0;
   lastLocalInteractionAtMs_ = 0;
   waitingForApFallback_ = false;
   wifiReconnectStarted_ = false;
   wifiReconnectStartedAtMs_ = 0;
+  if (nextState == FirmwareState::Tracking) {
+    runtimeSnapshotDirty_ = true;
+  }
   if (nextState != FirmwareState::Reward) {
     rewardEngine_.clear();
   }
   Serial.printf("State -> %s\n", stateName(nextState));
 }
 
+void FirmwareApp::markRuntimeSnapshotDirty_() {
+  runtimeSnapshotDirty_ = true;
+}
+
+void FirmwareApp::syncTaskEntry_(void* context) {
+  if (!context) {
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  static_cast<FirmwareApp*>(context)->syncTask_();
+}
+
 bool FirmwareApp::enqueuePendingAck_(const String& commandId,
                                      CloudClient::CommandAckStatus status,
                                      const String& failureReason) {
+  if (queueMutex_ && xSemaphoreTake(queueMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return false;
+  }
+
+  const auto releaseMutex = [this]() {
+    if (queueMutex_) {
+      xSemaphoreGive(queueMutex_);
+    }
+  };
+
   for (size_t index = 0; index < pendingCommandAckCount_; ++index) {
     if (pendingCommandAcks_[index].commandId == commandId) {
       pendingCommandAcks_[index].status = status;
       pendingCommandAcks_[index].failureReason = failureReason;
+      releaseMutex();
       return true;
     }
   }
 
   if (pendingCommandAckCount_ >= kPendingCommandAckQueueSize) {
     Serial.println("Pending ack queue full.");
+    releaseMutex();
     return false;
   }
 
@@ -102,21 +189,51 @@ bool FirmwareApp::enqueuePendingAck_(const String& commandId,
   pending.commandId = commandId;
   pending.status = status;
   pending.failureReason = failureReason;
+  releaseMutex();
+  return true;
+}
+
+bool FirmwareApp::dequeuePendingAck_(PendingCommandAck& outAck) {
+  if (queueMutex_ && xSemaphoreTake(queueMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return false;
+  }
+
+  if (pendingCommandAckCount_ == 0) {
+    if (queueMutex_) {
+      xSemaphoreGive(queueMutex_);
+    }
+    return false;
+  }
+
+  outAck = pendingCommandAcks_[0];
+  for (size_t index = 1; index < pendingCommandAckCount_; ++index) {
+    pendingCommandAcks_[index - 1] = pendingCommandAcks_[index];
+  }
+  pendingCommandAcks_[pendingCommandAckCount_ - 1] = PendingCommandAck{};
+  pendingCommandAckCount_--;
+  if (queueMutex_) {
+    xSemaphoreGive(queueMutex_);
+  }
   return true;
 }
 
 void FirmwareApp::flushPendingCommandAcks_() {
-  if (WiFi.status() != WL_CONNECTED || pendingCommandAckCount_ == 0) {
+  if (WiFi.status() != WL_CONNECTED) {
     return;
   }
 
-  const PendingCommandAck pending = pendingCommandAcks_[0];
+  PendingCommandAck pending;
+  if (!dequeuePendingAck_(pending)) {
+    return;
+  }
+
   const bool acked =
       realtimeClient_.isConnected()
           ? realtimeClient_.publishAck(cloudClient_.deviceAuthToken(), pending.commandId, pending.status, pending.failureReason)
           : cloudClient_.ackCommand(pending.commandId, pending.status, pending.failureReason);
   if (!acked) {
     Serial.printf("Failed to ack command %s\n", pending.commandId.c_str());
+    enqueuePendingAck_(pending.commandId, pending.status, pending.failureReason);
     return;
   }
 
@@ -125,57 +242,48 @@ void FirmwareApp::flushPendingCommandAcks_() {
                 pending.status == CloudClient::CommandAckStatus::Applied ? "applied" :
                 pending.status == CloudClient::CommandAckStatus::Failed ? "failed" : "cancelled");
 
-  for (size_t index = 1; index < pendingCommandAckCount_; ++index) {
-    pendingCommandAcks_[index - 1] = pendingCommandAcks_[index];
+}
+
+bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
+                                              String& settingsJson,
+                                              HabitTracker::WeekDate& currentWeekStart,
+                                              uint8_t& todayRow,
+                                              uint32_t& revision,
+                                              String& generatedAt) {
+  tm logicalNow{};
+  if (!timeService_.nowLogical(logicalNow)) {
+    return false;
   }
-  pendingCommandAcks_[pendingCommandAckCount_ - 1] = PendingCommandAck{};
-  pendingCommandAckCount_--;
+
+  HabitTracker::WeeklyGrid board{};
+  DeviceSettingsState settings{};
+  bool haveWeekStart = false;
+
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return false;
+  }
+
+  board = habitTracker_.grid();
+  settings = deviceSettings_.current();
+  revision = habitTracker_.runtimeRevision();
+  todayRow = habitTracker_.todayRow(logicalNow);
+  haveWeekStart = habitTracker_.currentWeekStart(currentWeekStart);
+
+  if (stateMutex_) {
+    xSemaphoreGive(stateMutex_);
+  }
+
+  if (!haveWeekStart) {
+    return false;
+  }
+
+  boardDaysJson = buildBoardDaysJson(board);
+  settingsJson = buildSettingsJson(settings);
+  generatedAt = timeService_.currentUtcIsoTimestamp();
+  return true;
 }
 
 bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason) {
-  if (command.kind == "sync_day_states_batch") {
-    if (!command.hasBatchDayStatesPayload || command.batchPayloadJson.isEmpty()) {
-      failureReason = "sync_day_states_batch payload missing updates.";
-      return false;
-    }
-
-    DynamicJsonDocument doc(4096);
-    DeserializationError error = deserializeJson(doc, command.batchPayloadJson);
-    if (error) {
-      failureReason = "Failed to parse batch history payload.";
-      return false;
-    }
-
-    JsonArrayConst updates = doc["updates"].as<JsonArrayConst>();
-    if (updates.isNull()) {
-      failureReason = "Batch history payload missing updates array.";
-      return false;
-    }
-
-    tm nowLogical{};
-    if (!timeService_.nowLogical(nowLogical)) {
-      failureReason = "Logical time is unavailable.";
-      return false;
-    }
-
-    for (JsonObjectConst update : updates) {
-      const String localDate = update["local_date"] | "";
-      if (localDate.isEmpty() || update["is_done"].isNull()) {
-        continue;
-      }
-
-      const bool isDone = update["is_done"].as<bool>();
-      const String effectiveAt = update["effective_at"] | command.effectiveAt;
-      if (!habitTracker_.applyCloudState(localDate, isDone, effectiveAt, nowLogical)) {
-        failureReason = "Failed to apply one or more batch day states locally.";
-        return false;
-      }
-    }
-
-    Serial.println("Applied cloud batch history sync.");
-    return true;
-  }
-
   if (command.kind == "set_day_state") {
     tm nowLogical{};
     if (!timeService_.nowLogical(nowLogical)) {
@@ -183,29 +291,102 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
       return false;
     }
 
-    if (!command.hasSetDayStatePayload || command.localDate.isEmpty()) {
-      failureReason = "set_day_state payload missing local_date or is_done.";
+    if (!command.hasSetDayStatePayload || command.localDate.isEmpty() || !command.hasBaseRevision) {
+      failureReason = "set_day_state payload missing local_date, is_done, or base_revision.";
       return false;
     }
 
-    if (!habitTracker_.applyCloudState(command.localDate, command.isDone, command.effectiveAt, nowLogical)) {
-      failureReason = "Failed to apply cloud day state locally.";
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+      failureReason = "Device state busy.";
       return false;
     }
 
+    const bool applied =
+        habitTracker_.applyCloudState(command.localDate, command.isDone, nowLogical, command.baseRevision, failureReason);
+    if (stateMutex_) {
+      xSemaphoreGive(stateMutex_);
+    }
+
+    if (!applied) {
+      return false;
+    }
+
+    markRuntimeSnapshotDirty_();
     Serial.printf("Applied cloud day state %s -> %s\n",
                   command.localDate.c_str(),
                   command.isDone ? "done" : "not_done");
     return true;
   }
 
-  if (command.kind == "sync_settings") {
-    if (!command.hasSyncSettingsPayload) {
-      failureReason = "sync_settings payload missing required fields.";
+  if (command.kind == "apply_history_draft") {
+    if (!command.hasHistoryDraftPayload || command.payloadJson.isEmpty() || !command.hasBaseRevision) {
+      failureReason = "History draft payload missing updates or base_revision.";
       return false;
     }
 
-    if (!deviceSettings_.applySync(command.settingsSync, failureReason)) {
+    tm nowLogical{};
+    if (!timeService_.nowLogical(nowLogical)) {
+      failureReason = "Logical time is unavailable.";
+      return false;
+    }
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError error = deserializeJson(doc, command.payloadJson);
+    if (error) {
+      failureReason = "Failed to parse history draft payload.";
+      return false;
+    }
+
+    JsonArrayConst updatesJson = doc["updates"].as<JsonArrayConst>();
+    if (updatesJson.isNull() || updatesJson.size() == 0) {
+      failureReason = "History draft payload missing updates.";
+      return false;
+    }
+
+    HabitTracker::HistoryDraftUpdate* updates = new HabitTracker::HistoryDraftUpdate[updatesJson.size()];
+    for (size_t index = 0; index < updatesJson.size(); ++index) {
+      JsonObjectConst update = updatesJson[index];
+      updates[index].localDate = update["local_date"] | "";
+      updates[index].isDone = update["is_done"].as<bool>();
+    }
+
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+      delete[] updates;
+      failureReason = "Device state busy.";
+      return false;
+    }
+
+    const bool applied = habitTracker_.applyHistoryDraft(
+        updates, updatesJson.size(), nowLogical, command.baseRevision, failureReason);
+    if (stateMutex_) {
+      xSemaphoreGive(stateMutex_);
+    }
+    delete[] updates;
+    if (!applied) {
+      return false;
+    }
+
+    markRuntimeSnapshotDirty_();
+    Serial.println("Applied cloud history draft.");
+    return true;
+  }
+
+  if (command.kind == "apply_device_settings") {
+    if (!command.hasSyncSettingsPayload) {
+      failureReason = "apply_device_settings payload is empty.";
+      return false;
+    }
+
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+      failureReason = "Device state busy.";
+      return false;
+    }
+
+    const bool settingsApplied = deviceSettings_.applySync(command.settingsSync, failureReason);
+    if (!settingsApplied) {
+      if (stateMutex_) {
+        xSemaphoreGive(stateMutex_);
+      }
       if (failureReason.isEmpty()) {
         failureReason = "Failed to persist device settings.";
       }
@@ -213,8 +394,25 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
 
     habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
+    if (!habitTracker_.bumpRuntimeRevision()) {
+      if (stateMutex_) {
+        xSemaphoreGive(stateMutex_);
+      }
+      failureReason = "Failed to persist runtime revision after settings update.";
+      return false;
+    }
     timeService_.applySettings(deviceSettings_.current());
-    Serial.println("Applied cloud settings sync.");
+    if (stateMutex_) {
+      xSemaphoreGive(stateMutex_);
+    }
+    markRuntimeSnapshotDirty_();
+    Serial.println("Applied cloud device settings.");
+    return true;
+  }
+
+  if (command.kind == "request_runtime_snapshot") {
+    markRuntimeSnapshotDirty_();
+    Serial.println("Runtime snapshot requested.");
     return true;
   }
 
@@ -222,31 +420,48 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   return false;
 }
 
-void FirmwareApp::flushPendingDeviceEvent_() {
-  HabitTracker::PendingDeviceEvent pendingEvent;
-  if (!habitTracker_.pendingDeviceEvent(pendingEvent)) {
-    return;
+bool FirmwareApp::flushRuntimeSnapshot_() {
+  if (!runtimeSnapshotDirty_ || WiFi.status() != WL_CONNECTED || !cloudClient_.isConfigured()) {
+    return false;
   }
 
-  CloudClient::DayStateRecord record;
-  record.deviceEventId = pendingEvent.deviceEventId;
-  record.effectiveAt = pendingEvent.effectiveAt;
-  record.localDate = pendingEvent.localDate;
-  record.isDone = pendingEvent.isDone;
-
-  const bool synced =
-      realtimeClient_.isConnected()
-          ? realtimeClient_.publishDayStateEvent(cloudClient_.deviceAuthToken(), record)
-          : cloudClient_.recordDayState(record);
-  if (!synced) {
-    Serial.println("Pending day-state sync failed.");
-    return;
+  HabitTracker::WeekDate weekStart{};
+  uint8_t todayRow = 0;
+  uint32_t revision = 0;
+  String boardDaysJson;
+  String settingsJson;
+  String generatedAt;
+  if (!copyRuntimeSnapshotPayload_(boardDaysJson, settingsJson, weekStart, todayRow, revision, generatedAt)) {
+    return false;
   }
 
-  habitTracker_.markPendingDeviceEventSynced();
-  Serial.printf("Synced local day event %s for %s\n",
-                pendingEvent.deviceEventId.c_str(),
-                pendingEvent.localDate.c_str());
+  const bool uploaded =
+      (realtimeClient_.isConnected() &&
+       realtimeClient_.publishRuntimeSnapshot(
+           cloudClient_.deviceAuthToken(), revision, weekStart, todayRow, boardDaysJson, settingsJson, generatedAt)) ||
+      cloudClient_.uploadRuntimeSnapshot(
+          revision, weekStart, todayRow, boardDaysJson, settingsJson, generatedAt);
+  if (uploaded) {
+    uint32_t currentRevision = revision;
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+      currentRevision = habitTracker_.runtimeRevision();
+      xSemaphoreGive(stateMutex_);
+    }
+
+    if (currentRevision == revision) {
+      runtimeSnapshotDirty_ = false;
+      Serial.printf("Uploaded runtime snapshot revision %lu\n", static_cast<unsigned long>(revision));
+    } else {
+      runtimeSnapshotDirty_ = true;
+      Serial.printf("Uploaded stale runtime snapshot revision %lu; latest revision is %lu, keeping snapshot dirty.\n",
+                    static_cast<unsigned long>(revision),
+                    static_cast<unsigned long>(currentRevision));
+    }
+  } else {
+    Serial.println("Runtime snapshot upload failed.");
+  }
+
+  return uploaded;
 }
 
 void FirmwareApp::pollCommands_() {
@@ -257,24 +472,119 @@ void FirmwareApp::pollCommands_() {
   }
 
   for (size_t index = 0; index < commandCount; ++index) {
-    String failureReason;
-    const bool applied = applyCloudCommand_(commands[index], failureReason);
-    const CloudClient::CommandAckStatus ackStatus =
-        applied ? CloudClient::CommandAckStatus::Applied : CloudClient::CommandAckStatus::Failed;
-
-    enqueuePendingAck_(commands[index].id, ackStatus, failureReason);
+    if (!enqueueIncomingCommand_(commands[index])) {
+      Serial.println("Incoming command queue full; stopping HTTP command fetch processing.");
+      break;
+    }
   }
 }
 
 void FirmwareApp::processRealtimeCommands_() {
   CloudClient::DeviceCommand command;
   while (realtimeClient_.popCommand(command)) {
+    if (!enqueueIncomingCommand_(command)) {
+      Serial.println("Incoming command queue full; dropping realtime command.");
+    }
+  }
+}
+
+bool FirmwareApp::enqueueIncomingCommand_(const CloudClient::DeviceCommand& command) {
+  if (queueMutex_ && xSemaphoreTake(queueMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return false;
+  }
+
+  if (incomingCommandCount_ >= kIncomingCommandQueueSize) {
+    if (queueMutex_) {
+      xSemaphoreGive(queueMutex_);
+    }
+    return false;
+  }
+
+  IncomingCommand& slot = incomingCommands_[incomingCommandCount_++];
+  slot.command = command;
+  slot.occupied = true;
+
+  if (queueMutex_) {
+    xSemaphoreGive(queueMutex_);
+  }
+  return true;
+}
+
+bool FirmwareApp::dequeueIncomingCommand_(CloudClient::DeviceCommand& outCommand) {
+  if (queueMutex_ && xSemaphoreTake(queueMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return false;
+  }
+
+  if (incomingCommandCount_ == 0) {
+    if (queueMutex_) {
+      xSemaphoreGive(queueMutex_);
+    }
+    return false;
+  }
+
+  outCommand = incomingCommands_[0].command;
+  for (size_t index = 1; index < incomingCommandCount_; ++index) {
+    incomingCommands_[index - 1] = incomingCommands_[index];
+  }
+  incomingCommands_[incomingCommandCount_ - 1] = IncomingCommand{};
+  incomingCommandCount_--;
+
+  if (queueMutex_) {
+    xSemaphoreGive(queueMutex_);
+  }
+  return true;
+}
+
+void FirmwareApp::drainIncomingCommands_() {
+  for (uint8_t processed = 0; processed < 2; ++processed) {
+    CloudClient::DeviceCommand command;
+    if (!dequeueIncomingCommand_(command)) {
+      return;
+    }
+
     String failureReason;
     const bool applied = applyCloudCommand_(command, failureReason);
     const CloudClient::CommandAckStatus ackStatus =
         applied ? CloudClient::CommandAckStatus::Applied : CloudClient::CommandAckStatus::Failed;
-
     enqueuePendingAck_(command.id, ackStatus, failureReason);
+  }
+}
+
+void FirmwareApp::syncTask_() {
+  for (;;) {
+    if (state_ == FirmwareState::SetupRecovery || !cloudClient_.isConfigured() || WiFi.status() != WL_CONNECTED) {
+      vTaskDelay(pdMS_TO_TICKS(50));
+      continue;
+    }
+
+    realtimeClient_.loop();
+    processRealtimeCommands_();
+
+    const bool realtimeConnected = realtimeClient_.isConnected();
+    if (runtimeSnapshotDirty_ && millis() - lastRuntimeSnapshotAttemptAtMs_ >= kRuntimeSnapshotSyncIntervalMs) {
+      lastRuntimeSnapshotAttemptAtMs_ = millis();
+      flushRuntimeSnapshot_();
+    }
+
+    flushPendingCommandAcks_();
+
+    if (!realtimeConnected && millis() - lastCommandPollAtMs_ >= kFallbackCommandPollWhenNoRealtimeMs) {
+      lastCommandPollAtMs_ = millis();
+      pollCommands_();
+    }
+
+    if (millis() - lastHeartbeatAtMs_ >= kHeartbeatIntervalMs) {
+      lastHeartbeatAtMs_ = millis();
+      if (!realtimeConnected ||
+          !realtimeClient_.publishPresence(cloudClient_.deviceAuthToken(),
+                                           String(Config::kFirmwareVersion),
+                                           String(Config::kHardwareProfile),
+                                           timeService_.currentUtcIsoTimestamp())) {
+        cloudClient_.heartbeat();
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(15));
   }
 }
 
@@ -353,7 +663,7 @@ void FirmwareApp::tickSetupRecovery_() {
 
   if (cloudClient_.redeemPendingClaim(claim)) {
     provisioningStore_.clearPendingClaim();
-    pollCommands_();
+    markRuntimeSnapshotDirty_();
     enterState_(FirmwareState::Tracking);
   }
 }
@@ -362,81 +672,43 @@ void FirmwareApp::tickTracking_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
-  realtimeClient_.loop();
-  processRealtimeCommands_();
+
+  drainIncomingCommands_();
 
   tm logicalNow{};
   if (timeService_.nowLogical(logicalNow)) {
-    habitTracker_.checkWeekBoundary(logicalNow);
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+      if (habitTracker_.checkWeekBoundary(logicalNow)) {
+        markRuntimeSnapshotDirty_();
+      }
 
-    if (buttonInput_.consumeShortPress()) {
-      bool isDone = false;
-      const int8_t weekSuccessBefore = habitTracker_.currentWeekSuccess();
-      const String effectiveAt = timeService_.currentUtcIsoTimestamp();
-      if (habitTracker_.queueLocalToggleToday(logicalNow, effectiveAt, isDone)) {
-        lastLocalInteractionAtMs_ = millis();
-        Serial.printf("Local toggle for %s -> %s\n",
-                      timeService_.currentLogicalDate().c_str(),
-                      isDone ? "done" : "not_done");
-        if (realtimeClient_.isConnected()) {
-          flushPendingDeviceEvent_();
-        }
+      if (buttonInput_.consumeShortPress()) {
+        bool isDone = false;
+        const int8_t weekSuccessBefore = habitTracker_.currentWeekSuccess();
+        if (habitTracker_.queueLocalToggleToday(logicalNow, isDone)) {
+          lastLocalInteractionAtMs_ = millis();
+          markRuntimeSnapshotDirty_();
+          Serial.printf("Local toggle for %s -> %s\n",
+                        timeService_.currentLogicalDate().c_str(),
+                        isDone ? "done" : "not_done");
 
-        const int8_t weekSuccessAfter = habitTracker_.currentWeekSuccess();
-        if (rewardEngine_.shouldTrigger(deviceSettings_.current(), isDone, weekSuccessBefore, weekSuccessAfter)) {
-          rewardEngine_.start(deviceSettings_.current());
-          enterState_(FirmwareState::Reward);
-          return;
+          const int8_t weekSuccessAfter = habitTracker_.currentWeekSuccess();
+          if (rewardEngine_.shouldTrigger(deviceSettings_.current(), isDone, weekSuccessBefore, weekSuccessAfter)) {
+            rewardEngine_.start(deviceSettings_.current());
+            xSemaphoreGive(stateMutex_);
+            enterState_(FirmwareState::Reward);
+            return;
+          }
         }
       }
-    }
 
-    const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-    boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
+      const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+      boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
+      xSemaphoreGive(stateMutex_);
+    }
   } else {
     const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
     boardRenderer_.renderSetupState(false, WiFi.status() == WL_CONNECTED, brightness);
-  }
-
-  if (!cloudClient_.isConfigured() || WiFi.status() != WL_CONNECTED) {
-    return;
-  }
-
-  const bool realtimeConnected = realtimeClient_.isConnected();
-  const bool quietForFallback = millis() - lastLocalInteractionAtMs_ >= kCloudFallbackQuietPeriodMs;
-
-  if (millis() - lastDeviceSyncAttemptAtMs_ >= kDeviceSyncIntervalMs) {
-    const bool canFlushPendingEvent = realtimeConnected || quietForFallback;
-    if (habitTracker_.hasPendingDeviceEvent() && canFlushPendingEvent) {
-      lastDeviceSyncAttemptAtMs_ = millis();
-      flushPendingDeviceEvent_();
-    }
-  }
-
-  if (realtimeConnected || quietForFallback) {
-    flushPendingCommandAcks_();
-  }
-
-  const bool shouldUseHttpFallback = !realtimeConnected;
-  if (shouldUseHttpFallback &&
-      quietForFallback &&
-      millis() - lastCommandPollAtMs_ >= kFallbackCommandPollWhenNoRealtimeMs) {
-    lastCommandPollAtMs_ = millis();
-    pollCommands_();
-  }
-
-  if (millis() - lastHeartbeatAtMs_ >= kHeartbeatIntervalMs) {
-    lastHeartbeatAtMs_ = millis();
-    if (!realtimeConnected ||
-        !realtimeClient_.publishPresence(
-            cloudClient_.deviceAuthToken(),
-            String(Config::kFirmwareVersion),
-            String(Config::kHardwareProfile),
-            timeService_.currentUtcIsoTimestamp())) {
-      if (quietForFallback) {
-        cloudClient_.heartbeat();
-      }
-    }
   }
 }
 
@@ -444,8 +716,7 @@ void FirmwareApp::tickReward_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
-  realtimeClient_.loop();
-  processRealtimeCommands_();
+  drainIncomingCommands_();
 
   if (buttonInput_.consumeShortPress() || rewardEngine_.shouldDismiss()) {
     enterState_(FirmwareState::Tracking);
@@ -454,14 +725,13 @@ void FirmwareApp::tickReward_() {
 
   tm logicalNow{};
   const tm* logicalNowPtr = timeService_.nowLogical(logicalNow) ? &logicalNow : nullptr;
-  const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-  boardRenderer_.renderReward(deviceSettings_.current(),
-                              rewardEngine_.type(),
-                              logicalNowPtr,
-                              rewardEngine_.elapsedMs(),
-                              brightness);
-
-  if (realtimeClient_.isConnected()) {
-    flushPendingCommandAcks_();
+  DeviceSettingsState settings{};
+  uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+    settings = deviceSettings_.current();
+    brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+    xSemaphoreGive(stateMutex_);
   }
+  boardRenderer_.renderReward(
+      settings, rewardEngine_.type(), logicalNowPtr, rewardEngine_.elapsedMs(), brightness);
 }

@@ -3,6 +3,7 @@
 Last locked: March 9, 2026
 
 This document resets the runtime architecture around the real failure modes found during hardware validation.
+For the simplified target runtime model that replaces the layered patch path, see [AddOne_Runtime_Simplification_Reset.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Simplification_Reset.md).
 
 ## Why This Rebuild Exists
 - The app board and the physical device board are not currently projecting the same model.
@@ -86,10 +87,11 @@ This is the board model both app and firmware must follow.
 - Cloud board state must update only after the device confirms apply, not when the app merely requests it.
 
 ### History correction
-- History correction is instant in the app.
-- The device should receive only the latest settled correction set, not every intermediate tap.
-- Cloud board state must update from the device-applied result, not from intermediate app taps.
-- The correct model is `latest-wins snapshot/revision sync`, not command replay.
+- History correction is available only during a live device session.
+- History correction is instant in the app draft.
+- The device should receive one explicit `Draft + Save` apply request, not every intermediate tap.
+- Cloud board state must update from the device-applied result or the next device runtime snapshot, not from intermediate app taps.
+- There is no deferred history queue and no replay-on-reconnect history behavior.
 
 ## Rebuild Rules
 
@@ -99,10 +101,11 @@ This is the board model both app and firmware must follow.
 - Realtime message handling must not block button capture.
 
 ### Cloud transport
-- `today toggle` can stay event-based.
-- `history correction` must become revision-based.
-- Older history revisions must be discardable by both gateway and firmware.
-- The device is the runtime authority for board state; cloud/app requests are intents until the device confirms them.
+- `today toggle` must be absolute desired-state delivery with runtime revision checks.
+- `history correction` must use `Draft + Save` with `base_revision`.
+- Older history drafts must be discardable by both gateway and firmware.
+- Runtime healing must rely on full device snapshots, not queued per-cell history replay.
+- The device is the runtime authority for board state and device-affecting settings; cloud/app requests are intents until the device confirms them.
 
 ### App data model
 - The app should project the board from the same canonical board contract as firmware.
@@ -137,3 +140,4 @@ This is the board model both app and firmware must follow.
 - Device-originated toggle appears in cloud/app after local update.
 - App-originated toggle appears on device quickly.
 - Offline local device changes sync correctly after reconnect.
+- Runtime snapshots heal stale cloud/app state back to the exact device board after reconnect or drift.

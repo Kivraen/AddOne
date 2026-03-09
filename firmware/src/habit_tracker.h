@@ -6,12 +6,9 @@
 
 class HabitTracker {
 public:
-  struct PendingDeviceEvent {
-    String deviceEventId{};
-    String effectiveAt{};
+  struct HistoryDraftUpdate {
     String localDate{};
     bool isDone = false;
-    bool isPending = false;
   };
 
   struct WeekDate {
@@ -26,16 +23,25 @@ public:
   };
 
   void begin();
-  bool applyCloudState(const String& localDate, bool isDone, const String& effectiveAt, const tm& nowDate);
+  bool applyCloudState(const String& localDate,
+                       bool isDone,
+                       const tm& nowDate,
+                       uint32_t expectedRevision,
+                       String& failureReason);
+  bool applyHistoryDraft(const HistoryDraftUpdate* updates,
+                         size_t updateCount,
+                         const tm& nowDate,
+                         uint32_t expectedRevision,
+                         String& failureReason);
+  bool bumpRuntimeRevision();
   bool checkWeekBoundary(const tm& nowDate);
+  bool currentWeekStart(WeekDate& outDate) const;
   int8_t currentWeekSuccess() const { return grid_.success[0]; }
   const WeeklyGrid& grid() const { return grid_; }
-  bool hasPendingDeviceEvent() const { return pendingEvent_.isPending; }
   bool isInitialized() const { return initialized_; }
   uint8_t minimum() const { return minimum_; }
-  bool pendingDeviceEvent(PendingDeviceEvent& outEvent) const;
-  bool markPendingDeviceEventSynced();
-  bool queueLocalToggleToday(const tm& nowDate, const String& effectiveAt, bool& outIsDone);
+  uint32_t runtimeRevision() const { return runtimeRevision_; }
+  bool queueLocalToggleToday(const tm& nowDate, bool& outIsDone);
   bool setMinimum(uint8_t minimum);
   bool syncDate(const tm& nowDate);
   uint8_t todayRow(const tm& nowDate) const;
@@ -46,15 +52,9 @@ private:
   static constexpr const char* kWeekStartKey = "weekStart";
   static constexpr const char* kMinimumKey = "minimum";
   static constexpr const char* kFirstWeekKey = "firstWeek";
-  static constexpr const char* kPendingEventIdKey = "pEvtId";
-  static constexpr const char* kPendingDateKey = "pDate";
-  static constexpr const char* kPendingDoneKey = "pDone";
-  static constexpr const char* kPendingAtKey = "pAt";
-  static constexpr const char* kPendingFlagKey = "hasPend";
+  static constexpr const char* kRevisionKey = "revision";
 
-  static String defaultEffectiveAt_();
   static int dayOfWeekMondayBased_(const tm& date);
-  static String generateDeviceEventId_();
   static bool isValidWeekDate_(const WeekDate& date);
   static bool parseLocalDate_(const String& localDate, tm& outDate);
   static WeekDate toWeekDate_(const tm& date);
@@ -67,13 +67,13 @@ private:
   int8_t findEarliestRecordedDay_(uint8_t weekIdx) const;
   void initEmpty_(const tm& nowDate);
   void load_();
-  bool setDayStateForDate_(const tm& targetDate, bool isDone, const String& effectiveAt, const tm& nowDate);
+  bool setDayStateForDate_(const tm& targetDate, bool isDone, const tm& nowDate, bool* outChanged = nullptr);
   void shiftWeeks_(int weeks);
 
   WeeklyGrid grid_{};
   bool initialized_ = false;
   bool isFirstWeek_ = true;
-  PendingDeviceEvent pendingEvent_{};
   WeekDate lastWeekStart_{};
+  uint32_t runtimeRevision_ = 0;
   uint8_t minimum_ = Config::kDefaultWeeklyMinimum;
 };

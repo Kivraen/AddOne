@@ -15,9 +15,20 @@ enum class RewardTrigger : uint8_t {
 };
 
 struct DeviceSettingsSyncPayload {
+  bool hasAmbientAuto = false;
+  bool hasBrightness = false;
+  bool hasDayResetTime = false;
+  bool hasName = false;
+  bool hasPalettePreset = false;
+  bool hasRewardEnabled = false;
+  bool hasRewardTrigger = false;
+  bool hasRewardType = false;
+  bool hasTimezone = false;
+  bool hasWeeklyTarget = false;
   bool ambientAuto = true;
   bool rewardEnabled = false;
   String dayResetTime{};
+  String name{};
   String palettePreset{};
   String rewardTrigger{};
   String rewardType{};
@@ -30,6 +41,7 @@ struct DeviceSettingsState {
   bool ambientAuto = true;
   bool rewardEnabled = false;
   char dayResetTime[9] = "00:00:00";
+  char name[64] = "AddOne";
   char palettePreset[16] = "classic";
   char timezone[64] = "America/Los_Angeles";
   uint8_t brightness = 70;
@@ -53,6 +65,7 @@ private:
   static constexpr const char* kAmbientAutoKey = "ambAuto";
   static constexpr const char* kBrightnessKey = "bright";
   static constexpr const char* kDayResetTimeKey = "resetAt";
+  static constexpr const char* kNameKey = "name";
   static constexpr const char* kPalettePresetKey = "palette";
   static constexpr const char* kRewardEnabledKey = "rewardOn";
   static constexpr const char* kRewardTriggerKey = "rewardTrg";

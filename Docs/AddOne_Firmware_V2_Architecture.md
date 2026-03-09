@@ -110,12 +110,17 @@ Used for:
 - Device identity, pending claim persistence, and top-level state machine exist.
 - AP HTTP server now exists in firmware v2 and matches the locked local onboarding contract.
 - Cloud claim redemption, heartbeat, command polling, and command acknowledgement now exist in firmware v2.
-- Firmware v2 now has a real `habit_tracker.*` module with the 21-week AddOne board model, local toggle handling, and pending device-event persistence.
+- Firmware v2 now has a real `habit_tracker.*` module with the 21-week AddOne board model, local toggle handling, runtime revisioning, and snapshot export support.
 - Firmware v2 now has initial `button_input.*`, `time_service.*`, `rtc_clock.*`, and `board_renderer.*` modules.
-- Firmware v2 now has a minimal `device_settings.*` module, applies `sync_settings` commands from the cloud contract, and uses `ambient_light.*` to derive runtime brightness.
+- Firmware v2 now has a minimal `device_settings.*` module, applies `apply_device_settings` commands from the cloud contract, and uses `ambient_light.*` to derive runtime brightness.
 - Firmware v2 now has a minimal `reward_engine.*` module and a real reward state with built-in `clock` and palette-based `paint` rendering.
 - Firmware v2 now has the first MQTT realtime client seam for online command delivery, while cloud polling remains as fallback.
 - The next firmware milestone is real broker-backed validation, then remaining hardware polish, custom reward payload sync, and real-device validation.
+- Firmware v2 runtime rebuild direction:
+  - physical button is fully local-first
+  - runtime revision advances on accepted device or cloud-applied state changes
+  - runtime snapshots heal cloud/app state after reconnect, boot uncertainty, or explicit refresh
+  - history edits are applied as live `Draft + Save`, not streamed per-cell commands
 - Hardware validation exposed a runtime-consistency problem set:
   - app and firmware board projection are not yet fully aligned
   - button capture is still coupled to blocking network work

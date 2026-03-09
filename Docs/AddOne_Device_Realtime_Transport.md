@@ -1,13 +1,14 @@
 # AddOne Device Realtime Transport
 
-Last locked: March 8, 2026
+Last locked: March 9, 2026
 
 This document defines the low-latency command path for AddOne devices.
 
 The goal is:
-- instant optimistic updates in the app
+- instant local feedback in the app
 - near-instant reaction on online devices
-- Supabase remaining the product source of truth
+- device remaining the runtime source of truth
+- Supabase storing the latest device-confirmed mirror
 - reliable fallback when the broker or device is offline
 
 ## Architecture
@@ -17,21 +18,25 @@ AddOne uses two lanes:
 1. `Source of truth`
 - Supabase auth
 - device ownership
-- settings
-- history/day state
+- mirrored latest board/settings
 - queued command records
+- snapshot storage
 
 2. `Realtime transport`
 - MQTT broker for low-latency device command delivery
-- small gateway service that bridges Supabase command rows to MQTT topics
-- existing Supabase RPCs retained for command ack and day-event writes
+- small gateway service that bridges:
+  - Supabase command rows -> MQTT topics
+  - MQTT device runtime messages -> Supabase RPCs
+- existing Supabase RPCs retained as the cloud write surface
 
 This means:
 - the app still writes command intents to Supabase
-- the gateway publishes new queued commands to MQTT immediately
+- the gateway publishes queued commands to MQTT immediately
 - online devices receive commands without waiting for a poll cycle
-- cloud board state advances only after device-confirmed apply or device-originated local events
-- offline devices still recover through the existing queued command model
+- the device applies locally first
+- the device publishes a fresh runtime snapshot after accepted runtime changes
+- the cloud mirror advances only from device-confirmed apply or device-originated runtime snapshots
+- offline devices still recover through queued commands plus reconnect snapshots
 
 ## Why This Shape
 
@@ -48,14 +53,16 @@ This is the clean upgrade from the current validation-grade polling system becau
 3. The realtime gateway sees the queued command.
 4. The gateway publishes the command to the device MQTT topic.
 5. The device applies the command immediately if online.
-6. The device acknowledges with the existing `ack_device_command(...)` surface.
-7. Supabase updates command state to `applied | failed | cancelled`.
-8. The cloud board updates from that device confirmation.
-9. The app UI reconciles through realtime invalidation and normal refetch.
+6. The device acknowledges with `ack_device_command(...)`.
+7. The device publishes a fresh runtime snapshot.
+8. The gateway forwards that snapshot to `upload_device_runtime_snapshot(...)`.
+9. Supabase updates the mirrored board/settings state.
+10. The app UI reconciles from the new device snapshot revision.
 
 If the device is offline:
 - the command remains queued in Supabase
 - the device can still recover through fallback polling after reconnect
+- when it reconnects, it should publish a fresh runtime snapshot to heal drift
 
 ## Topic Contract
 
@@ -86,7 +93,9 @@ Payload:
 
 Supported `kind` values in v1:
 - `set_day_state`
-- `sync_settings`
+- `request_runtime_snapshot`
+- `apply_history_draft`
+- `apply_device_settings`
 
 ### Device day-event topic
 - `addone/device/<hardware_uid>/event/day-state`
@@ -100,6 +109,19 @@ Purpose:
 Current runtime direction:
 - device should publish here first when realtime is available
 - HTTP `record_day_state_from_device(...)` remains the fallback
+
+### Device runtime snapshot topic
+- `addone/device/<hardware_uid>/snapshot/runtime`
+
+Published by:
+- device firmware
+
+Purpose:
+- publish the current device-confirmed runtime board and mirrored runtime settings after accepted runtime changes or reconnect
+
+Current runtime direction:
+- device should publish here first when realtime is available
+- HTTP `upload_device_runtime_snapshot(...)` remains the fallback
 
 ### Device presence topic
 - `addone/device/<hardware_uid>/presence`
@@ -147,6 +169,8 @@ The realtime gateway must:
 - subscribe to queued `device_commands`
 - resolve `device_id -> hardware_uid`
 - publish command payloads to MQTT
+- subscribe to device ack, presence, day-event, and runtime-snapshot topics
+- forward runtime snapshots into `upload_device_runtime_snapshot(...)`
 - deduplicate rapid republish of the same queued command
 - remain stateless enough to restart safely
 
@@ -160,21 +184,33 @@ Firmware must:
 - connect to MQTT when Wi-Fi and broker config are present
 - subscribe to its own command topic
 - parse and apply realtime commands using the same command handler as the poll path
-- publish command acknowledgements and local day events through the realtime lane when possible, with HTTP fallback
+- publish command acknowledgements, local day events, presence, and runtime snapshots through the realtime lane when possible, with HTTP fallback
 - keep fallback poll enabled at a slower interval
 
 ## App Responsibilities
 
 The app must:
-- update board/history optimistically
-- show `syncing` when a device is online and a change is in flight
+- show immediate feedback for in-flight today toggles
+- confirm runtime changes from a newer device snapshot revision
 - reserve `queued` for actual offline/backlog cases
+- keep a short polling fallback if realtime snapshot delivery is unavailable
 
 ## Deployment Notes
 
 For v1, the broker and gateway are separate from Supabase:
 - Supabase handles product data
-- MQTT handles device delivery
+- MQTT handles online runtime delivery
 - the gateway bridges the two
 
 This keeps the system scalable without turning Postgres polling into the realtime layer.
+
+## Development Setup Notes
+- Local validation on a developer machine can use `mosquitto` as the broker.
+- The minimum healthy local stack is:
+  - Expo app
+  - Supabase staging project
+  - MQTT broker
+  - realtime gateway
+  - flashed firmware configured for that broker
+- `device_runtime_snapshots` must be in the `supabase_realtime` publication for the app to receive live mirrored board updates via Supabase subscriptions.
+- If that publication entry is missing, the app can still work by polling snapshots, but it will feel slower and more fragile.

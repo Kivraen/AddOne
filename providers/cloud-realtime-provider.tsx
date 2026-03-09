@@ -14,8 +14,20 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
 
   const ownedDeviceIds = useMemo(() => devices.map((device) => device.id).sort(), [devices]);
+  const ownedFallbackStateIds = useMemo(
+    () => devices.filter((device) => !device.lastSnapshotAt).map((device) => device.id).sort(),
+    [devices],
+  );
   const sharedDeviceIds = useMemo(
     () => sharedBoards.map((board) => board.id).filter((id) => !ownedDeviceIds.includes(id)).sort(),
+    [ownedDeviceIds, sharedBoards],
+  );
+  const sharedFallbackStateIds = useMemo(
+    () =>
+      sharedBoards
+        .filter((board) => !ownedDeviceIds.includes(board.id) && !board.lastSnapshotAt)
+        .map((board) => board.id)
+        .sort(),
     [ownedDeviceIds, sharedBoards],
   );
 
@@ -71,7 +83,7 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
           event: "*",
           filter: `device_id=eq.${deviceId}`,
           schema: "public",
-          table: "device_day_states",
+          table: "device_runtime_snapshots",
         }, () => {
           invalidateDevices();
           invalidateSharedBoards();
@@ -126,8 +138,45 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
           event: "*",
           filter: `device_id=eq.${deviceId}`,
           schema: "public",
-          table: "device_day_states",
+          table: "device_runtime_snapshots",
         }, invalidateSharedBoards)
+        .subscribe();
+      channels.push(channel);
+    }
+
+    for (const deviceId of ownedFallbackStateIds) {
+      const channel = supabase
+        .channel(`owned-device-day-states:${deviceId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            filter: `device_id=eq.${deviceId}`,
+            schema: "public",
+            table: "device_day_states",
+          },
+          () => {
+            invalidateDevices();
+            invalidateSharedBoards();
+          },
+        )
+        .subscribe();
+      channels.push(channel);
+    }
+
+    for (const deviceId of sharedFallbackStateIds) {
+      const channel = supabase
+        .channel(`shared-device-day-states:${deviceId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            filter: `device_id=eq.${deviceId}`,
+            schema: "public",
+            table: "device_day_states",
+          },
+          invalidateSharedBoards,
+        )
         .subscribe();
       channels.push(channel);
     }
@@ -137,7 +186,7 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
         void supabase.removeChannel(channel);
       }
     };
-  }, [mode, ownedDeviceIds, queryClient, sharedDeviceIds, status, user?.id]);
+  }, [mode, ownedDeviceIds, ownedFallbackStateIds, queryClient, sharedDeviceIds, sharedFallbackStateIds, status, user?.id]);
 
   return children;
 }

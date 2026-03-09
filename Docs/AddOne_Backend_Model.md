@@ -151,7 +151,7 @@ Notes:
 
 ### `device_day_events`
 Purpose:
-- append-only event log for all history changes
+- reserved for optional future audit/event tracing
 
 Sources:
 - `device`
@@ -160,18 +160,26 @@ Sources:
 - `migration`
 
 Notes:
-- this is the anti-toggle layer
-- the app and firmware should send explicit day-state events with timestamps
-- this is the basis for reconciliation when remote actions were queued or the device was offline
+- this is not the primary v1 runtime-healing path
+- v1 runtime correctness relies on device-authored snapshots, not replaying per-day event history
 
 ### `device_day_states`
 Purpose:
 - current materialized day state per `device + local_date`
 
 Notes:
-- updated automatically from `device_day_events`
+- updated from device-confirmed apply and device-authored runtime snapshots
 - this is the fast read model for the board
 - app-originated changes should not advance this table until the device confirms apply
+
+### `device_runtime_snapshots`
+Purpose:
+- store the latest full device-authored board/settings snapshot by runtime revision
+
+Notes:
+- this is the primary healing path after reconnect or drift
+- snapshots rewrite the mirrored `device_day_states` read model
+- snapshots keep cloud/app aligned to the exact device board without a deferred event queue
 
 ### `device_commands`
 Purpose:
@@ -179,16 +187,15 @@ Purpose:
 
 Initial v1 usage:
 - remote fallback completion
-- settings sync
-
-Current behavior:
-- a device settings update now automatically enqueues a fresh `sync_settings` command for that device in staging
+- live device settings apply
+- runtime snapshot refresh requests
+- history draft apply
 
 Transport model:
 - online devices should receive these commands over the MQTT realtime delivery lane
 - fallback polling still exists for offline recovery and backlog drain
 - command acknowledgement still writes back through Supabase
-- acknowledged `applied` commands are what materialize cloud-requested board changes into `device_day_states`
+- acknowledged `applied` commands confirm execution, while mirrored board/settings state advances on the next device-confirmed snapshot
 
 ## RPC / Helper Functions
 The first migration includes helper functions for:
@@ -211,7 +218,12 @@ The device sync migration adds helper functions for:
 - heartbeat / last seen updates
 - device command pull
 - device command acknowledgement
-- device-originated day-state event writes
+- device runtime snapshot upload
+
+The runtime authority rebuild adds helper functions for:
+- requesting a runtime snapshot refresh from the app
+- applying a live history draft with `base_revision`
+- applying live device settings through a device-confirmed command path
 
 The realtime transport layer adds:
 - MQTT topic contract for per-device command delivery

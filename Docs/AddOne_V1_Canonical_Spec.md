@@ -35,17 +35,21 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Day reset defaults to midnight local, with user-configurable reset time.
 - No formal skip/pause state in v1.
 - History editing changes daily cells only; weekly success/fail always auto-recomputes.
+- History edit is `live-only` and uses `Draft + Save`.
+- Device-affecting settings are also `live-only` and count as saved only after device confirmation.
 - Canonical runtime board projection, parity rules, and rebuild constraints are locked in [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md).
 
 ## App And Cloud Model
 - Normal app control is `cloud-backed`.
 - Device core always works locally even when cloud or Wi-Fi is unavailable.
 - Cloud backup is `automatic` whenever the linked device is online.
-- Remote app completion is allowed.
-- If the device is offline, remote completion is `queued and synced later`.
+- Remote app completion is allowed only during a live device session.
+- If the device is offline remotely, the app is `read-only` for device-affecting actions.
 - Online device delivery should use a `realtime command transport`, not periodic polling as the primary path.
 - Supabase remains the product source of truth; realtime transport is the low-latency delivery lane for online devices.
-- Board-state persistence must advance only from `device-confirmed apply` or `device-originated local events`, not from app intent alone.
+- Device is the runtime source of truth for board state and device-affecting settings.
+- Cloud mirrors only `device-confirmed apply` or `device-originated runtime snapshots`, never app intent alone.
+- Runtime snapshots should use the same realtime lane as online commands whenever possible; direct cloud HTTP snapshot upload is fallback only.
 - Polling remains a `fallback and backlog recovery path`, not the long-term user-experience standard.
 - The app requires sign-in.
 - Current app auth flow is `email OTP`.
@@ -188,12 +192,14 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
 - Cloud mode now drives the main board from live device/account data, while demo mode remains as a deliberate mock fallback.
 - The app now invalidates live board/share queries from Supabase realtime changes so firmware-originated updates can surface without manual refresh.
-- Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
+- Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, runtime snapshot upload, runtime refresh request, history draft apply, and live settings apply now exist in staging schema.
 - The app now applies optimistic board/history updates immediately for cloud-backed actions.
-- The current rebuild direction is `device-authoritative runtime state`: app requests queue intents, and the cloud board catches up from device-confirmed apply.
+- The current rebuild direction is `device-authoritative runtime state`: app requests live intents or drafts, and the cloud mirror catches up from device-confirmed apply or runtime snapshots.
+- Operational lesson now locked:
+  - runtime feels reliable only when the app reads from the latest device-confirmed snapshot, not from mixed command status, derived rows, and local shadow state at the same time
 - A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
 - Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
-- Firmware v2 now includes claim redemption, heartbeat, command pull/ack, and device day-event sync against the AddOne cloud RPC contract.
+- Firmware v2 now includes claim redemption, heartbeat, command pull/ack, runtime revision tracking, and snapshot-based cloud healing against the AddOne cloud RPC contract.
 - Firmware v2 now includes the first real AddOne behavior layer: single-button local toggling, 21-week board persistence, RTC/NTP-backed time service, and LED board rendering.
 - Firmware v2 now includes minimal settings sync application, palette preset handling, and ambient-light-driven brightness.
 - Firmware v2 now includes reward-state behavior with built-in `clock` and palette-based `paint` rendering for local button-triggered rewards.
@@ -203,7 +209,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 1. Complete the runtime consistency rebuild from [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md):
    - one canonical board projection
    - local-first button reliability
-   - latest-wins history sync
+   - live-only `Draft + Save` history sync
 2. Revalidate the rebuilt button, board parity, app toggle, and history flows on real hardware.
 3. Add custom reward payload sync so app-configured reward art can flow through cloud and onto firmware.
 4. Remove staging-only onboarding shortcuts once real hardware validation is complete.

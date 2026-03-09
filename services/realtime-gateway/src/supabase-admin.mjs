@@ -45,66 +45,6 @@ export async function fetchQueuedCommandEnvelope(supabase, commandId) {
   };
 }
 
-export async function isApprovedDeviceOwner(supabase, deviceId, userId) {
-  const { data, error } = await supabase
-    .from("device_memberships")
-    .select("device_id")
-    .eq("device_id", deviceId)
-    .eq("user_id", userId)
-    .eq("role", "owner")
-    .eq("status", "approved")
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return !!data?.device_id;
-}
-
-export async function requestDayStateFromAppRelay(supabase, params) {
-  const { clientEventId, deviceId, isDone, localDate, userId } = params;
-
-  const isOwner = await isApprovedDeviceOwner(supabase, deviceId, userId);
-  if (!isOwner) {
-    throw new Error("Only the owner can control this device.");
-  }
-
-  const { data, error } = await supabase.rpc("request_day_state_from_app", {
-    p_client_event_id: clientEventId,
-    p_device_id: deviceId,
-    p_is_done: isDone,
-    p_local_date: localDate,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data;
-}
-
-export async function requestDayStatesBatchFromAppRelay(supabase, params) {
-  const { batchEventId, deviceId, updates, userId } = params;
-
-  const isOwner = await isApprovedDeviceOwner(supabase, deviceId, userId);
-  if (!isOwner) {
-    throw new Error("Only the owner can control this device.");
-  }
-
-  const { data, error } = await supabase.rpc("request_day_states_batch_from_app", {
-    p_batch_event_id: batchEventId,
-    p_device_id: deviceId,
-    p_updates: updates,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data;
-}
-
 export async function listQueuedCommandEnvelopes(supabase) {
   const { data, error } = await supabase
     .from("device_commands")

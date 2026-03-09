@@ -184,66 +184,52 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
     JsonVariantConst payloadObject = entry["payload"];
     if (payloadObject.is<JsonObjectConst>()) {
       JsonObjectConst payloadJson = payloadObject.as<JsonObjectConst>();
-      serializeJson(payloadJson, command.batchPayloadJson);
+      serializeJson(payloadJson, command.payloadJson);
       command.localDate = payloadJson["local_date"] | "";
       command.effectiveAt = payloadJson["effective_at"] | "";
       if (!payloadJson["is_done"].isNull()) {
         command.isDone = payloadJson["is_done"].as<bool>();
         command.hasSetDayStatePayload = !command.localDate.isEmpty();
       }
-      command.hasBatchDayStatesPayload = payloadJson["updates"].is<JsonArrayConst>();
+      command.hasHistoryDraftPayload = payloadJson["updates"].is<JsonArrayConst>();
+      if (!payloadJson["base_revision"].isNull()) {
+        command.baseRevision = payloadJson["base_revision"].as<uint32_t>();
+        command.hasBaseRevision = true;
+      }
 
-      command.settingsSync.ambientAuto = payloadJson["ambient_auto"].isNull() ? true : payloadJson["ambient_auto"].as<bool>();
-      command.settingsSync.rewardEnabled = payloadJson["reward_enabled"].isNull() ? false : payloadJson["reward_enabled"].as<bool>();
+      command.settingsSync.hasAmbientAuto = !payloadJson["ambient_auto"].isNull();
+      command.settingsSync.hasRewardEnabled = !payloadJson["reward_enabled"].isNull();
+      command.settingsSync.hasDayResetTime = !payloadJson["day_reset_time"].isNull();
+      command.settingsSync.hasName = !payloadJson["name"].isNull();
+      command.settingsSync.hasPalettePreset = !payloadJson["palette_preset"].isNull();
+      command.settingsSync.hasRewardTrigger = !payloadJson["reward_trigger"].isNull();
+      command.settingsSync.hasRewardType = !payloadJson["reward_type"].isNull();
+      command.settingsSync.hasTimezone = !payloadJson["timezone"].isNull();
+      command.settingsSync.hasBrightness = !payloadJson["brightness"].isNull();
+      command.settingsSync.hasWeeklyTarget = !payloadJson["weekly_target"].isNull();
+
+      command.settingsSync.ambientAuto = command.settingsSync.hasAmbientAuto ? payloadJson["ambient_auto"].as<bool>() : true;
+      command.settingsSync.rewardEnabled = command.settingsSync.hasRewardEnabled ? payloadJson["reward_enabled"].as<bool>() : false;
       command.settingsSync.dayResetTime = payloadJson["day_reset_time"] | "";
+      command.settingsSync.name = payloadJson["name"] | "";
       command.settingsSync.palettePreset = payloadJson["palette_preset"] | "";
       command.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
       command.settingsSync.rewardType = payloadJson["reward_type"] | "";
       command.settingsSync.timezone = payloadJson["timezone"] | "";
-      command.settingsSync.brightness = payloadJson["brightness"].isNull() ? 70 : payloadJson["brightness"].as<uint8_t>();
-      command.settingsSync.weeklyTarget = payloadJson["weekly_target"].isNull()
-                                              ? Config::kDefaultWeeklyMinimum
-                                              : payloadJson["weekly_target"].as<uint8_t>();
+      command.settingsSync.brightness =
+          command.settingsSync.hasBrightness ? payloadJson["brightness"].as<uint8_t>() : 70;
+      command.settingsSync.weeklyTarget = command.settingsSync.hasWeeklyTarget
+                                              ? payloadJson["weekly_target"].as<uint8_t>()
+                                              : Config::kDefaultWeeklyMinimum;
       command.hasSyncSettingsPayload =
-          !command.settingsSync.palettePreset.isEmpty() || !command.settingsSync.timezone.isEmpty() || !command.settingsSync.dayResetTime.isEmpty();
+          command.settingsSync.hasAmbientAuto || command.settingsSync.hasRewardEnabled || command.settingsSync.hasDayResetTime ||
+          command.settingsSync.hasName ||
+          command.settingsSync.hasPalettePreset || command.settingsSync.hasRewardTrigger || command.settingsSync.hasRewardType ||
+          command.settingsSync.hasTimezone || command.settingsSync.hasBrightness || command.settingsSync.hasWeeklyTarget;
     }
   }
 
   return true;
-}
-
-bool CloudClient::recordDayState(const DayStateRecord& record) {
-  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
-    return false;
-  }
-
-  if (record.localDate.isEmpty() || record.deviceEventId.isEmpty()) {
-    return false;
-  }
-
-  String payload = "{";
-  payload += "\"p_hardware_uid\":\"";
-  payload += escapeJson(identity_->hardwareUid());
-  payload += "\",\"p_device_auth_token\":\"";
-  payload += escapeJson(deviceAuthToken_);
-  payload += "\",\"p_local_date\":\"";
-  payload += escapeJson(record.localDate);
-  payload += "\",\"p_is_done\":";
-  payload += record.isDone ? "true" : "false";
-  payload += ",\"p_device_event_id\":\"";
-  payload += escapeJson(record.deviceEventId);
-  payload += "\"";
-
-  if (!record.effectiveAt.isEmpty()) {
-    payload += ",\"p_effective_at\":\"";
-    payload += escapeJson(record.effectiveAt);
-    payload += "\"";
-  }
-
-  payload += "}";
-
-  String response;
-  return postRpc_("record_day_state_from_device", payload, response);
 }
 
 bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& claim) {
@@ -274,6 +260,58 @@ bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& c
     Serial.printf("Cloud claim redeemed for session %s\n", claim.onboardingSessionId);
   }
   return ok;
+}
+
+bool CloudClient::uploadRuntimeSnapshot(uint32_t revision,
+                                        const HabitTracker::WeekDate& currentWeekStart,
+                                        uint8_t todayRow,
+                                        const String& boardDaysJson,
+                                        const String& settingsJson,
+                                        const String& generatedAt) {
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  if (boardDaysJson.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_revision\":";
+  payload += String(revision);
+  payload += ",\"p_current_week_start\":\"";
+  payload += String(currentWeekStart.year);
+  payload += "-";
+  if (currentWeekStart.month < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.month);
+  payload += "-";
+  if (currentWeekStart.day < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.day);
+  payload += "\",\"p_today_row\":";
+  payload += String(todayRow);
+  payload += ",\"p_board_days\":";
+  payload += boardDaysJson;
+  payload += ",\"p_settings\":";
+  payload += settingsJson.isEmpty() ? "{}" : settingsJson;
+
+  if (!generatedAt.isEmpty()) {
+    payload += ",\"p_generated_at\":\"";
+    payload += escapeJson(generatedAt);
+    payload += "\"";
+  }
+
+  payload += "}";
+
+  String response;
+  return postRpc_("upload_device_runtime_snapshot", payload, response);
 }
 
 const char* CloudClient::ackStatusName_(CommandAckStatus status) const {

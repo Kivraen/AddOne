@@ -23,26 +23,47 @@ void DeviceSettingsStore::begin() {
 }
 
 bool DeviceSettingsStore::applySync(const DeviceSettingsSyncPayload& payload, String& error) {
-  settings_.ambientAuto = payload.ambientAuto;
-  settings_.rewardEnabled = payload.rewardEnabled;
-  settings_.brightness = clampBrightness_(payload.brightness);
-  settings_.weeklyTarget = clampWeeklyTarget_(payload.weeklyTarget);
-  settings_.rewardTrigger = parseRewardTrigger_(payload.rewardTrigger);
-  settings_.rewardType = parseRewardType_(payload.rewardType);
+  if (payload.hasAmbientAuto) {
+    settings_.ambientAuto = payload.ambientAuto;
+  }
+  if (payload.hasRewardEnabled) {
+    settings_.rewardEnabled = payload.rewardEnabled;
+  }
+  if (payload.hasBrightness) {
+    settings_.brightness = clampBrightness_(payload.brightness);
+  }
+  if (payload.hasWeeklyTarget) {
+    settings_.weeklyTarget = clampWeeklyTarget_(payload.weeklyTarget);
+  }
+  if (payload.hasRewardTrigger) {
+    settings_.rewardTrigger = parseRewardTrigger_(payload.rewardTrigger);
+  }
+  if (payload.hasRewardType) {
+    settings_.rewardType = parseRewardType_(payload.rewardType);
+  }
 
-  if (!normalizeResetTime_(payload.dayResetTime, settings_.dayResetTime, sizeof(settings_.dayResetTime))) {
+  if (payload.hasDayResetTime &&
+      !normalizeResetTime_(payload.dayResetTime, settings_.dayResetTime, sizeof(settings_.dayResetTime))) {
     error = "Invalid day reset time.";
     return false;
   }
+  if (payload.hasName) {
+    const String name = payload.name.isEmpty() ? String("AddOne") : payload.name;
+    strncpy(settings_.name, name.c_str(), sizeof(settings_.name) - 1);
+    settings_.name[sizeof(settings_.name) - 1] = '\0';
+  }
 
-  if (!normalizePalette_(payload.palettePreset, settings_.palettePreset, sizeof(settings_.palettePreset))) {
+  if (payload.hasPalettePreset &&
+      !normalizePalette_(payload.palettePreset, settings_.palettePreset, sizeof(settings_.palettePreset))) {
     error = "Invalid palette preset.";
     return false;
   }
 
-  const String timezone = payload.timezone.isEmpty() ? String(Config::kDefaultTimezoneIana) : payload.timezone;
-  strncpy(settings_.timezone, timezone.c_str(), sizeof(settings_.timezone) - 1);
-  settings_.timezone[sizeof(settings_.timezone) - 1] = '\0';
+  if (payload.hasTimezone) {
+    const String timezone = payload.timezone.isEmpty() ? String(Config::kDefaultTimezoneIana) : payload.timezone;
+    strncpy(settings_.timezone, timezone.c_str(), sizeof(settings_.timezone) - 1);
+    settings_.timezone[sizeof(settings_.timezone) - 1] = '\0';
+  }
 
   return persist_();
 }
@@ -82,6 +103,10 @@ void DeviceSettingsStore::load_() {
 
   String storedReset = prefs.getString(kDayResetTimeKey, "00:00:00");
   normalizeResetTime_(storedReset, settings_.dayResetTime, sizeof(settings_.dayResetTime));
+
+  String storedName = prefs.getString(kNameKey, "AddOne");
+  strncpy(settings_.name, storedName.c_str(), sizeof(settings_.name) - 1);
+  settings_.name[sizeof(settings_.name) - 1] = '\0';
 
   String storedPalette = prefs.getString(kPalettePresetKey, "classic");
   normalizePalette_(storedPalette, settings_.palettePreset, sizeof(settings_.palettePreset));
@@ -135,6 +160,7 @@ bool DeviceSettingsStore::persist_() const {
   prefs.putUChar(kBrightnessKey, settings_.brightness);
   prefs.putUChar(kWeeklyTargetKey, settings_.weeklyTarget);
   prefs.putString(kDayResetTimeKey, settings_.dayResetTime);
+  prefs.putString(kNameKey, settings_.name);
   prefs.putString(kPalettePresetKey, settings_.palettePreset);
   prefs.putString(kTimezoneKey, settings_.timezone);
   prefs.putString(kRewardTriggerKey, rewardTriggerName_(settings_.rewardTrigger));

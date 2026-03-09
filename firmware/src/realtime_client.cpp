@@ -8,6 +8,9 @@
 
 namespace {
 constexpr unsigned long kReconnectIntervalMs = 3000;
+constexpr size_t kCommandJsonCapacityFloor = 3072;
+constexpr size_t kCommandJsonCapacityHeadroom = 1024;
+constexpr uint16_t kMqttBufferSize = 6144;
 
 String escapeJson(const String& input) {
   String output;
@@ -54,7 +57,7 @@ void RealtimeClient::begin(const DeviceIdentity& identity) {
   }
 
   mqttClient_.setServer(CloudConfig::kMqttBrokerHost, CloudConfig::kMqttBrokerPort);
-  mqttClient_.setBufferSize(2048);
+  mqttClient_.setBufferSize(kMqttBufferSize);
   mqttClient_.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
     handleMessage_(topic, payload, length);
   });
@@ -113,31 +116,6 @@ bool RealtimeClient::publishAck(const String& deviceAuthToken,
   return publishJson_(ackTopic_(), payload);
 }
 
-bool RealtimeClient::publishDayStateEvent(const String& deviceAuthToken, const CloudClient::DayStateRecord& record) {
-  if (deviceAuthToken.isEmpty() || record.deviceEventId.isEmpty() || record.localDate.isEmpty()) {
-    return false;
-  }
-
-  String payload = "{";
-  payload += "\"device_auth_token\":\"";
-  payload += escapeJson(deviceAuthToken);
-  payload += "\",\"device_event_id\":\"";
-  payload += escapeJson(record.deviceEventId);
-  payload += "\",\"local_date\":\"";
-  payload += escapeJson(record.localDate);
-  payload += "\",\"is_done\":";
-  payload += record.isDone ? "true" : "false";
-
-  if (!record.effectiveAt.isEmpty()) {
-    payload += ",\"effective_at\":\"";
-    payload += escapeJson(record.effectiveAt);
-    payload += "\"";
-  }
-
-  payload += "}";
-  return publishJson_(dayStateEventTopic_(), payload);
-}
-
 bool RealtimeClient::publishPresence(const String& deviceAuthToken,
                                      const String& firmwareVersion,
                                      const String& hardwareProfile,
@@ -171,6 +149,51 @@ bool RealtimeClient::publishPresence(const String& deviceAuthToken,
 
   payload += "}";
   return publishJson_(presenceTopic_(), payload);
+}
+
+bool RealtimeClient::publishRuntimeSnapshot(const String& deviceAuthToken,
+                                            uint32_t revision,
+                                            const HabitTracker::WeekDate& currentWeekStart,
+                                            uint8_t todayRow,
+                                            const String& boardDaysJson,
+                                            const String& settingsJson,
+                                            const String& generatedAt) {
+  if (deviceAuthToken.isEmpty() || boardDaysJson.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken);
+  payload += "\",\"revision\":";
+  payload += String(revision);
+  payload += ",\"current_week_start\":\"";
+  payload += String(currentWeekStart.year);
+  payload += "-";
+  if (currentWeekStart.month < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.month);
+  payload += "-";
+  if (currentWeekStart.day < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.day);
+  payload += "\",\"today_row\":";
+  payload += String(todayRow);
+  payload += ",\"board_days\":";
+  payload += boardDaysJson;
+  payload += ",\"settings\":";
+  payload += settingsJson.isEmpty() ? "{}" : settingsJson;
+
+  if (!generatedAt.isEmpty()) {
+    payload += ",\"generated_at\":\"";
+    payload += escapeJson(generatedAt);
+    payload += "\"";
+  }
+
+  payload += "}";
+  return publishJson_(runtimeSnapshotTopic_(), payload);
 }
 
 bool RealtimeClient::popCommand(CloudClient::DeviceCommand& outCommand) {
@@ -248,12 +271,17 @@ bool RealtimeClient::replaceExistingQueuedCommand_(const CloudClient::DeviceComm
   for (size_t index = 0; index < queueCount_; ++index) {
     CloudClient::DeviceCommand& queued = commandQueue_[index];
 
-    if (command.kind == "sync_settings" && queued.kind == "sync_settings") {
+    if (command.kind == "apply_device_settings" && queued.kind == "apply_device_settings") {
       queued = command;
       return true;
     }
 
-    if (command.kind == "sync_day_states_batch" && queued.kind == "sync_day_states_batch") {
+    if (command.kind == "apply_history_draft" && queued.kind == "apply_history_draft") {
+      queued = command;
+      return true;
+    }
+
+    if (command.kind == "request_runtime_snapshot" && queued.kind == "request_runtime_snapshot") {
       queued = command;
       return true;
     }
@@ -300,7 +328,8 @@ bool RealtimeClient::publishJson_(const String& topic, const String& payload) {
 }
 
 bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCommand& outCommand) const {
-  DynamicJsonDocument doc(2048);
+  const size_t jsonCapacity = payload.length() + kCommandJsonCapacityHeadroom;
+  DynamicJsonDocument doc(jsonCapacity > kCommandJsonCapacityFloor ? jsonCapacity : kCommandJsonCapacityFloor);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
     Serial.printf("MQTT JSON parse error: %s\n", error.c_str());
@@ -320,28 +349,45 @@ bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCom
     return !outCommand.id.isEmpty() && !outCommand.kind.isEmpty();
   }
 
-  serializeJson(payloadJson, outCommand.batchPayloadJson);
+  serializeJson(payloadJson, outCommand.payloadJson);
   outCommand.localDate = payloadJson["local_date"] | "";
   outCommand.effectiveAt = payloadJson["effective_at"] | "";
   if (!payloadJson["is_done"].isNull()) {
     outCommand.isDone = payloadJson["is_done"].as<bool>();
     outCommand.hasSetDayStatePayload = !outCommand.localDate.isEmpty();
   }
-  outCommand.hasBatchDayStatesPayload = payloadJson["updates"].is<JsonArrayConst>();
+  outCommand.hasHistoryDraftPayload = payloadJson["updates"].is<JsonArrayConst>();
+  if (!payloadJson["base_revision"].isNull()) {
+    outCommand.baseRevision = payloadJson["base_revision"].as<uint32_t>();
+    outCommand.hasBaseRevision = true;
+  }
 
-  outCommand.settingsSync.ambientAuto = payloadJson["ambient_auto"].isNull() ? true : payloadJson["ambient_auto"].as<bool>();
-  outCommand.settingsSync.rewardEnabled = payloadJson["reward_enabled"].isNull() ? false : payloadJson["reward_enabled"].as<bool>();
+  outCommand.settingsSync.hasAmbientAuto = !payloadJson["ambient_auto"].isNull();
+  outCommand.settingsSync.hasRewardEnabled = !payloadJson["reward_enabled"].isNull();
+  outCommand.settingsSync.hasDayResetTime = !payloadJson["day_reset_time"].isNull();
+  outCommand.settingsSync.hasName = !payloadJson["name"].isNull();
+  outCommand.settingsSync.hasPalettePreset = !payloadJson["palette_preset"].isNull();
+  outCommand.settingsSync.hasRewardTrigger = !payloadJson["reward_trigger"].isNull();
+  outCommand.settingsSync.hasRewardType = !payloadJson["reward_type"].isNull();
+  outCommand.settingsSync.hasTimezone = !payloadJson["timezone"].isNull();
+  outCommand.settingsSync.hasBrightness = !payloadJson["brightness"].isNull();
+  outCommand.settingsSync.hasWeeklyTarget = !payloadJson["weekly_target"].isNull();
+  outCommand.settingsSync.ambientAuto = outCommand.settingsSync.hasAmbientAuto ? payloadJson["ambient_auto"].as<bool>() : true;
+  outCommand.settingsSync.rewardEnabled = outCommand.settingsSync.hasRewardEnabled ? payloadJson["reward_enabled"].as<bool>() : false;
   outCommand.settingsSync.dayResetTime = payloadJson["day_reset_time"] | "";
+  outCommand.settingsSync.name = payloadJson["name"] | "";
   outCommand.settingsSync.palettePreset = payloadJson["palette_preset"] | "";
   outCommand.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
   outCommand.settingsSync.rewardType = payloadJson["reward_type"] | "";
   outCommand.settingsSync.timezone = payloadJson["timezone"] | "";
-  outCommand.settingsSync.brightness = payloadJson["brightness"].isNull() ? 70 : payloadJson["brightness"].as<uint8_t>();
-  outCommand.settingsSync.weeklyTarget = payloadJson["weekly_target"].isNull()
-                                             ? Config::kDefaultWeeklyMinimum
-                                             : payloadJson["weekly_target"].as<uint8_t>();
+  outCommand.settingsSync.brightness = outCommand.settingsSync.hasBrightness ? payloadJson["brightness"].as<uint8_t>() : 70;
+  outCommand.settingsSync.weeklyTarget =
+      outCommand.settingsSync.hasWeeklyTarget ? payloadJson["weekly_target"].as<uint8_t>() : Config::kDefaultWeeklyMinimum;
   outCommand.hasSyncSettingsPayload =
-      !outCommand.settingsSync.palettePreset.isEmpty() || !outCommand.settingsSync.timezone.isEmpty() || !outCommand.settingsSync.dayResetTime.isEmpty();
+      outCommand.settingsSync.hasAmbientAuto || outCommand.settingsSync.hasRewardEnabled || outCommand.settingsSync.hasDayResetTime ||
+      outCommand.settingsSync.hasName ||
+      outCommand.settingsSync.hasPalettePreset || outCommand.settingsSync.hasRewardTrigger || outCommand.settingsSync.hasRewardType ||
+      outCommand.settingsSync.hasTimezone || outCommand.settingsSync.hasBrightness || outCommand.settingsSync.hasWeeklyTarget;
 
   return !outCommand.id.isEmpty() && !outCommand.kind.isEmpty();
 }
@@ -362,19 +408,19 @@ String RealtimeClient::ackTopic_() const {
   return topic;
 }
 
-String RealtimeClient::dayStateEventTopic_() const {
-  String topic = CloudConfig::kMqttTopicPrefix;
-  topic += "/device/";
-  topic += identity_ ? identity_->hardwareUid() : String("unknown");
-  topic += "/event/day-state";
-  return topic;
-}
-
 String RealtimeClient::presenceTopic_() const {
   String topic = CloudConfig::kMqttTopicPrefix;
   topic += "/device/";
   topic += identity_ ? identity_->hardwareUid() : String("unknown");
   topic += "/presence";
+  return topic;
+}
+
+String RealtimeClient::runtimeSnapshotTopic_() const {
+  String topic = CloudConfig::kMqttTopicPrefix;
+  topic += "/device/";
+  topic += identity_ ? identity_->hardwareUid() : String("unknown");
+  topic += "/snapshot/runtime";
   return topic;
 }
 

@@ -30,6 +30,10 @@ export interface AddOneDevice {
   name: string;
   ownerName: string;
   syncState: SyncState;
+  isLive: boolean;
+  lastSnapshotAt: string | null;
+  lastSeenAt: string | null;
+  runtimeRevision: number;
   weeklyTarget: number;
   weekStart: WeekStart;
   timezone: string;
@@ -59,6 +63,7 @@ export interface SharedBoard {
   ownerName: string;
   habitName: string;
   syncState: SyncState;
+  lastSnapshotAt?: string | null;
   weeklyTarget: number;
   paletteId: string;
   days: boolean[][];
@@ -153,4 +158,22 @@ export interface DeviceApProvisioningResponse {
   next_step: DeviceApProvisioningNextStep;
   reboot_required: boolean;
   schema_version: 1;
+}
+
+export interface HistoryDraftUpdate {
+  isDone: boolean;
+  localDate: string;
+}
+
+export interface DeviceSettingsPatch {
+  ambient_auto?: boolean;
+  brightness?: number;
+  day_reset_time?: string;
+  name?: string;
+  palette_preset?: string;
+  reward_enabled?: boolean;
+  reward_trigger?: RewardTrigger;
+  reward_type?: RewardType;
+  timezone?: string;
+  weekly_target?: number;
 }

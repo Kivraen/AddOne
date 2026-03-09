@@ -190,6 +190,8 @@ export default function SettingsModal() {
 
   const phoneTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const busy = isDeviceBusy || isSharingBusy;
+  const liveDeviceSession = mode === "demo" || device.isLive;
+  const deviceControlDisabled = busy || !liveDeviceSession;
 
   async function runAction(action: () => Promise<unknown> | unknown, successMessage: string) {
     try {
@@ -204,10 +206,35 @@ export default function SettingsModal() {
 
   return (
     <GlassSheet subtitle="Core controls stay here. History stays on the board." title="Settings" variant="full">
+      {!liveDeviceSession ? (
+        <GlassCard style={{ gap: 8, paddingHorizontal: 16, paddingVertical: 14 }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: theme.typography.label.fontSize,
+              lineHeight: theme.typography.label.lineHeight,
+            }}
+          >
+            Device is offline
+          </Text>
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            Device settings are live-only. Reconnect through cloud or join the AddOne AP to change them.
+          </Text>
+        </GlassCard>
+      ) : null}
+
       <View style={{ gap: 10 }}>
         <SectionTitle>Habit</SectionTitle>
         <FieldCard
-          disabled={busy || !habitNameInput.trim() || habitNameInput.trim() === device.name}
+          disabled={deviceControlDisabled || !habitNameInput.trim() || habitNameInput.trim() === device.name}
           helperText="Shown on the app and device."
           label="Habit name"
           onAction={() => {
@@ -232,6 +259,7 @@ export default function SettingsModal() {
             {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
               <ChoicePill
                 key={`target-${target}`}
+                disabled={deviceControlDisabled}
                 label={String(target)}
                 onPress={() => {
                   void runAction(() => setWeeklyTarget(target), "Weekly target updated.");
@@ -269,7 +297,7 @@ export default function SettingsModal() {
       <View style={{ gap: 10 }}>
         <SectionTitle>Time</SectionTitle>
         <FieldCard
-          disabled={busy || !timezoneInput.trim() || timezoneInput.trim() === device.timezone}
+          disabled={deviceControlDisabled || !timezoneInput.trim() || timezoneInput.trim() === device.timezone}
           helperText={`Current phone zone: ${phoneTimezone}`}
           label="Timezone"
           onAction={() => {
@@ -281,7 +309,7 @@ export default function SettingsModal() {
         />
         <View style={{ alignItems: "flex-end" }}>
           <ActionButton
-            disabled={busy || timezoneInput === phoneTimezone}
+            disabled={deviceControlDisabled || timezoneInput === phoneTimezone}
             label="Use phone zone"
             onPress={() => {
               setTimezoneInput(phoneTimezone);
@@ -289,7 +317,7 @@ export default function SettingsModal() {
           />
         </View>
         <FieldCard
-          disabled={busy || !isValidResetTime(resetTimeInput) || resetTimeInput === device.resetTime}
+          disabled={deviceControlDisabled || !isValidResetTime(resetTimeInput) || resetTimeInput === device.resetTime}
           helperText="Use 24-hour format like 00:00 or 03:30."
           keyboardType="numbers-and-punctuation"
           label="Reset time"
@@ -308,6 +336,7 @@ export default function SettingsModal() {
           label="Auto brightness"
           trailing={
             <Switch
+              disabled={deviceControlDisabled}
               onValueChange={(value) => {
                 void runAction(() => setAutoBrightness(value), value ? "Auto brightness enabled." : "Auto brightness disabled.");
               }}
@@ -332,6 +361,7 @@ export default function SettingsModal() {
             {boardPalettes.map((palette) => (
               <ChoicePill
                 key={palette.id}
+                disabled={deviceControlDisabled}
                 label={palette.name}
                 onPress={() => {
                   void runAction(() => setPalette(palette.id), `${palette.name} palette applied.`);
@@ -349,6 +379,7 @@ export default function SettingsModal() {
           label="Rewards"
           trailing={
             <Switch
+              disabled={deviceControlDisabled}
               onValueChange={() => {
                 void runAction(() => toggleReward(), device.rewardEnabled ? "Rewards disabled." : "Rewards enabled.");
               }}
@@ -360,7 +391,12 @@ export default function SettingsModal() {
           value={device.rewardEnabled ? "Enabled" : "Off by default"}
         />
         <Pressable
-          onPress={() => router.push("/rewards")}
+          disabled={!liveDeviceSession}
+          onPress={() => {
+            if (liveDeviceSession) {
+              router.push("/rewards");
+            }
+          }}
           style={{
             alignItems: "center",
             flexDirection: "row",
@@ -369,6 +405,7 @@ export default function SettingsModal() {
             borderWidth: 1,
             borderColor: withAlpha(theme.colors.textPrimary, 0.08),
             backgroundColor: withAlpha(theme.colors.bgElevated, 0.92),
+            opacity: liveDeviceSession ? 1 : 0.45,
             paddingHorizontal: 16,
             paddingVertical: 14,
           }}

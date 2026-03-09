@@ -18,11 +18,17 @@ public:
                   const String& commandId,
                   CloudClient::CommandAckStatus status,
                   const String& lastError = "");
-  bool publishDayStateEvent(const String& deviceAuthToken, const CloudClient::DayStateRecord& record);
   bool publishPresence(const String& deviceAuthToken,
                        const String& firmwareVersion,
                        const String& hardwareProfile,
                        const String& lastSyncAt);
+  bool publishRuntimeSnapshot(const String& deviceAuthToken,
+                              uint32_t revision,
+                              const HabitTracker::WeekDate& currentWeekStart,
+                              uint8_t todayRow,
+                              const String& boardDaysJson,
+                              const String& settingsJson,
+                              const String& generatedAt);
   bool popCommand(CloudClient::DeviceCommand& outCommand);
 
 private:
@@ -39,8 +45,8 @@ private:
   String ackTopic_() const;
   String commandTopic_() const;
   String clientId_() const;
-  String dayStateEventTopic_() const;
   String presenceTopic_() const;
+  String runtimeSnapshotTopic_() const;
 
   const DeviceIdentity* identity_ = nullptr;
   WiFiClient wifiClient_{};

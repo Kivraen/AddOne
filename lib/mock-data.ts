@@ -7,8 +7,12 @@ function fillWeeks(rows: number[][]): boolean[][] {
 export const initialDevices: AddOneDevice[] = [
   {
     id: "studio-01",
+    isLive: true,
+    lastSnapshotAt: new Date(Date.now() - 60_000).toISOString(),
+    lastSeenAt: new Date(Date.now() - 30_000).toISOString(),
     name: "Studio Walk",
     ownerName: "Viktor",
+    runtimeRevision: 42,
     syncState: "online",
     weeklyTarget: 5,
     weekStart: "monday",
@@ -58,8 +62,12 @@ export const initialDevices: AddOneDevice[] = [
   },
   {
     id: "desk-02",
+    isLive: false,
+    lastSnapshotAt: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
+    lastSeenAt: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
     name: "Evening Lift",
     ownerName: "Viktor",
+    runtimeRevision: 17,
     syncState: "queued",
     weeklyTarget: 4,
     weekStart: "monday",

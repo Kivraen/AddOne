@@ -14,17 +14,41 @@ import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, targetStatusLabel } from "@/lib/board";
-import { SyncState } from "@/types/addone";
+import { useAppUiStore } from "@/store/app-ui-store";
+import { AddOneDevice } from "@/types/addone";
 
-function boardButtonState(isDone: boolean, syncState: SyncState): PrimaryActionState {
-  return isDone ? "done" : "notDone";
+function boardButtonState(device: AddOneDevice, isApplyingToday: boolean): PrimaryActionState {
+  if (isApplyingToday) {
+    return "syncing";
+  }
+
+  if (!device.isLive) {
+    return "disabled";
+  }
+
+  return device.days[device.today.weekIndex][device.today.dayIndex] ? "done" : "notDone";
+}
+
+function withPendingTodayState(device: AddOneDevice, pendingTodayState?: boolean): AddOneDevice {
+  if (pendingTodayState === undefined) {
+    return device;
+  }
+
+  const days = device.days.map((week) => [...week]);
+  days[device.today.weekIndex][device.today.dayIndex] = pendingTodayState;
+
+  return {
+    ...device,
+    days,
+  };
 }
 
 export default function HomeScreen() {
   const router = useRouter();
   const { mode, userEmail } = useAuth();
   const { activeDevice, activeDeviceId, devices, isLoading, setActiveDevice } = useDevices();
-  const { cycleSyncState, toggleToday } = useDeviceActions();
+  const { cycleSyncState, isApplyingToday, toggleToday } = useDeviceActions();
+  const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
   const statusLine = activeDevice
     ? mode === "demo"
@@ -34,17 +58,16 @@ export default function HomeScreen() {
   const pages = useMemo(
     () =>
       devices.map((device) => {
-        const palette = getMergedPalette(device.paletteId, device.customPalette);
-        const todayDone = device.days[device.today.weekIndex][device.today.dayIndex];
+        const effectiveDevice = withPendingTodayState(device, pendingTodayStateByDevice[device.id]);
+        const palette = getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette);
 
         return {
-          cells: buildBoardCells(device),
-          device,
+          cells: buildBoardCells(effectiveDevice),
+          device: effectiveDevice,
           palette,
-          todayDone,
         };
       }),
-    [devices],
+    [devices, pendingTodayStateByDevice],
   );
 
   if (isLoading) {
@@ -208,7 +231,7 @@ export default function HomeScreen() {
             }
           }}
         >
-          {pages.map(({ cells, device, palette, todayDone }) => (
+          {pages.map(({ cells, device, palette }) => (
             <View key={device.id} style={{ flex: 1, gap: 18, justifyContent: "space-between" }}>
               <GlassCard style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 18 }}>
                 <View style={{ gap: 16 }}>
@@ -300,6 +323,7 @@ export default function HomeScreen() {
                 </View>
 
                 <Pressable
+                  disabled={!device.isLive}
                   onPress={() => router.push("/history")}
                   style={{
                     alignItems: "center",
@@ -309,6 +333,7 @@ export default function HomeScreen() {
                     borderWidth: 1,
                     borderColor: "rgba(242, 238, 230, 0.08)",
                     backgroundColor: "rgba(23, 23, 23, 0.92)",
+                    opacity: device.isLive ? 1 : 0.55,
                     paddingHorizontal: 16,
                     paddingVertical: 15,
                   }}
@@ -334,6 +359,18 @@ export default function HomeScreen() {
                     >
                       Correct day cells directly on the board.
                     </Text>
+                    {!device.isLive ? (
+                      <Text
+                        style={{
+                          color: theme.colors.statusErrorMuted,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                        }}
+                      >
+                        Available only while the device is live.
+                      </Text>
+                    ) : null}
                   </View>
                   <Ionicons color={theme.colors.textSecondary} name="chevron-forward" size={18} />
                 </Pressable>
@@ -347,7 +384,7 @@ export default function HomeScreen() {
                       console.warn("Failed to toggle today from app", error);
                     });
                   }}
-                  state={boardButtonState(todayDone, device.syncState)}
+                  state={boardButtonState(device, isApplyingToday && activeDeviceId === device.id)}
                 />
                 <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
                   {devices.map((page) => (

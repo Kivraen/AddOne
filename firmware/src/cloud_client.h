@@ -4,6 +4,7 @@
 
 #include "device_settings.h"
 #include "device_identity.h"
+#include "habit_tracker.h"
 #include "provisioning_contract.h"
 
 class CloudClient {
@@ -14,21 +15,16 @@ public:
     Cancelled = 2,
   };
 
-  struct DayStateRecord {
-    String deviceEventId{};
-    String effectiveAt{};
-    String localDate{};
-    bool isDone = false;
-  };
-
   struct DeviceCommand {
-    String batchPayloadJson{};
+    String payloadJson{};
     String effectiveAt{};
     String id{};
     String kind{};
     String localDate{};
     DeviceSettingsSyncPayload settingsSync{};
-    bool hasBatchDayStatesPayload = false;
+    uint32_t baseRevision = 0;
+    bool hasBaseRevision = false;
+    bool hasHistoryDraftPayload = false;
     bool hasSetDayStatePayload = false;
     bool hasSyncSettingsPayload = false;
     bool isDone = false;
@@ -40,8 +36,13 @@ public:
   bool heartbeat();
   bool isConfigured() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);
-  bool recordDayState(const DayStateRecord& record);
   bool redeemPendingClaim(const ProvisioningContract::PendingClaim& claim);
+  bool uploadRuntimeSnapshot(uint32_t revision,
+                             const HabitTracker::WeekDate& currentWeekStart,
+                             uint8_t todayRow,
+                             const String& boardDaysJson,
+                             const String& settingsJson,
+                             const String& generatedAt);
 
 private:
   const char* ackStatusName_(CommandAckStatus status) const;

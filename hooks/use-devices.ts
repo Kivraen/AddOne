@@ -1,21 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { useAuth } from "@/hooks/use-auth";
-import { addOneQueryKeys } from "@/lib/addone-query-keys";
-import { nudgeCommandRelay, requestDayStateViaRelay, requestDayStatesBatchViaRelay } from "@/lib/command-relay";
 import {
+  applyDeviceSettingsFromApp,
+  applyHistoryDraftFromApp,
   claimDevice,
+  fetchDeviceCommandStatus,
   fetchOwnedDevices,
   fetchSharedBoards,
+  requestRuntimeSnapshotFromApp,
   setDayStateFromApp,
-  setDayStatesBatchFromApp,
-  updateDevice,
   updateMembershipReminder,
 } from "@/lib/supabase/addone-repository";
+import { addOneQueryKeys } from "@/lib/addone-query-keys";
+import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, RewardTrigger, RewardType, SharedBoard, SyncState, WeekStart } from "@/types/addone";
+import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, RewardTrigger, RewardType, SharedBoard, WeekStart } from "@/types/addone";
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -34,87 +35,67 @@ function makeClientEventId() {
     randomHexSegment(8),
     randomHexSegment(4),
     `4${randomHexSegment(3)}`,
-    `${((Math.floor(Math.random() * 4) + 8).toString(16))}${randomHexSegment(3)}`,
+    `${(Math.floor(Math.random() * 4) + 8).toString(16)}${randomHexSegment(3)}`,
     randomHexSegment(12),
   ].join("-");
 }
 
-function optimisticSyncState(device: AddOneDevice): SyncState {
-  return device.syncState === "offline" || device.syncState === "queued" ? "queued" : "syncing";
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
-function optimisticSyncLabel(state: SyncState, queueCount: number) {
-  if (state === "queued") {
-    return `${queueCount} action${queueCount === 1 ? "" : "s"} queued`;
-  }
+function getDayStateByLocalDate(device: AddOneDevice, localDate: string) {
+  const dateGrid = device.dateGrid ?? [];
 
-  if (state === "syncing") {
-    return "Applying on device";
-  }
-
-  return "Synced moments ago";
-}
-
-function isNetworkFailure(error: unknown) {
-  return error instanceof Error && /network request failed|failed to fetch|networkerror/i.test(error.message);
-}
-
-function applyOptimisticDayState(device: AddOneDevice, localDate: string, isDone: boolean): AddOneDevice {
-  if (!device.dateGrid) {
-    return device;
-  }
-
-  let targetWeek = -1;
-  let targetDay = -1;
-
-  for (let weekIndex = 0; weekIndex < device.dateGrid.length; weekIndex += 1) {
-    const dayIndex = device.dateGrid[weekIndex]?.indexOf(localDate) ?? -1;
+  for (let weekIndex = 0; weekIndex < dateGrid.length; weekIndex += 1) {
+    const dayIndex = dateGrid[weekIndex]?.indexOf(localDate) ?? -1;
     if (dayIndex >= 0) {
-      targetWeek = weekIndex;
-      targetDay = dayIndex;
-      break;
+      return device.days[weekIndex]?.[dayIndex];
     }
   }
 
-  if (targetWeek < 0 || targetDay < 0) {
-    return device;
-  }
-
-  const nextDays = device.days.map((week) => [...week]);
-  nextDays[targetWeek][targetDay] = isDone;
-
-  const nextSyncState = optimisticSyncState(device);
-  const nextQueueCount = nextSyncState === "queued" ? Math.max(device.queueCount + 1, 1) : 0;
-
-  return {
-    ...device,
-    days: nextDays,
-    lastSyncedLabel: optimisticSyncLabel(nextSyncState, nextQueueCount),
-    queueCount: nextQueueCount,
-    syncState: nextSyncState,
-  };
+  return undefined;
 }
 
-function applyOptimisticDayStates(
-  device: AddOneDevice,
-  updates: Array<{ isDone: boolean; localDate: string }>,
-): AddOneDevice {
-  return updates.reduce(
-    (currentDevice, update) => applyOptimisticDayState(currentDevice, update.localDate, update.isDone),
-    device,
-  );
+function deviceMatchesHistory(device: AddOneDevice, updates: HistoryDraftUpdate[]) {
+  return updates.every((update) => getDayStateByLocalDate(device, update.localDate) === update.isDone);
 }
 
-function applyOptimisticDevicePatch(
-  devices: AddOneDevice[] | undefined,
-  deviceId: string,
-  updater: (device: AddOneDevice) => AddOneDevice,
-) {
-  if (!devices) {
-    return devices;
+function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsPatch) {
+  if (patch.ambient_auto !== undefined && device.autoBrightness !== patch.ambient_auto) {
+    return false;
+  }
+  if (patch.brightness !== undefined && device.brightness !== patch.brightness) {
+    return false;
+  }
+  if (patch.day_reset_time !== undefined && device.resetTime !== patch.day_reset_time.slice(0, 5)) {
+    return false;
+  }
+  if (patch.name !== undefined && device.name !== patch.name) {
+    return false;
+  }
+  if (patch.palette_preset !== undefined && device.paletteId !== patch.palette_preset) {
+    return false;
+  }
+  if (patch.reward_enabled !== undefined && device.rewardEnabled !== patch.reward_enabled) {
+    return false;
+  }
+  if (patch.reward_trigger !== undefined && device.rewardTrigger !== patch.reward_trigger) {
+    return false;
+  }
+  if (patch.reward_type !== undefined && device.rewardType !== patch.reward_type) {
+    return false;
+  }
+  if (patch.timezone !== undefined && device.timezone !== patch.timezone) {
+    return false;
+  }
+  if (patch.weekly_target !== undefined && device.weeklyTarget !== patch.weekly_target) {
+    return false;
   }
 
-  return devices.map((device) => (device.id === deviceId ? updater(device) : device));
+  return true;
 }
 
 export function useDevices() {
@@ -129,6 +110,8 @@ export function useDevices() {
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchOwnedDevices({ userEmail, userId: user!.id }),
     queryKey: addOneQueryKeys.devices(user?.id),
+    refetchInterval: mode === "cloud" && status === "signedIn" ? 500 : false,
+    refetchIntervalInBackground: true,
   });
 
   const devices = mode === "demo" ? demoDevices : devicesQuery.data ?? [];
@@ -172,6 +155,8 @@ export function useSharedBoardsData() {
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchSharedBoards(user!.id),
     queryKey: addOneQueryKeys.sharedBoards(user?.id),
+    refetchInterval: mode === "cloud" && status === "signedIn" ? 3000 : false,
+    refetchIntervalInBackground: true,
   });
 
   return {
@@ -182,8 +167,10 @@ export function useSharedBoardsData() {
 
 export function useDeviceActions() {
   const { activeDevice, devices } = useDevices();
-  const { mode, session, user } = useAuth();
+  const { mode, user, userEmail } = useAuth();
   const queryClient = useQueryClient();
+  const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
+  const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
 
   const demoActions = {
     cycleSyncState: useAddOneStore((state) => state.cycleSyncState),
@@ -202,6 +189,17 @@ export function useDeviceActions() {
     toggleToday: useAddOneStore((state) => state.toggleToday),
   };
 
+  const loadLatestDevices = async () => {
+    if (!user?.id) {
+      return [] as AddOneDevice[];
+    }
+
+    return queryClient.fetchQuery({
+      queryFn: () => fetchOwnedDevices({ userEmail, userId: user.id }),
+      queryKey: addOneQueryKeys.devices(user.id),
+    });
+  };
+
   const invalidateCloudDevices = async () => {
     if (!user?.id) {
       return;
@@ -211,91 +209,109 @@ export function useDeviceActions() {
     await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.sharedBoards(user.id) });
   };
 
-  const updateOptimisticDevices = (deviceId: string, updater: (device: AddOneDevice) => AddOneDevice) => {
-    if (!user?.id) {
-      return undefined;
+  const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
+
+  const resolveFreshLiveDevice = async (deviceId?: string | null) => {
+    const current = resolveDevice(deviceId);
+
+    if (mode !== "cloud") {
+      return requireLiveDevice(current);
     }
 
-    const queryKey = addOneQueryKeys.devices(user.id);
-    const previousDevices = queryClient.getQueryData<AddOneDevice[]>(queryKey);
-    queryClient.setQueryData<AddOneDevice[] | undefined>(queryKey, (current) => applyOptimisticDevicePatch(current, deviceId, updater));
-    return { previousDevices, queryKey };
+    const latestDevices = await loadLatestDevices();
+    const latest = latestDevices.find((device) => device.id === (deviceId ?? current?.id)) ?? current;
+    return requireLiveDevice(latest ?? null);
   };
 
-  const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
+  const requireLiveDevice = (device: AddOneDevice | null) => {
+    if (!device) {
+      throw new Error("No AddOne device is active.");
+    }
+
+    if (!device.isLive) {
+      throw new Error("The device is offline. Reconnect it through cloud or join its AddOne AP for live changes.");
+    }
+
+    return device;
+  };
+
+  const readCommandFailure = async (commandId?: string | null) => {
+    if (!commandId) {
+      return null;
+    }
+
+    try {
+      const command = await fetchDeviceCommandStatus(commandId);
+      if (command.status === "failed" || command.status === "cancelled") {
+        return command.last_error ?? "The device rejected the requested change.";
+      }
+    } catch {
+      // Command row visibility is not the runtime source of truth. Ignore lookup misses here.
+    }
+
+    return null;
+  };
+
+  const waitForDeviceMatch = async (
+    deviceId: string,
+    options: {
+      baseRevision?: number;
+      commandId?: string | null;
+      errorMessage?: string;
+      timeoutMs?: number;
+    },
+    predicate: (device: AddOneDevice) => boolean,
+  ) => {
+    const timeoutMs = options.timeoutMs ?? 12_000;
+    const startedAt = Date.now();
+    let lastCommandCheckAt = 0;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const latestDevices = await loadLatestDevices();
+      const next = latestDevices.find((device) => device.id === deviceId);
+      if (next && (options.baseRevision === undefined || next.runtimeRevision > options.baseRevision) && predicate(next)) {
+        return next;
+      }
+
+      if (options.commandId && Date.now() - lastCommandCheckAt >= 1000) {
+        lastCommandCheckAt = Date.now();
+        const failure = await readCommandFailure(options.commandId);
+        if (failure) {
+          throw new Error(failure);
+        }
+      }
+
+      await sleep(250);
+    }
+
+    const failure = await readCommandFailure(options.commandId);
+    if (failure) {
+      throw new Error(failure);
+    }
+
+    throw new Error(options.errorMessage ?? "The device did not mirror the latest state in time.");
+  };
 
   const claimMutation = useMutation({
     mutationFn: claimDevice,
     onSuccess: invalidateCloudDevices,
   });
 
+  const refreshRuntimeMutation = useMutation({
+    mutationFn: requestRuntimeSnapshotFromApp,
+  });
+
   const setDayStateMutation = useMutation({
-    mutationFn: async (variables: Parameters<typeof setDayStateFromApp>[0]) => {
-      try {
-        const result = await setDayStateFromApp(variables);
-        void nudgeCommandRelay(result.command_id, session?.access_token);
-        return result;
-      } catch (error) {
-        if (!isNetworkFailure(error) || !session?.access_token) {
-          throw error;
-        }
-
-        return requestDayStateViaRelay(variables, session.access_token);
-      }
-    },
-    onMutate: async (variables) => {
-      if (!user?.id) {
-        return undefined;
-      }
-
-      await queryClient.cancelQueries({ queryKey: addOneQueryKeys.devices(user.id) });
-      return updateOptimisticDevices(variables.deviceId, (device) =>
-        applyOptimisticDayState(device, variables.localDate, variables.isDone),
-      );
-    },
-    onError: (_error, _variables, context) => {
-      if (!context?.queryKey) {
-        return;
-      }
-
-      queryClient.setQueryData(context.queryKey, context.previousDevices);
-    },
+    mutationFn: setDayStateFromApp,
   });
 
-  const setDayStatesBatchMutation = useMutation({
-    mutationFn: async (variables: Parameters<typeof setDayStatesBatchFromApp>[0]) => {
-      try {
-        const result = await setDayStatesBatchFromApp(variables);
-        void nudgeCommandRelay(result.command_id, session?.access_token);
-        return result;
-      } catch (error) {
-        if (!isNetworkFailure(error) || !session?.access_token) {
-          throw error;
-        }
-
-        return requestDayStatesBatchViaRelay(variables, session.access_token);
-      }
-    },
-    onMutate: async (variables) => {
-      if (!user?.id) {
-        return undefined;
-      }
-
-      await queryClient.cancelQueries({ queryKey: addOneQueryKeys.devices(user.id) });
-      return updateOptimisticDevices(variables.deviceId, (device) => applyOptimisticDayStates(device, variables.updates));
-    },
-    onError: (_error, _variables, context) => {
-      if (!context?.queryKey) {
-        return;
-      }
-
-      queryClient.setQueryData(context.queryKey, context.previousDevices);
-    },
+  const historyDraftMutation = useMutation({
+    mutationFn: applyHistoryDraftFromApp,
   });
 
-  const updateDeviceMutation = useMutation({
-    mutationFn: ({ deviceId, patch }: { deviceId: string; patch: Parameters<typeof updateDevice>[1] }) => updateDevice(deviceId, patch),
-    onSuccess: invalidateCloudDevices,
+  const applySettingsMutation = useMutation({
+    mutationFn: ({ deviceId, patch }: { deviceId: string; patch: DeviceSettingsPatch }) =>
+      applyDeviceSettingsFromApp(deviceId, patch),
   });
 
   const updateMembershipMutation = useMutation({
@@ -305,49 +321,73 @@ export function useDeviceActions() {
 
   const isBusy =
     claimMutation.isPending ||
+    refreshRuntimeMutation.isPending ||
     setDayStateMutation.isPending ||
-    setDayStatesBatchMutation.isPending ||
-    updateDeviceMutation.isPending ||
+    historyDraftMutation.isPending ||
+    applySettingsMutation.isPending ||
     updateMembershipMutation.isPending;
 
-  async function setDayStateFromCell(device: AddOneDevice, row: number, col: number) {
-    if (col < 0 || row < 0 || row > 6 || col < device.today.weekIndex) {
-      return;
-    }
+  const refreshRuntimeSnapshot = async (deviceId?: string) => {
+    const targetDevice = await resolveFreshLiveDevice(deviceId);
+    const previousSnapshotAt = targetDevice.lastSnapshotAt ?? "";
+    const previousRevision = targetDevice.runtimeRevision;
+    const result = await refreshRuntimeMutation.mutateAsync({
+      deviceId: targetDevice.id,
+      requestId: makeClientEventId(),
+    });
 
-    if (col === device.today.weekIndex && row > device.today.dayIndex) {
-      return;
-    }
+    await waitForDeviceMatch(
+      targetDevice.id,
+      {
+        baseRevision: previousRevision,
+        commandId: result.command_id ?? null,
+        errorMessage: "The device did not publish a fresh runtime snapshot in time.",
+      },
+      (device) => (device.lastSnapshotAt ?? "") !== previousSnapshotAt || device.runtimeRevision > previousRevision,
+    );
+  };
 
-    const localDate = device.dateGrid?.[col]?.[row];
-    if (!localDate) {
-      return;
-    }
+  const applySettingsPatch = async (patch: DeviceSettingsPatch, deviceId?: string) => {
+    const targetDevice = await resolveFreshLiveDevice(deviceId);
+    const baseRevision = targetDevice.runtimeRevision;
+    const result = await applySettingsMutation.mutateAsync({
+      deviceId: targetDevice.id,
+      patch,
+    });
 
-      await setDayStateMutation.mutateAsync({
-        clientEventId: makeClientEventId(),
-        deviceId: device.id,
-        isDone: !device.days[col][row],
-        localDate,
-      });
-  }
+    await waitForDeviceMatch(
+      targetDevice.id,
+      {
+        baseRevision,
+        commandId: result.command_id ?? null,
+        errorMessage: "The device did not confirm the updated settings in time.",
+      },
+      (device) => deviceMatchesSettingsPatch(device, patch),
+    );
+    void invalidateCloudDevices();
+  };
 
   if (mode === "demo") {
     return {
       claimDevice: claimMutation.mutateAsync,
+      commitHistoryDraft: async () => undefined,
       cycleSyncState: demoActions.cycleSyncState,
+      isApplyingToday: false,
       isBusy,
+      isRefreshingRuntimeSnapshot: false,
+      isSavingHistoryDraft: false,
+      isSavingSettings: false,
+      refreshRuntimeSnapshot: async () => undefined,
       setAutoBrightness: demoActions.setAutoBrightness,
       setHabitName: demoActions.setHabitName,
       setPalette: demoActions.setPalette,
-      setResetTime: demoActions.setResetTime,
       setReminderEnabled: demoActions.setReminderEnabled,
+      setResetTime: demoActions.setResetTime,
       setRewardTrigger: demoActions.setRewardTrigger,
       setRewardType: demoActions.setRewardType,
       setTimezone: demoActions.setTimezone,
       setWeekStart: demoActions.setWeekStart,
       setWeeklyTarget: demoActions.setWeeklyTarget,
-      commitHistoryBatch: async () => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleReward: demoActions.toggleReward,
       toggleToday: async (_deviceId?: string) => {
@@ -358,32 +398,50 @@ export function useDeviceActions() {
 
   return {
     claimDevice: claimMutation.mutateAsync,
-    cycleSyncState: invalidateCloudDevices,
-    isBusy,
-    setAutoBrightness: async (value: boolean) => {
-      if (!activeDevice) {
+    commitHistoryDraft: async (
+      updates: HistoryDraftUpdate[],
+      baseRevision: number,
+      deviceId?: string,
+    ) => {
+      const targetDevice = requireLiveDevice(resolveDevice(deviceId));
+      if (updates.length === 0) {
         return;
       }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { ambient_auto: value } });
+
+      const result = await historyDraftMutation.mutateAsync({
+        baseRevision,
+        deviceId: targetDevice.id,
+        draftId: makeClientEventId(),
+        updates,
+      });
+
+      await waitForDeviceMatch(
+        targetDevice.id,
+        {
+          baseRevision,
+          commandId: result.command_id ?? null,
+          errorMessage: "The device did not confirm the saved history draft in time.",
+        },
+        (device) => deviceMatchesHistory(device, updates),
+      );
+      void invalidateCloudDevices();
+    },
+    cycleSyncState: invalidateCloudDevices,
+    isApplyingToday: setDayStateMutation.isPending,
+    isBusy,
+    isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
+    isSavingHistoryDraft: historyDraftMutation.isPending,
+    isSavingSettings: applySettingsMutation.isPending,
+    refreshRuntimeSnapshot,
+    setAutoBrightness: async (value: boolean) => {
+      await applySettingsPatch({ ambient_auto: value });
     },
     setHabitName: async (value: string) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { name: value.trim() || activeDevice.name } });
+      const targetDevice = requireLiveDevice(activeDevice);
+      await applySettingsPatch({ name: value.trim() || targetDevice.name });
     },
     setPalette: async (paletteId: string) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { palette_preset: paletteId } });
-    },
-    setResetTime: async (value: string) => {
-      if (!activeDevice) {
-        return;
-      }
-      const normalized = /^\d{2}:\d{2}$/.test(value) ? `${value}:00` : value;
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { day_reset_time: normalized } });
+      await applySettingsPatch({ palette_preset: paletteId });
     },
     setReminderEnabled: async (value: boolean) => {
       if (!activeDevice || !user?.id) {
@@ -391,67 +449,74 @@ export function useDeviceActions() {
       }
       await updateMembershipMutation.mutateAsync({ deviceId: activeDevice.id, patch: { reminder_enabled: value }, userId: user.id });
     },
+    setResetTime: async (value: string) => {
+      const normalized = /^\d{2}:\d{2}$/.test(value) ? `${value}:00` : value;
+      await applySettingsPatch({ day_reset_time: normalized });
+    },
     setRewardTrigger: async (value: RewardTrigger) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { reward_trigger: value } });
+      await applySettingsPatch({ reward_trigger: value });
     },
     setRewardType: async (value: RewardType) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { reward_type: value } });
+      await applySettingsPatch({ reward_type: value });
     },
     setTimezone: async (value: string) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { timezone: value.trim() || activeDevice.timezone } });
+      const targetDevice = requireLiveDevice(activeDevice);
+      await applySettingsPatch({ timezone: value.trim() || targetDevice.timezone });
     },
-    setWeekStart: async (value: WeekStart) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { week_start: value } });
-    },
+    setWeekStart: async (_value: WeekStart) => undefined,
     setWeeklyTarget: async (value: number) => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { weekly_target: value } });
+      await applySettingsPatch({ weekly_target: value });
     },
-    toggleHistoryCell: async (row: number, col: number) => {
-      const targetDevice = resolveDevice(activeDevice?.id);
-      if (!targetDevice) {
-        return;
-      }
-      await setDayStateFromCell(targetDevice, row, col);
-    },
+    toggleHistoryCell: async () => undefined,
     toggleReward: async () => {
-      if (!activeDevice) {
-        return;
-      }
-      await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { reward_enabled: !activeDevice.rewardEnabled } });
+      const targetDevice = requireLiveDevice(activeDevice);
+      await applySettingsPatch({ reward_enabled: !targetDevice.rewardEnabled });
     },
     toggleToday: async (deviceId?: string) => {
-      const targetDevice = resolveDevice(deviceId);
-      if (!targetDevice) {
-        return;
-      }
-      await setDayStateFromCell(targetDevice, targetDevice.today.dayIndex, targetDevice.today.weekIndex);
-    },
-    commitHistoryBatch: async (updates: Array<{ isDone: boolean; localDate: string }>, deviceId?: string) => {
-      const targetDevice = resolveDevice(deviceId);
-      if (!targetDevice || updates.length === 0) {
-        return;
-      }
+      const issueToggle = async (allowRetry: boolean) => {
+        const targetDevice = await resolveFreshLiveDevice(deviceId);
+        const localDate = targetDevice.dateGrid?.[targetDevice.today.weekIndex]?.[targetDevice.today.dayIndex];
+        if (!localDate) {
+          throw new Error("The device board is missing today's date.");
+        }
 
-      await setDayStatesBatchMutation.mutateAsync({
-        batchEventId: makeClientEventId(),
-        deviceId: targetDevice.id,
-        updates,
-      });
+        const desiredState = !targetDevice.days[targetDevice.today.weekIndex][targetDevice.today.dayIndex];
+        const baseRevision = targetDevice.runtimeRevision;
+        setPendingTodayState(targetDevice.id, desiredState);
+
+        try {
+          const result = await setDayStateMutation.mutateAsync({
+            baseRevision,
+            clientEventId: makeClientEventId(),
+            deviceId: targetDevice.id,
+            isDone: desiredState,
+            localDate,
+          });
+
+          await waitForDeviceMatch(
+            targetDevice.id,
+            {
+              baseRevision,
+              commandId: result.command_id ?? null,
+              errorMessage: "The device did not confirm today's state in time.",
+            },
+            (device) => getDayStateByLocalDate(device, localDate) === desiredState,
+          );
+          clearPendingTodayState(targetDevice.id);
+          void invalidateCloudDevices();
+        } catch (error) {
+          clearPendingTodayState(targetDevice.id);
+          const message = error instanceof Error ? error.message : "Failed to change today's state.";
+          if (allowRetry && message.includes("Runtime revision conflict")) {
+            await invalidateCloudDevices();
+            return issueToggle(false);
+          }
+
+          throw error;
+        }
+      };
+
+      await issueToggle(true);
     },
   };
 }

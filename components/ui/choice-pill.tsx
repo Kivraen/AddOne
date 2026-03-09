@@ -4,20 +4,23 @@ import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
 
 interface ChoicePillProps {
+  disabled?: boolean;
   label: string;
   selected: boolean;
   onPress: () => void;
 }
 
-export function ChoicePill({ label, selected, onPress }: ChoicePillProps) {
+export function ChoicePill({ disabled = false, label, selected, onPress }: ChoicePillProps) {
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={{
         borderRadius: theme.radius.pill,
         borderWidth: 1,
         borderColor: selected ? withAlpha(theme.colors.textPrimary, 0.18) : withAlpha(theme.colors.textPrimary, 0.08),
         backgroundColor: selected ? withAlpha(theme.colors.textPrimary, 0.1) : withAlpha(theme.colors.bgElevated, 0.86),
+        opacity: disabled ? 0.45 : 1,
         paddingHorizontal: 12,
         paddingVertical: 9,
       }}

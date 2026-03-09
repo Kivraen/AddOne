@@ -17,19 +17,102 @@ void HabitTracker::begin() {
   load_();
 }
 
-bool HabitTracker::applyCloudState(const String& localDate, bool isDone, const String& effectiveAt, const tm& nowDate) {
+bool HabitTracker::applyCloudState(const String& localDate,
+                                   bool isDone,
+                                   const tm& nowDate,
+                                   uint32_t expectedRevision,
+                                   String& failureReason) {
   if (!ensureInitialized_(nowDate)) {
+    failureReason = "Tracker is not initialized.";
     return false;
   }
 
   checkWeekBoundary(nowDate);
 
-  tm targetDate{};
-  if (!parseLocalDate_(localDate, targetDate)) {
+  if (runtimeRevision_ != expectedRevision) {
+    failureReason = "Runtime revision conflict.";
     return false;
   }
 
-  return setDayStateForDate_(targetDate, isDone, effectiveAt, nowDate);
+  tm targetDate{};
+  if (!parseLocalDate_(localDate, targetDate)) {
+    failureReason = "Invalid local date.";
+    return false;
+  }
+
+  bool changed = false;
+  if (!setDayStateForDate_(targetDate, isDone, nowDate, &changed)) {
+    failureReason = "Failed to apply cloud day state.";
+    return false;
+  }
+
+  if (changed && !bumpRuntimeRevision()) {
+    failureReason = "Failed to persist runtime revision.";
+    return false;
+  }
+
+  return true;
+}
+
+bool HabitTracker::applyHistoryDraft(const HistoryDraftUpdate* updates,
+                                     size_t updateCount,
+                                     const tm& nowDate,
+                                     uint32_t expectedRevision,
+                                     String& failureReason) {
+  if (!updates || updateCount == 0) {
+    failureReason = "History draft is empty.";
+    return false;
+  }
+
+  if (!ensureInitialized_(nowDate)) {
+    failureReason = "Tracker is not initialized.";
+    return false;
+  }
+
+  checkWeekBoundary(nowDate);
+
+  if (runtimeRevision_ != expectedRevision) {
+    failureReason = "Runtime revision conflict.";
+    return false;
+  }
+
+  bool anyChanged = false;
+  for (size_t index = 0; index < updateCount; ++index) {
+    tm targetDate{};
+    if (!parseLocalDate_(updates[index].localDate, targetDate)) {
+      failureReason = "History draft contains an invalid local date.";
+      return false;
+    }
+
+    bool changed = false;
+    if (!setDayStateForDate_(targetDate, updates[index].isDone, nowDate, &changed)) {
+      failureReason = "Failed to apply one or more history updates.";
+      return false;
+    }
+
+    anyChanged = anyChanged || changed;
+  }
+
+  if (anyChanged && !bumpRuntimeRevision()) {
+    failureReason = "Failed to persist runtime revision.";
+    return false;
+  }
+
+  return true;
+}
+
+bool HabitTracker::bumpRuntimeRevision() {
+  runtimeRevision_++;
+  return persist_();
+}
+
+bool HabitTracker::currentWeekStart(WeekDate& outDate) const {
+  if (!initialized_ || !isValidWeekDate_(lastWeekStart_)) {
+    return false;
+  }
+
+  outDate = lastWeekStart_;
+  return true;
 }
 
 bool HabitTracker::checkWeekBoundary(const tm& nowDate) {
@@ -65,24 +148,8 @@ bool HabitTracker::checkWeekBoundary(const tm& nowDate) {
   return persist_();
 }
 
-String HabitTracker::defaultEffectiveAt_() {
-  return "1970-01-01T00:00:00Z";
-}
-
 int HabitTracker::dayOfWeekMondayBased_(const tm& date) {
   return (date.tm_wday == 0) ? 6 : (date.tm_wday - 1);
-}
-
-String HabitTracker::generateDeviceEventId_() {
-  char buffer[37];
-  snprintf(buffer,
-           sizeof(buffer),
-           "%08lx-%08lx-%08lx-%08lx",
-           static_cast<unsigned long>(esp_random()),
-           static_cast<unsigned long>(esp_random()),
-           static_cast<unsigned long>(esp_random()),
-           static_cast<unsigned long>(esp_random()));
-  return String(buffer);
 }
 
 bool HabitTracker::isValidWeekDate_(const WeekDate& date) {
@@ -232,23 +299,10 @@ void HabitTracker::load_() {
   }
 
   isFirstWeek_ = prefs.getBool(kFirstWeekKey, true);
-  pendingEvent_.isPending = prefs.getBool(kPendingFlagKey, false);
-  pendingEvent_.deviceEventId = prefs.getString(kPendingEventIdKey, "");
-  pendingEvent_.localDate = prefs.getString(kPendingDateKey, "");
-  pendingEvent_.isDone = prefs.getBool(kPendingDoneKey, false);
-  pendingEvent_.effectiveAt = prefs.getString(kPendingAtKey, "");
+  runtimeRevision_ = prefs.getULong(kRevisionKey, 0);
   prefs.end();
 
   initialized_ = isValidWeekDate_(lastWeekStart_);
-}
-
-bool HabitTracker::markPendingDeviceEventSynced() {
-  if (!pendingEvent_.isPending) {
-    return true;
-  }
-
-  pendingEvent_ = PendingDeviceEvent{};
-  return persist_();
 }
 
 bool HabitTracker::setMinimum(uint8_t minimum) {
@@ -274,15 +328,6 @@ bool HabitTracker::setMinimum(uint8_t minimum) {
   return persist_();
 }
 
-bool HabitTracker::pendingDeviceEvent(PendingDeviceEvent& outEvent) const {
-  if (!pendingEvent_.isPending) {
-    return false;
-  }
-
-  outEvent = pendingEvent_;
-  return true;
-}
-
 bool HabitTracker::persist_() const {
   Preferences prefs;
   if (!prefs.begin(kNamespace, false)) {
@@ -293,16 +338,12 @@ bool HabitTracker::persist_() const {
   prefs.putBytes(kWeekStartKey, &lastWeekStart_, sizeof(lastWeekStart_));
   prefs.putUChar(kMinimumKey, minimum_);
   prefs.putBool(kFirstWeekKey, isFirstWeek_);
-  prefs.putBool(kPendingFlagKey, pendingEvent_.isPending);
-  prefs.putString(kPendingEventIdKey, pendingEvent_.deviceEventId);
-  prefs.putString(kPendingDateKey, pendingEvent_.localDate);
-  prefs.putBool(kPendingDoneKey, pendingEvent_.isDone);
-  prefs.putString(kPendingAtKey, pendingEvent_.effectiveAt);
+  prefs.putULong(kRevisionKey, runtimeRevision_);
   prefs.end();
   return true;
 }
 
-bool HabitTracker::queueLocalToggleToday(const tm& nowDate, const String& effectiveAt, bool& outIsDone) {
+bool HabitTracker::queueLocalToggleToday(const tm& nowDate, bool& outIsDone) {
   if (!ensureInitialized_(nowDate)) {
     return false;
   }
@@ -321,24 +362,11 @@ bool HabitTracker::queueLocalToggleToday(const tm& nowDate, const String& effect
   }
   grid_.success[0] = (count >= minimum_) ? 1 : -1;
 
-  char localDate[11];
-  snprintf(localDate,
-           sizeof(localDate),
-           "%04d-%02d-%02d",
-           nowDate.tm_year + 1900,
-           nowDate.tm_mon + 1,
-           nowDate.tm_mday);
-
-  pendingEvent_.localDate = localDate;
-  pendingEvent_.isDone = outIsDone;
-  pendingEvent_.effectiveAt = effectiveAt.isEmpty() ? defaultEffectiveAt_() : effectiveAt;
-  pendingEvent_.deviceEventId = generateDeviceEventId_();
-  pendingEvent_.isPending = !pendingEvent_.deviceEventId.isEmpty();
-
-  return pendingEvent_.isPending && persist_();
+  runtimeRevision_++;
+  return persist_();
 }
 
-bool HabitTracker::setDayStateForDate_(const tm& targetDate, bool isDone, const String& effectiveAt, const tm& nowDate) {
+bool HabitTracker::setDayStateForDate_(const tm& targetDate, bool isDone, const tm& nowDate, bool* outChanged) {
   const WeekDate currentMonday = mondayOfWeek_(nowDate);
   const WeekDate targetMonday = mondayOfWeek_(targetDate);
   const int weekIdx = weeksBetween_(targetMonday, currentMonday);
@@ -351,6 +379,7 @@ bool HabitTracker::setDayStateForDate_(const tm& targetDate, bool isDone, const 
     return false;
   }
 
+  const bool changed = grid_.days[dayOfWeek][weekIdx] != isDone;
   grid_.days[dayOfWeek][weekIdx] = isDone;
   if (weekIdx == 0) {
     uint8_t count = 0;
@@ -364,16 +393,8 @@ bool HabitTracker::setDayStateForDate_(const tm& targetDate, bool isDone, const 
     evaluateWeek_(static_cast<uint8_t>(weekIdx));
   }
 
-  char localDate[11];
-  snprintf(localDate,
-           sizeof(localDate),
-           "%04d-%02d-%02d",
-           targetDate.tm_year + 1900,
-           targetDate.tm_mon + 1,
-           targetDate.tm_mday);
-
-  if (pendingEvent_.isPending && pendingEvent_.localDate == String(localDate) && pendingEvent_.isDone == isDone) {
-    pendingEvent_ = PendingDeviceEvent{};
+  if (outChanged) {
+    *outChanged = changed;
   }
 
   return persist_();

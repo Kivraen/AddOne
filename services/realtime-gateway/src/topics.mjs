@@ -18,6 +18,10 @@ export function presenceTopic(prefix, hardwareUid) {
   return `${sanitizeSegment(prefix)}/device/${sanitizeSegment(hardwareUid)}/presence`;
 }
 
+export function runtimeSnapshotTopic(prefix, hardwareUid) {
+  return `${sanitizeSegment(prefix)}/device/${sanitizeSegment(hardwareUid)}/snapshot/runtime`;
+}
+
 export function commandWildcard(prefix) {
   return `${sanitizeSegment(prefix)}/device/+/command`;
 }
@@ -32,6 +36,10 @@ export function dayStateEventWildcard(prefix) {
 
 export function presenceWildcard(prefix) {
   return `${sanitizeSegment(prefix)}/device/+/presence`;
+}
+
+export function runtimeSnapshotWildcard(prefix) {
+  return `${sanitizeSegment(prefix)}/device/+/snapshot/runtime`;
 }
 
 export function parseTopic(prefix, topic) {
