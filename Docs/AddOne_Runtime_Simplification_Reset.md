@@ -32,6 +32,7 @@ Last locked: March 9, 2026
 - The active board read model for app/runtime should be the latest `device_runtime_snapshot`
 - `device_day_states` becomes a derived compatibility/read table, not the primary runtime board source
 - If a snapshot exists, the app should render from that snapshot
+- The app should invalidate live board state from `device_runtime_snapshots`, not from `device_day_states`
 
 ### Runtime write model
 - App sends commands only during a live device session

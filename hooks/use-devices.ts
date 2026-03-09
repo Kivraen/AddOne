@@ -46,6 +46,9 @@ function sleep(ms: number) {
   });
 }
 
+const DEVICE_SNAPSHOT_POLL_MS = 500;
+const SHARED_BOARD_POLL_MS = 3000;
+
 function getDayStateByLocalDate(device: AddOneDevice, localDate: string) {
   const dateGrid = device.dateGrid ?? [];
 
@@ -110,7 +113,8 @@ export function useDevices() {
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchOwnedDevices({ userEmail, userId: user!.id }),
     queryKey: addOneQueryKeys.devices(user?.id),
-    refetchInterval: mode === "cloud" && status === "signedIn" ? 500 : false,
+    // This stays in place until device_runtime_snapshots is reliably delivered via Supabase realtime.
+    refetchInterval: mode === "cloud" && status === "signedIn" ? DEVICE_SNAPSHOT_POLL_MS : false,
     refetchIntervalInBackground: true,
   });
 
@@ -155,7 +159,7 @@ export function useSharedBoardsData() {
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchSharedBoards(user!.id),
     queryKey: addOneQueryKeys.sharedBoards(user?.id),
-    refetchInterval: mode === "cloud" && status === "signedIn" ? 3000 : false,
+    refetchInterval: mode === "cloud" && status === "signedIn" ? SHARED_BOARD_POLL_MS : false,
     refetchIntervalInBackground: true,
   });
 
