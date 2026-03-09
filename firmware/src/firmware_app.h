@@ -32,4 +32,6 @@ private:
   CloudClient cloudClient_{};
   ProvisioningStore provisioningStore_{};
   unsigned long enteredStateAtMs_ = 0;
+  unsigned long lastClaimAttemptAtMs_ = 0;
+  unsigned long lastHeartbeatAtMs_ = 0;
 };

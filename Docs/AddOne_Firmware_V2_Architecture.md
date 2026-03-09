@@ -107,6 +107,13 @@ Used for:
 5. Add single-button tracking logic and board rendering.
 6. Add optional reward logic.
 
+## Current Status
+- Firmware v2 workspace exists and builds.
+- Device identity, pending claim persistence, and top-level state machine exist.
+- AP HTTP server now exists in firmware v2 and matches the locked local onboarding contract.
+- Cloud claim redemption and first heartbeat plumbing now exist in firmware v2.
+- The next firmware milestone is device command sync plus real single-button tracking and board rendering.
+
 ## Relation To The Prototype Spike
 The prototype spike was useful and should be treated as a reference note:
 - it proved `GET /api/v1/provisioning/info` and `POST /api/v1/provisioning/session` are feasible

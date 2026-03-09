@@ -3,6 +3,9 @@
 #include "config.h"
 
 namespace {
+constexpr unsigned long kClaimRetryIntervalMs = 3000;
+constexpr unsigned long kHeartbeatIntervalMs = 60000;
+
 const char* stateName(FirmwareState state) {
   switch (state) {
     case FirmwareState::SetupRecovery:
@@ -46,19 +49,61 @@ void FirmwareApp::loop() {
 void FirmwareApp::enterState_(FirmwareState nextState) {
   state_ = nextState;
   enteredStateAtMs_ = millis();
+  lastClaimAttemptAtMs_ = 0;
+  lastHeartbeatAtMs_ = 0;
   Serial.printf("State -> %s\n", stateName(nextState));
 }
 
 void FirmwareApp::tickSetupRecovery_() {
-  if (!apServer_.isRunning()) {
+  if (!apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
     apServer_.begin(identity_, provisioningStore_);
   }
 
   apServer_.loop();
+
+  if (!apServer_.hasCompletedProvisioning() || !apServer_.isWifiConnected()) {
+    return;
+  }
+
+  if (!provisioningStore_.hasPendingClaim()) {
+    if (cloudClient_.isConfigured()) {
+      enterState_(FirmwareState::Tracking);
+    }
+    return;
+  }
+
+  if (millis() - lastClaimAttemptAtMs_ < kClaimRetryIntervalMs) {
+    return;
+  }
+  lastClaimAttemptAtMs_ = millis();
+
+  ProvisioningContract::PendingClaim claim;
+  if (!provisioningStore_.loadPendingClaim(claim)) {
+    Serial.println("Pending claim metadata could not be loaded.");
+    return;
+  }
+
+  if (!cloudClient_.isConfigured()) {
+    Serial.println("Cloud config missing; claim redemption deferred.");
+    return;
+  }
+
+  if (cloudClient_.redeemPendingClaim(claim)) {
+    provisioningStore_.clearPendingClaim();
+    enterState_(FirmwareState::Tracking);
+  }
 }
 
 void FirmwareApp::tickTracking_() {
-  // Placeholder only: single-button habit tracking comes after onboarding/cloud.
+  if (!cloudClient_.isConfigured()) {
+    return;
+  }
+
+  if (millis() - lastHeartbeatAtMs_ < kHeartbeatIntervalMs) {
+    return;
+  }
+  lastHeartbeatAtMs_ = millis();
+  cloudClient_.heartbeat();
 }
 
 void FirmwareApp::tickReward_() {

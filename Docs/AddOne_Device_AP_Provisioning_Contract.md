@@ -130,4 +130,9 @@ Suggested failure categories:
 - The app now attempts the real `GET /info` and `POST /session` calls against the configured AddOne AP base URL.
 - The app stores Wi-Fi details only in local UI state during staging.
 - The app UI now reflects the real AP handoff flow.
-- Firmware still needs to expose the AP HTTP server and consume this contract.
+- Firmware v2 now includes the real AP endpoint layer for:
+  - `GET /api/v1/provisioning/info`
+  - `POST /api/v1/provisioning/session`
+- Firmware v2 now persists pending claim context locally and starts STA connection from the submitted Wi-Fi payload.
+- Firmware v2 now hands off from AP provisioning into cloud claim redemption and first heartbeat plumbing.
+- Device command sync and day-event sync are the next firmware steps after this.

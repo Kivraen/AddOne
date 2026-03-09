@@ -170,6 +170,7 @@ Purpose:
 - Backend claim-session and device sync RPCs are implemented in staging schema.
 - The app-side AP payload builder and local endpoint contract are now implemented.
 - The app now probes the local AP and can POST the provisioning payload to firmware once those endpoints exist.
-- AP HTTP transport is not implemented in firmware yet.
-- Firmware does not consume this contract yet.
+- Firmware v2 now exposes the AP HTTP provisioning endpoints and can persist the local handoff payload.
+- Firmware v2 now has claim-redemption and heartbeat plumbing against the cloud RPC surface.
+- Final cloud integration still needs real flashed credentials/config plus command pull/ack and day-event sync.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.

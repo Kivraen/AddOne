@@ -182,13 +182,15 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
 - A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
-- AP provisioning transport and firmware/cloud redemption are still not implemented in firmware v2.
+- Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
+- Firmware v2 now includes claim-redemption and first-heartbeat plumbing against the AddOne cloud RPC contract.
+- Command pull/ack, device day-event sync, and real habit behavior are still not implemented in firmware v2.
 
 ## Canonical Next Steps
 1. Apply the new schema to `addone-staging`.
 2. Generate typed cloud models and add the real API/query layer.
 3. Replace mock store data with live device/account data.
 4. Build the new AddOne firmware v2 around the locked state model and contract surface.
-5. Implement the device-side AP setup/recovery API contract that the app now targets.
-6. Wire firmware v2 to cloud claim redemption, heartbeat, command pull/ack, and day-event sync.
+5. Wire firmware v2 to command pull/ack and device day-event sync.
+6. Add the AddOne single-button tracking logic and board rendering.
 7. Replace remaining mock/demo board state with fully live device data.

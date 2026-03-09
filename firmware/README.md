@@ -20,12 +20,13 @@ Current contents:
 - device identity helper
 - pending claim persistence
 - top-level firmware state machine skeleton
+- AP provisioning HTTP server for the locked local onboarding contract
+- cloud claim redemption and first heartbeat plumbing
 
 Not implemented yet:
-- AP server
-- Wi-Fi provisioning
-- cloud claim redemption
-- heartbeat / command sync
+- real cloud credentials/config for flashed hardware
+- command pull / ack
+- day-event sync
 - button handling
 - board rendering
 - reward rendering
