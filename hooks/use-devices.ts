@@ -268,21 +268,12 @@ export function useDeviceActions() {
   ) => {
     const timeoutMs = options.timeoutMs ?? 12_000;
     const startedAt = Date.now();
-    let lastCommandCheckAt = 0;
 
     while (Date.now() - startedAt < timeoutMs) {
       const latestDevices = await loadLatestDevices();
       const next = latestDevices.find((device) => device.id === deviceId);
       if (next && (options.baseRevision === undefined || next.runtimeRevision > options.baseRevision) && predicate(next)) {
         return next;
-      }
-
-      if (options.commandId && Date.now() - lastCommandCheckAt >= 1000) {
-        lastCommandCheckAt = Date.now();
-        const failure = await readCommandFailure(options.commandId);
-        if (failure) {
-          throw new Error(failure);
-        }
       }
 
       await sleep(250);
