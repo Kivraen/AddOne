@@ -27,6 +27,11 @@ Current contents:
 - ambient-light-driven brightness control with palette preset application
 - optional reward engine with built-in `clock` and palette-based `paint` rendering
 
+Local flashing:
+- tracked [cloud_config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.h) now supports a local-only `cloud_config.local.h` override
+- create that local header with staging or production Supabase values before flashing real hardware
+- `cloud_config.local.h` is ignored from Git
+
 Not implemented yet:
 - real cloud credentials/config for flashed hardware
 - custom reward artwork sync

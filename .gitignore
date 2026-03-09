@@ -12,3 +12,4 @@ node_modules
 .env.*.local
 !.env.example
 firmware/.pio
+firmware/include/cloud_config.local.h
