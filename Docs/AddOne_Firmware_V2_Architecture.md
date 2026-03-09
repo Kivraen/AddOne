@@ -1,6 +1,6 @@
 # AddOne Firmware V2 Architecture
 
-Last locked: March 8, 2026
+Last locked: March 9, 2026
 
 This document marks the transition from `contract validation` to `real AddOne firmware v2`.
 
@@ -100,9 +100,10 @@ Used for:
 1. Create the clean firmware workspace and state skeleton.
 2. Add local persisted claim context and provisioning contract types.
 3. Add AP HTTP server that matches the locked app contract.
-4. Add cloud claim redemption, heartbeat, and command polling.
+4. Add cloud claim redemption, heartbeat, and fallback command polling.
 5. Add single-button tracking logic and board rendering.
 6. Add optional reward logic.
+7. Add realtime command delivery for online devices while retaining polling for offline recovery.
 
 ## Current Status
 - Firmware v2 workspace exists and builds.
@@ -113,7 +114,21 @@ Used for:
 - Firmware v2 now has initial `button_input.*`, `time_service.*`, `rtc_clock.*`, and `board_renderer.*` modules.
 - Firmware v2 now has a minimal `device_settings.*` module, applies `sync_settings` commands from the cloud contract, and uses `ambient_light.*` to derive runtime brightness.
 - Firmware v2 now has a minimal `reward_engine.*` module and a real reward state with built-in `clock` and palette-based `paint` rendering.
-- The next firmware milestone is remaining hardware polish, custom reward payload sync, and real-device validation.
+- Firmware v2 now has the first MQTT realtime client seam for online command delivery, while cloud polling remains as fallback.
+- The next firmware milestone is real broker-backed validation, then remaining hardware polish, custom reward payload sync, and real-device validation.
+- Hardware validation exposed a runtime-consistency problem set:
+  - app and firmware board projection are not yet fully aligned
+  - button capture is still coupled to blocking network work
+  - history correction still needs latest-wins revision sync instead of command replay
+- The canonical rebuild rules for those issues are now locked in [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md).
+
+## Rebuild Constraint
+- Physical button capture must become fully local-first and remain reliable even while cloud transport is busy.
+- Firmware rendering must follow the same board contract as the app:
+  - same week orientation
+  - same week-start logic
+  - same weekly-row semantics
+- History correction must apply the latest settled revision, not replay a stream of stale intermediate edits.
 
 ## Relation To The Prototype Spike
 The prototype spike was useful and should be treated as a reference note:

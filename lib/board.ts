@@ -24,22 +24,27 @@ export function buildBoardCells(entity: AddOneDevice | SharedBoard): PixelCellSt
   const { today, weeklyTarget, days } = entity;
 
   for (let col = 0; col < BOARD_COLS; col += 1) {
-    const isPastWeek = col < today.weekIndex;
+    const isPastWeek = col > today.weekIndex;
     const isCurrentWeek = col === today.weekIndex;
     const visibleDays = isPastWeek ? 7 : isCurrentWeek ? today.dayIndex + 1 : 0;
+    const completed = completedCount(days[col], visibleDays);
 
     for (let row = 0; row < 7; row += 1) {
       if (row >= visibleDays) {
         continue;
       }
 
-      const completed = days[col][row];
-      const isToday = col === today.weekIndex && row === today.dayIndex && !completed;
-      cells[row][col] = isToday ? "todayFocus" : completed ? "done" : "socket";
+      cells[row][col] = days[col][row] ? "done" : "socket";
     }
 
     if (visibleDays > 0) {
-      cells[7][col] = completedCount(days[col], visibleDays) >= weeklyTarget ? "weekSuccess" : "weekFail";
+      if (completed >= weeklyTarget) {
+        cells[7][col] = "weekSuccess";
+      } else if (isPastWeek) {
+        cells[7][col] = "weekFail";
+      } else {
+        cells[7][col] = "socket";
+      }
     }
   }
 
@@ -54,7 +59,7 @@ export function getTodayHighlight(entity: AddOneDevice | SharedBoard): Highlight
 }
 
 export function toggleHistoryCell(device: AddOneDevice, row: number, col: number): AddOneDevice {
-  if (row > 6 || col > device.today.weekIndex) {
+  if (row > 6 || col < device.today.weekIndex) {
     return device;
   }
 

@@ -4,7 +4,7 @@ import { PixelGrid } from "@/components/board/pixel-grid";
 import { GlassCard } from "@/components/ui/glass-card";
 import { SyncBadge } from "@/components/ui/sync-badge";
 import { theme } from "@/constants/theme";
-import { buildBoardCells, getMergedPalette, getTodayHighlight, targetStatusLabel } from "@/lib/board";
+import { buildBoardCells, getMergedPalette, targetStatusLabel } from "@/lib/board";
 import { SharedBoard } from "@/types/addone";
 
 interface SharedBoardCardProps {
@@ -42,7 +42,7 @@ export function SharedBoardCard({ board }: SharedBoardCardProps) {
         <SyncBadge state={board.syncState} />
       </View>
 
-      <PixelGrid cells={buildBoardCells(board)} highlightToday={getTodayHighlight(board)} mode="shared" palette={palette} readOnly />
+      <PixelGrid cells={buildBoardCells(board)} mode="shared" palette={palette} readOnly />
 
       <Text
         style={{

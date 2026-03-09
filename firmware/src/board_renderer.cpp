@@ -82,13 +82,6 @@ void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsStat
     }
   }
 
-  if (localNow) {
-    const uint8_t todayRow = tracker.todayRow(*localNow);
-    if (!grid.days[todayRow][0]) {
-      setPixel_(todayRow, 0, palette.rewardPrimary);
-    }
-  }
-
   FastLED.setBrightness(brightness);
   FastLED.show();
 }

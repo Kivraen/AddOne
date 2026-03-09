@@ -5,7 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-na
 import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
 
-export type PrimaryActionState = "done" | "notDone" | "pendingSync" | "disabled";
+export type PrimaryActionState = "done" | "notDone" | "pendingSync" | "syncing" | "disabled";
 
 interface PrimaryActionButtonProps extends PropsWithChildren {
   state: PrimaryActionState;
@@ -30,6 +30,12 @@ const stateStyle: Record<PrimaryActionState, { background: string; text: string;
     text: "#F2EEE6",
     border: withAlpha("#C7904A", 0.24),
     label: "Queued for sync",
+  },
+  syncing: {
+    background: withAlpha("#C7904A", 0.15),
+    text: "#F2EEE6",
+    border: withAlpha("#C7904A", 0.24),
+    label: "Syncing now",
   },
   disabled: {
     background: withAlpha("#F2EEE6", 0.04),

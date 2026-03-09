@@ -14,6 +14,7 @@ Reference documents:
 - [Firmware v2 architecture](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Firmware_V2_Architecture.md)
 - [AP provisioning contract](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md)
 - [Cloud contract](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md)
+- [Realtime transport](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md)
 
 Current contents:
 - minimal PlatformIO project
@@ -26,10 +27,12 @@ Current contents:
 - minimal device settings store with cloud-applied `sync_settings`
 - ambient-light-driven brightness control with palette preset application
 - optional reward engine with built-in `clock` and palette-based `paint` rendering
+- realtime MQTT command client for low-latency online command delivery, with fallback cloud polling still retained
 
 Local flashing:
 - tracked [cloud_config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.h) now supports a local-only `cloud_config.local.h` override
 - create that local header with staging or production Supabase values before flashing real hardware
+- MQTT broker host/port/credentials now also live in `cloud_config.local.h` when realtime delivery is enabled
 - `cloud_config.local.h` is ignored from Git
 
 Not implemented yet:

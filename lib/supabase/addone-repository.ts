@@ -87,16 +87,28 @@ function nextResetLabel(resetTime: string) {
   return formatted === "midnight" ? "Resets at midnight" : `Resets at ${formatted}`;
 }
 
-function relativeSyncLabel(lastSyncAt: string | null, queueCount: number) {
+function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">) {
+  const lastSeenAt = device.last_seen_at ? new Date(device.last_seen_at).getTime() : 0;
+  const lastSyncAt = device.last_sync_at ? new Date(device.last_sync_at).getTime() : 0;
+  const now = Date.now();
+
+  return (lastSeenAt && now - lastSeenAt < 120_000) || (lastSyncAt && now - lastSyncAt < 120_000);
+}
+
+function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">, queueCount: number) {
   if (queueCount > 0) {
+    if (deviceSeemsOnline(device)) {
+      return "Applying on device";
+    }
+
     return `${queueCount} action${queueCount === 1 ? "" : "s"} queued`;
   }
 
-  if (!lastSyncAt) {
+  if (!device.last_sync_at) {
     return "Waiting for first sync";
   }
 
-  const diffMs = Date.now() - new Date(lastSyncAt).getTime();
+  const diffMs = Date.now() - new Date(device.last_sync_at).getTime();
   const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
 
   if (diffMinutes <= 1) {
@@ -118,7 +130,7 @@ function relativeSyncLabel(lastSyncAt: string | null, queueCount: number) {
 
 function deriveSyncState(device: DeviceRow, queueCount: number): SyncState {
   if (queueCount > 0) {
-    return "queued";
+    return deviceSeemsOnline(device) ? "syncing" : "queued";
   }
 
   const lastSeenAt = device.last_seen_at ? new Date(device.last_seen_at).getTime() : 0;
@@ -136,27 +148,20 @@ function deriveSyncState(device: DeviceRow, queueCount: number): SyncState {
   return "offline";
 }
 
-function getLocaleWeekStart(): 0 | 1 {
-  try {
-    const locale = new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale) as Intl.Locale & {
-      weekInfo?: { firstDay?: number };
-    };
-    return locale.weekInfo?.firstDay === 1 ? 1 : 0;
-  } catch {
-    return 0;
+function normalizeWeekStart(weekStart: WeekStart): Exclude<WeekStart, "locale"> {
+  if (weekStart === "sunday") {
+    return "sunday";
   }
+
+  return "monday";
 }
 
 function getWeekStartOffset(weekStart: WeekStart): 0 | 1 {
-  if (weekStart === "monday") {
+  if (normalizeWeekStart(weekStart) === "monday") {
     return 1;
   }
 
-  if (weekStart === "sunday") {
-    return 0;
-  }
-
-  return getLocaleWeekStart();
+  return 0;
 }
 
 function toUtcDate(localDate: string) {
@@ -237,10 +242,9 @@ function coercePalette(json: Json): Partial<BoardPalette> | undefined {
 
 function buildBoardFrame(device: Pick<DeviceRow, "day_reset_time" | "timezone" | "week_start">) {
   const todayDate = getLogicalToday(device.timezone, device.day_reset_time);
-  const currentWeekStart = startOfWeek(todayDate, device.week_start);
-  const oldestWeekStart = addDays(currentWeekStart, -20 * 7);
+  const currentWeekStart = startOfWeek(todayDate, normalizeWeekStart(device.week_start));
   const dateGrid = Array.from({ length: 21 }, (_, weekIndex) => {
-    const weekStartDate = addDays(oldestWeekStart, weekIndex * 7);
+    const weekStartDate = addDays(currentWeekStart, weekIndex * -7);
     return Array.from({ length: 7 }, (_, dayIndex) => addDays(weekStartDate, dayIndex));
   });
 
@@ -281,7 +285,7 @@ function mapDeviceRowToAppDevice(input: {
     ownerName: currentUserName,
     syncState: deriveSyncState(device, queueCount),
     weeklyTarget: device.weekly_target,
-    weekStart: device.week_start,
+    weekStart: normalizeWeekStart(device.week_start),
     timezone: device.timezone,
     resetTime: stripSeconds(device.day_reset_time),
     nextResetLabel: nextResetLabel(device.day_reset_time),
@@ -301,10 +305,10 @@ function mapDeviceRowToAppDevice(input: {
     days,
     dateGrid,
     today: {
-      weekIndex: 20,
+      weekIndex: 0,
       dayIndex: todayDayIndex,
     },
-    lastSyncedLabel: relativeSyncLabel(device.last_sync_at, queueCount),
+    lastSyncedLabel: relativeSyncLabel(device, queueCount),
   };
 }
 
@@ -326,7 +330,7 @@ function mapDeviceRowToSharedBoard(input: {
     days: buildDays(dateGrid, buildStateMap(dayStates)),
     dateGrid,
     today: {
-      weekIndex: 20,
+      weekIndex: 0,
       dayIndex: todayDayIndex,
     },
   };
@@ -601,9 +605,15 @@ export async function claimDevice(params: { hardwareProfile?: string; hardwareUi
   return assertData(error, data as DeviceRow, "Failed to claim device.");
 }
 
-export async function createDeviceOnboardingSession(params?: { hardwareProfileHint?: string | null }) {
+export async function createDeviceOnboardingSession(params?: {
+  bootstrapDayResetTime?: string | null;
+  bootstrapTimezone?: string | null;
+  hardwareProfileHint?: string | null;
+}) {
   const supabase = ensureSupabase();
   const { data, error } = await (supabase.rpc as any)("create_device_onboarding_session", {
+    p_bootstrap_day_reset_time: params?.bootstrapDayResetTime ?? "00:00:00",
+    p_bootstrap_timezone: params?.bootstrapTimezone ?? null,
     p_hardware_profile_hint: params?.hardwareProfileHint ?? null,
   });
 
@@ -696,14 +706,42 @@ export async function setDayStateFromApp(params: {
   localDate: string;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("set_day_state_from_app", {
+  const { data, error } = await (supabase.rpc as any)("request_day_state_from_app", {
     p_client_event_id: params.clientEventId,
     p_device_id: params.deviceId,
     p_is_done: params.isDone,
     p_local_date: params.localDate,
   });
 
-  return assertData(error, data as Tables<"device_day_events">, "Failed to update day state.");
+  return assertData(
+    error,
+    data as { command_id: string; effective_at: string; status: string },
+    "Failed to request day state update.",
+  );
+}
+
+export async function setDayStatesBatchFromApp(params: {
+  batchEventId: string;
+  deviceId: string;
+  updates: Array<{ isDone: boolean; localDate: string }>;
+}) {
+  const supabase = ensureSupabase();
+  const updates = params.updates.map((update) => ({
+    is_done: update.isDone,
+    local_date: update.localDate,
+  }));
+
+  const { data, error } = await (supabase.rpc as any)("request_day_states_batch_from_app", {
+    p_batch_event_id: params.batchEventId,
+    p_device_id: params.deviceId,
+    p_updates: updates,
+  });
+
+  return assertData(
+    error,
+    data as { batch_event_id: string; command_id: string; effective_at: string; status: string },
+    "Failed to request history sync.",
+  );
 }
 
 export async function updateDevice(deviceId: string, patch: TablesUpdate<"devices">) {

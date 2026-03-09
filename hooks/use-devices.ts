@@ -3,17 +3,19 @@ import { useEffect } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
+import { nudgeCommandRelay, requestDayStateViaRelay, requestDayStatesBatchViaRelay } from "@/lib/command-relay";
 import {
   claimDevice,
   fetchOwnedDevices,
   fetchSharedBoards,
   setDayStateFromApp,
+  setDayStatesBatchFromApp,
   updateDevice,
   updateMembershipReminder,
 } from "@/lib/supabase/addone-repository";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, RewardTrigger, RewardType, SharedBoard, WeekStart } from "@/types/addone";
+import { AddOneDevice, RewardTrigger, RewardType, SharedBoard, SyncState, WeekStart } from "@/types/addone";
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -35,6 +37,84 @@ function makeClientEventId() {
     `${((Math.floor(Math.random() * 4) + 8).toString(16))}${randomHexSegment(3)}`,
     randomHexSegment(12),
   ].join("-");
+}
+
+function optimisticSyncState(device: AddOneDevice): SyncState {
+  return device.syncState === "offline" || device.syncState === "queued" ? "queued" : "syncing";
+}
+
+function optimisticSyncLabel(state: SyncState, queueCount: number) {
+  if (state === "queued") {
+    return `${queueCount} action${queueCount === 1 ? "" : "s"} queued`;
+  }
+
+  if (state === "syncing") {
+    return "Applying on device";
+  }
+
+  return "Synced moments ago";
+}
+
+function isNetworkFailure(error: unknown) {
+  return error instanceof Error && /network request failed|failed to fetch|networkerror/i.test(error.message);
+}
+
+function applyOptimisticDayState(device: AddOneDevice, localDate: string, isDone: boolean): AddOneDevice {
+  if (!device.dateGrid) {
+    return device;
+  }
+
+  let targetWeek = -1;
+  let targetDay = -1;
+
+  for (let weekIndex = 0; weekIndex < device.dateGrid.length; weekIndex += 1) {
+    const dayIndex = device.dateGrid[weekIndex]?.indexOf(localDate) ?? -1;
+    if (dayIndex >= 0) {
+      targetWeek = weekIndex;
+      targetDay = dayIndex;
+      break;
+    }
+  }
+
+  if (targetWeek < 0 || targetDay < 0) {
+    return device;
+  }
+
+  const nextDays = device.days.map((week) => [...week]);
+  nextDays[targetWeek][targetDay] = isDone;
+
+  const nextSyncState = optimisticSyncState(device);
+  const nextQueueCount = nextSyncState === "queued" ? Math.max(device.queueCount + 1, 1) : 0;
+
+  return {
+    ...device,
+    days: nextDays,
+    lastSyncedLabel: optimisticSyncLabel(nextSyncState, nextQueueCount),
+    queueCount: nextQueueCount,
+    syncState: nextSyncState,
+  };
+}
+
+function applyOptimisticDayStates(
+  device: AddOneDevice,
+  updates: Array<{ isDone: boolean; localDate: string }>,
+): AddOneDevice {
+  return updates.reduce(
+    (currentDevice, update) => applyOptimisticDayState(currentDevice, update.localDate, update.isDone),
+    device,
+  );
+}
+
+function applyOptimisticDevicePatch(
+  devices: AddOneDevice[] | undefined,
+  deviceId: string,
+  updater: (device: AddOneDevice) => AddOneDevice,
+) {
+  if (!devices) {
+    return devices;
+  }
+
+  return devices.map((device) => (device.id === deviceId ? updater(device) : device));
 }
 
 export function useDevices() {
@@ -101,8 +181,8 @@ export function useSharedBoardsData() {
 }
 
 export function useDeviceActions() {
-  const { activeDevice } = useDevices();
-  const { mode, user } = useAuth();
+  const { activeDevice, devices } = useDevices();
+  const { mode, session, user } = useAuth();
   const queryClient = useQueryClient();
 
   const demoActions = {
@@ -131,14 +211,86 @@ export function useDeviceActions() {
     await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.sharedBoards(user.id) });
   };
 
+  const updateOptimisticDevices = (deviceId: string, updater: (device: AddOneDevice) => AddOneDevice) => {
+    if (!user?.id) {
+      return undefined;
+    }
+
+    const queryKey = addOneQueryKeys.devices(user.id);
+    const previousDevices = queryClient.getQueryData<AddOneDevice[]>(queryKey);
+    queryClient.setQueryData<AddOneDevice[] | undefined>(queryKey, (current) => applyOptimisticDevicePatch(current, deviceId, updater));
+    return { previousDevices, queryKey };
+  };
+
+  const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
+
   const claimMutation = useMutation({
     mutationFn: claimDevice,
     onSuccess: invalidateCloudDevices,
   });
 
   const setDayStateMutation = useMutation({
-    mutationFn: setDayStateFromApp,
-    onSuccess: invalidateCloudDevices,
+    mutationFn: async (variables: Parameters<typeof setDayStateFromApp>[0]) => {
+      try {
+        const result = await setDayStateFromApp(variables);
+        void nudgeCommandRelay(result.command_id, session?.access_token);
+        return result;
+      } catch (error) {
+        if (!isNetworkFailure(error) || !session?.access_token) {
+          throw error;
+        }
+
+        return requestDayStateViaRelay(variables, session.access_token);
+      }
+    },
+    onMutate: async (variables) => {
+      if (!user?.id) {
+        return undefined;
+      }
+
+      await queryClient.cancelQueries({ queryKey: addOneQueryKeys.devices(user.id) });
+      return updateOptimisticDevices(variables.deviceId, (device) =>
+        applyOptimisticDayState(device, variables.localDate, variables.isDone),
+      );
+    },
+    onError: (_error, _variables, context) => {
+      if (!context?.queryKey) {
+        return;
+      }
+
+      queryClient.setQueryData(context.queryKey, context.previousDevices);
+    },
+  });
+
+  const setDayStatesBatchMutation = useMutation({
+    mutationFn: async (variables: Parameters<typeof setDayStatesBatchFromApp>[0]) => {
+      try {
+        const result = await setDayStatesBatchFromApp(variables);
+        void nudgeCommandRelay(result.command_id, session?.access_token);
+        return result;
+      } catch (error) {
+        if (!isNetworkFailure(error) || !session?.access_token) {
+          throw error;
+        }
+
+        return requestDayStatesBatchViaRelay(variables, session.access_token);
+      }
+    },
+    onMutate: async (variables) => {
+      if (!user?.id) {
+        return undefined;
+      }
+
+      await queryClient.cancelQueries({ queryKey: addOneQueryKeys.devices(user.id) });
+      return updateOptimisticDevices(variables.deviceId, (device) => applyOptimisticDayStates(device, variables.updates));
+    },
+    onError: (_error, _variables, context) => {
+      if (!context?.queryKey) {
+        return;
+      }
+
+      queryClient.setQueryData(context.queryKey, context.previousDevices);
+    },
   });
 
   const updateDeviceMutation = useMutation({
@@ -152,10 +304,14 @@ export function useDeviceActions() {
   });
 
   const isBusy =
-    claimMutation.isPending || setDayStateMutation.isPending || updateDeviceMutation.isPending || updateMembershipMutation.isPending;
+    claimMutation.isPending ||
+    setDayStateMutation.isPending ||
+    setDayStatesBatchMutation.isPending ||
+    updateDeviceMutation.isPending ||
+    updateMembershipMutation.isPending;
 
   async function setDayStateFromCell(device: AddOneDevice, row: number, col: number) {
-    if (col < 0 || row < 0 || row > 6 || col > device.today.weekIndex) {
+    if (col < 0 || row < 0 || row > 6 || col < device.today.weekIndex) {
       return;
     }
 
@@ -168,12 +324,12 @@ export function useDeviceActions() {
       return;
     }
 
-    await setDayStateMutation.mutateAsync({
-      clientEventId: makeClientEventId(),
-      deviceId: device.id,
-      isDone: !device.days[col][row],
-      localDate,
-    });
+      await setDayStateMutation.mutateAsync({
+        clientEventId: makeClientEventId(),
+        deviceId: device.id,
+        isDone: !device.days[col][row],
+        localDate,
+      });
   }
 
   if (mode === "demo") {
@@ -191,9 +347,12 @@ export function useDeviceActions() {
       setTimezone: demoActions.setTimezone,
       setWeekStart: demoActions.setWeekStart,
       setWeeklyTarget: demoActions.setWeeklyTarget,
+      commitHistoryBatch: async () => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleReward: demoActions.toggleReward,
-      toggleToday: demoActions.toggleToday,
+      toggleToday: async (_deviceId?: string) => {
+        demoActions.toggleToday();
+      },
     };
   }
 
@@ -263,10 +422,11 @@ export function useDeviceActions() {
       await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { weekly_target: value } });
     },
     toggleHistoryCell: async (row: number, col: number) => {
-      if (!activeDevice) {
+      const targetDevice = resolveDevice(activeDevice?.id);
+      if (!targetDevice) {
         return;
       }
-      await setDayStateFromCell(activeDevice, row, col);
+      await setDayStateFromCell(targetDevice, row, col);
     },
     toggleReward: async () => {
       if (!activeDevice) {
@@ -274,11 +434,24 @@ export function useDeviceActions() {
       }
       await updateDeviceMutation.mutateAsync({ deviceId: activeDevice.id, patch: { reward_enabled: !activeDevice.rewardEnabled } });
     },
-    toggleToday: async () => {
-      if (!activeDevice) {
+    toggleToday: async (deviceId?: string) => {
+      const targetDevice = resolveDevice(deviceId);
+      if (!targetDevice) {
         return;
       }
-      await setDayStateFromCell(activeDevice, activeDevice.today.dayIndex, activeDevice.today.weekIndex);
+      await setDayStateFromCell(targetDevice, targetDevice.today.dayIndex, targetDevice.today.weekIndex);
+    },
+    commitHistoryBatch: async (updates: Array<{ isDone: boolean; localDate: string }>, deviceId?: string) => {
+      const targetDevice = resolveDevice(deviceId);
+      if (!targetDevice || updates.length === 0) {
+        return;
+      }
+
+      await setDayStatesBatchMutation.mutateAsync({
+        batchEventId: makeClientEventId(),
+        deviceId: targetDevice.id,
+        updates,
+      });
     },
   };
 }

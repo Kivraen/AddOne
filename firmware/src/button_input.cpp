@@ -4,37 +4,53 @@
 
 void ButtonInput::begin() {
   pinMode(Config::kButtonPin, INPUT_PULLUP);
-  lastReading_ = digitalRead(Config::kButtonPin);
-  stableLevel_ = lastReading_;
-  lastChangeAtMs_ = millis();
-  shortPressPending_ = false;
+  pendingPressCount_ = 0;
+  const bool pressed = digitalRead(Config::kButtonPin) == LOW;
+  lastRawPressed_ = pressed;
+  stablePressed_ = pressed;
+  lastRawChangeAtMs_ = millis();
+  pressStartedAtMs_ = pressed ? millis() : 0;
 }
 
 bool ButtonInput::consumeShortPress() {
-  if (!shortPressPending_) {
-    return false;
+  const bool hasPending = pendingPressCount_ > 0;
+  if (hasPending) {
+    pendingPressCount_--;
   }
-
-  shortPressPending_ = false;
-  return true;
+  return hasPending;
 }
 
 void ButtonInput::loop() {
-  const bool reading = digitalRead(Config::kButtonPin);
-  const unsigned long now = millis();
+  const unsigned long nowMs = millis();
+  const bool rawPressed = digitalRead(Config::kButtonPin) == LOW;
 
-  if (reading != lastReading_) {
-    lastReading_ = reading;
-    lastChangeAtMs_ = now;
+  if (rawPressed != lastRawPressed_) {
+    lastRawPressed_ = rawPressed;
+    lastRawChangeAtMs_ = nowMs;
   }
 
-  if ((now - lastChangeAtMs_) < Config::kButtonDebounceMs || reading == stableLevel_) {
+  if (rawPressed == stablePressed_) {
     return;
   }
 
-  stableLevel_ = reading;
-  if (stableLevel_ == LOW) {
-    shortPressPending_ = true;
+  if (nowMs - lastRawChangeAtMs_ < Config::kButtonDebounceMs) {
+    return;
+  }
+
+  stablePressed_ = rawPressed;
+  if (stablePressed_) {
+    pressStartedAtMs_ = nowMs;
+    return;
+  }
+
+  if (pressStartedAtMs_ == 0) {
+    return;
+  }
+
+  const unsigned long pressDurationMs = nowMs - pressStartedAtMs_;
+  pressStartedAtMs_ = 0;
+  if (pressDurationMs >= Config::kButtonDebounceMs && pendingPressCount_ < 255) {
+    pendingPressCount_++;
   }
 }
 

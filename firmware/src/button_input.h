@@ -10,8 +10,9 @@ public:
   static bool recoveryHeldAtBoot();
 
 private:
-  bool lastReading_ = HIGH;
-  bool stableLevel_ = HIGH;
-  bool shortPressPending_ = false;
-  unsigned long lastChangeAtMs_ = 0;
+  uint8_t pendingPressCount_ = 0;
+  bool lastRawPressed_ = false;
+  bool stablePressed_ = false;
+  unsigned long lastRawChangeAtMs_ = 0;
+  unsigned long pressStartedAtMs_ = 0;
 };

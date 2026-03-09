@@ -169,7 +169,6 @@ export default function SettingsModal() {
     setReminderEnabled,
     setResetTime,
     setTimezone,
-    setWeekStart,
     setWeeklyTarget,
     toggleReward,
   } = useDeviceActions();
@@ -254,29 +253,16 @@ export default function SettingsModal() {
           >
             Week start
           </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <ChoicePill
-              label="Locale"
-              onPress={() => {
-                void runAction(() => setWeekStart("locale"), "Week start updated.");
-              }}
-              selected={device.weekStart === "locale"}
-            />
-            <ChoicePill
-              label="Monday"
-              onPress={() => {
-                void runAction(() => setWeekStart("monday"), "Week start updated.");
-              }}
-              selected={device.weekStart === "monday"}
-            />
-            <ChoicePill
-              label="Sunday"
-              onPress={() => {
-                void runAction(() => setWeekStart("sunday"), "Week start updated.");
-              }}
-              selected={device.weekStart === "sunday"}
-            />
-          </View>
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            Monday is the active week-start rule in this build so the app and device stay aligned.
+          </Text>
         </GlassCard>
       </View>
 

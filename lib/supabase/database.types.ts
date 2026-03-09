@@ -207,6 +207,8 @@ export type Database = {
       }
       device_onboarding_sessions: {
         Row: {
+          bootstrap_day_reset_time: string | null
+          bootstrap_timezone: string | null
           cancelled_at: string | null
           claim_token_hash: string
           claim_token_prefix: string
@@ -223,6 +225,8 @@ export type Database = {
           waiting_for_device_at: string | null
         }
         Insert: {
+          bootstrap_day_reset_time?: string | null
+          bootstrap_timezone?: string | null
           cancelled_at?: string | null
           claim_token_hash: string
           claim_token_prefix: string
@@ -239,6 +243,8 @@ export type Database = {
           waiting_for_device_at?: string | null
         }
         Update: {
+          bootstrap_day_reset_time?: string | null
+          bootstrap_timezone?: string | null
           cancelled_at?: string | null
           claim_token_hash?: string
           claim_token_prefix?: string
@@ -675,7 +681,11 @@ export type Database = {
         }
       }
       create_device_onboarding_session: {
-        Args: { p_hardware_profile_hint?: string }
+        Args: {
+          p_bootstrap_day_reset_time?: string
+          p_bootstrap_timezone?: string
+          p_hardware_profile_hint?: string
+        }
         Returns: {
           claim_token: string
           created_at: string
@@ -759,6 +769,8 @@ export type Database = {
       mark_device_onboarding_waiting: {
         Args: { p_session_id: string }
         Returns: {
+          bootstrap_day_reset_time: string | null
+          bootstrap_timezone: string | null
           cancelled_at: string | null
           claim_token_hash: string
           claim_token_prefix: string
@@ -903,6 +915,8 @@ export type Database = {
           p_name?: string
         }
         Returns: {
+          bootstrap_day_reset_time: string | null
+          bootstrap_timezone: string | null
           cancelled_at: string | null
           claim_token_hash: string
           claim_token_prefix: string
@@ -984,6 +998,25 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_day_state_from_app: {
+        Args: {
+          p_client_event_id?: string
+          p_device_id: string
+          p_effective_at?: string
+          p_is_done: boolean
+          p_local_date: string
+        }
+        Returns: Json
+      }
+      request_day_states_batch_from_app: {
+        Args: {
+          p_batch_event_id?: string
+          p_device_id: string
+          p_effective_at?: string
+          p_updates: Json
+        }
+        Returns: Json
+      }
       request_device_view_access: {
         Args: { p_code: string }
         Returns: {
@@ -1050,9 +1083,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_day_states_batch_from_app: {
+        Args: {
+          p_batch_event_id?: string
+          p_device_id: string
+          p_effective_at?: string
+          p_updates: Json
+        }
+        Returns: Json
+      }
     }
     Enums: {
-      device_command_kind: "set_day_state" | "sync_settings"
+      device_command_kind:
+        | "set_day_state"
+        | "sync_settings"
+        | "sync_day_states_batch"
       device_command_status:
         | "queued"
         | "delivered"
@@ -1205,7 +1250,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      device_command_kind: ["set_day_state", "sync_settings"],
+      device_command_kind: [
+        "set_day_state",
+        "sync_settings",
+        "sync_day_states_batch",
+      ],
       device_command_status: [
         "queued",
         "delivered",

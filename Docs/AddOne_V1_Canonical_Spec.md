@@ -1,6 +1,6 @@
 # AddOne V1 Canonical Spec
 
-Last locked: March 7, 2026
+Last locked: March 9, 2026
 
 This document is the canonical product and UI spec for AddOne v1.
 If another doc conflicts with this one, this file wins until an explicit new decision is made.
@@ -25,13 +25,17 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 
 ## Board And Habit Rules
 - Board is `8 x 21`.
+- Current week is the leftmost column.
+- Older history moves to the right.
+- Default board origin is `Monday` at the top-left pixel.
 - `Row 8` is `weekly success/fail` for each week column.
 - User sets a `weekly target` from `1-7`.
-- Week start defaults from `locale`, but the user can override it.
+- Current runtime week-start is locked to `Monday` until app and firmware both support another explicit mode without parity risk.
 - Timezone stays fixed until changed manually.
 - Day reset defaults to midnight local, with user-configurable reset time.
 - No formal skip/pause state in v1.
 - History editing changes daily cells only; weekly success/fail always auto-recomputes.
+- Canonical runtime board projection, parity rules, and rebuild constraints are locked in [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md).
 
 ## App And Cloud Model
 - Normal app control is `cloud-backed`.
@@ -39,6 +43,10 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Cloud backup is `automatic` whenever the linked device is online.
 - Remote app completion is allowed.
 - If the device is offline, remote completion is `queued and synced later`.
+- Online device delivery should use a `realtime command transport`, not periodic polling as the primary path.
+- Supabase remains the product source of truth; realtime transport is the low-latency delivery lane for online devices.
+- Board-state persistence must advance only from `device-confirmed apply` or `device-originated local events`, not from app intent alone.
+- Polling remains a `fallback and backlog recovery path`, not the long-term user-experience standard.
 - The app requires sign-in.
 - Current app auth flow is `email OTP`.
 - Future auth can add Google or password-based login later without changing the data model.
@@ -181,15 +189,22 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Cloud mode now drives the main board from live device/account data, while demo mode remains as a deliberate mock fallback.
 - The app now invalidates live board/share queries from Supabase realtime changes so firmware-originated updates can surface without manual refresh.
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
+- The app now applies optimistic board/history updates immediately for cloud-backed actions.
+- The current rebuild direction is `device-authoritative runtime state`: app requests queue intents, and the cloud board catches up from device-confirmed apply.
 - A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
 - Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
 - Firmware v2 now includes claim redemption, heartbeat, command pull/ack, and device day-event sync against the AddOne cloud RPC contract.
 - Firmware v2 now includes the first real AddOne behavior layer: single-button local toggling, 21-week board persistence, RTC/NTP-backed time service, and LED board rendering.
 - Firmware v2 now includes minimal settings sync application, palette preset handling, and ambient-light-driven brightness.
 - Firmware v2 now includes reward-state behavior with built-in `clock` and palette-based `paint` rendering for local button-triggered rewards.
+- A dedicated MQTT-based realtime transport contract and gateway scaffold now exist for low-latency online device delivery, with polling retained only as fallback.
 
 ## Canonical Next Steps
-1. Flash a real test device with firmware v2 and validate the full onboarding, claim, and cloud-sync path.
-2. Add custom reward payload sync so app-configured reward art can flow through cloud and onto firmware.
-3. Remove staging-only onboarding shortcuts once real hardware validation is complete.
-4. Promote the current staging stack into a production-ready shape: branded auth email, production Supabase project, and release hardening.
+1. Complete the runtime consistency rebuild from [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md):
+   - one canonical board projection
+   - local-first button reliability
+   - latest-wins history sync
+2. Revalidate the rebuilt button, board parity, app toggle, and history flows on real hardware.
+3. Add custom reward payload sync so app-configured reward art can flow through cloud and onto firmware.
+4. Remove staging-only onboarding shortcuts once real hardware validation is complete.
+5. Promote the current staging stack into a production-ready shape: branded auth email, production Supabase project, broker hardening, and release hardening.

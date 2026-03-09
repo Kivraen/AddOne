@@ -31,20 +31,15 @@ function cellColors(state: PixelCellState, palette: BoardPalette) {
         fill: palette.weekFail,
         border: withAlpha(palette.weekFail, 0.18),
       };
-    case "todayFocus":
-      return {
-        fill: palette.socket,
-        border: withAlpha(theme.colors.accentAmber, 0.52),
-      };
     case "socket":
       return {
         fill: palette.socket,
-        border: palette.socketEdge,
+        border: withAlpha(palette.socketEdge, 0.72),
       };
     default:
       return {
-        fill: withAlpha(palette.socket, 0.56),
-        border: withAlpha(palette.socketEdge, 0.65),
+        fill: withAlpha(palette.socket, 0.24),
+        border: withAlpha(palette.socketEdge, 0.32),
       };
   }
 }
@@ -83,7 +78,8 @@ export function PixelGrid({ cells, palette, mode, highlightToday, onCellPress, r
                 shadowOffset: { width: 0, height: 0 },
               };
 
-              const highlight = isToday ? (
+              const showHighlight = mode === "edit" && isToday;
+              const highlight = showHighlight ? (
                 <View
                   style={{
                     position: "absolute",

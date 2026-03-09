@@ -78,6 +78,11 @@ void CloudClient::begin(const DeviceIdentity& identity) {
   ensureDeviceAuthToken_();
 }
 
+const String& CloudClient::deviceAuthToken() {
+  ensureDeviceAuthToken_();
+  return deviceAuthToken_;
+}
+
 bool CloudClient::ackCommand(const String& commandId, CommandAckStatus status, const String& lastError) {
   if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_() || commandId.isEmpty()) {
     return false;
@@ -179,12 +184,14 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
     JsonVariantConst payloadObject = entry["payload"];
     if (payloadObject.is<JsonObjectConst>()) {
       JsonObjectConst payloadJson = payloadObject.as<JsonObjectConst>();
+      serializeJson(payloadJson, command.batchPayloadJson);
       command.localDate = payloadJson["local_date"] | "";
       command.effectiveAt = payloadJson["effective_at"] | "";
       if (!payloadJson["is_done"].isNull()) {
         command.isDone = payloadJson["is_done"].as<bool>();
         command.hasSetDayStatePayload = !command.localDate.isEmpty();
       }
+      command.hasBatchDayStatesPayload = payloadJson["updates"].is<JsonArrayConst>();
 
       command.settingsSync.ambientAuto = payloadJson["ambient_auto"].isNull() ? true : payloadJson["ambient_auto"].as<bool>();
       command.settingsSync.rewardEnabled = payloadJson["reward_enabled"].isNull() ? false : payloadJson["reward_enabled"].as<bool>();

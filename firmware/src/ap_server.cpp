@@ -136,8 +136,11 @@ void ApServer::begin(const DeviceIdentity& identity, ProvisioningStore& provisio
   provisioningAttemptStartedAtMs_ = 0;
 
   WiFi.persistent(true);
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(identity_->apSsid().c_str());
+  WiFi.disconnect(false, false);
+  delay(100);
+  WiFi.mode(WIFI_AP);
+  delay(100);
+  WiFi.softAP(identity_->apSsid().c_str(), nullptr, 1, false, 4);
 
   server_.on("/", HTTP_GET, [this]() {
     handleRoot_();
@@ -276,6 +279,8 @@ void ApServer::handleSession_() {
                 claim.onboardingSessionId,
                 wifiSsid.c_str());
 
+  WiFi.mode(WIFI_AP_STA);
+  delay(100);
   if (wifiPassword.isEmpty()) {
     WiFi.begin(wifiSsid.c_str());
   } else {

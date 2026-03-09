@@ -52,6 +52,14 @@ function formatExpirationLabel(expiresAt: string) {
   return `Expires in ${diffMinutes} minutes`;
 }
 
+function currentPhoneTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 function statusLabel(session: DeviceOnboardingSession | null) {
   if (!session) {
     return "Not started";
@@ -223,6 +231,8 @@ export default function OnboardingScreen() {
     setSetupError(null);
     setSetupMessage(null);
     await createSession({
+      bootstrapDayResetTime: "00:00:00",
+      bootstrapTimezone: currentPhoneTimezone(),
       hardwareProfileHint: "addone-v1",
     });
   }

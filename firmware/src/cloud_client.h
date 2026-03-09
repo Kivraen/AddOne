@@ -22,11 +22,13 @@ public:
   };
 
   struct DeviceCommand {
+    String batchPayloadJson{};
     String effectiveAt{};
     String id{};
     String kind{};
     String localDate{};
     DeviceSettingsSyncPayload settingsSync{};
+    bool hasBatchDayStatesPayload = false;
     bool hasSetDayStatePayload = false;
     bool hasSyncSettingsPayload = false;
     bool isDone = false;
@@ -34,6 +36,7 @@ public:
 
   void begin(const DeviceIdentity& identity);
   bool ackCommand(const String& commandId, CommandAckStatus status, const String& lastError = "");
+  const String& deviceAuthToken();
   bool heartbeat();
   bool isConfigured() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);

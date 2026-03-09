@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
@@ -7,12 +8,55 @@ import { GlassSheet } from "@/components/ui/glass-sheet";
 import { theme } from "@/constants/theme";
 import { useActiveDevice } from "@/hooks/use-active-device";
 import { useDeviceActions } from "@/hooks/use-devices";
-import { buildBoardCells, getMergedPalette, getTodayHighlight } from "@/lib/board";
+import { buildBoardCells, getMergedPalette, getTodayHighlight, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
+
+const kHistoryCommitIdleMs = 250;
 
 export default function HistoryModal() {
   const device = useActiveDevice();
-  const palette = getMergedPalette(device.paletteId, device.customPalette);
-  const { toggleHistoryCell } = useDeviceActions();
+  const [draftDevice, setDraftDevice] = useState(device);
+  const idleCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingUpdatesRef = useRef<Map<string, boolean>>(new Map());
+  const palette = getMergedPalette(draftDevice.paletteId, draftDevice.customPalette);
+  const { commitHistoryBatch } = useDeviceActions();
+
+  const flushDraft = useCallback(async () => {
+    if (idleCommitRef.current) {
+      clearTimeout(idleCommitRef.current);
+      idleCommitRef.current = null;
+    }
+
+    if (pendingUpdatesRef.current.size === 0) {
+      return;
+    }
+
+    const updates = Array.from(pendingUpdatesRef.current.entries()).map(([localDate, isDone]) => ({
+      isDone,
+      localDate,
+    }));
+    pendingUpdatesRef.current.clear();
+
+    await commitHistoryBatch(updates, device.id).catch((error) => {
+      console.warn("Failed to commit history batch", error);
+    });
+  }, [commitHistoryBatch, device.id]);
+
+  useEffect(() => {
+    setDraftDevice(device);
+    pendingUpdatesRef.current.clear();
+    if (idleCommitRef.current) {
+      clearTimeout(idleCommitRef.current);
+      idleCommitRef.current = null;
+    }
+  }, [device.id]);
+
+  useEffect(() => {
+    return () => {
+      void flushDraft().catch((error) => {
+        console.warn("Failed to flush history draft on close", error);
+      });
+    };
+  }, [flushDraft]);
 
   return (
     <GlassSheet
@@ -22,11 +66,26 @@ export default function HistoryModal() {
     >
       <GlassCard style={{ alignItems: "center", paddingHorizontal: 12, paddingVertical: 18 }}>
         <PixelGrid
-          cells={buildBoardCells(device)}
-          highlightToday={getTodayHighlight(device)}
+          cells={buildBoardCells(draftDevice)}
+          highlightToday={getTodayHighlight(draftDevice)}
           mode="edit"
           onCellPress={(row, col) => {
-            void toggleHistoryCell(row, col);
+            setDraftDevice((current) => {
+              const localDate = current.dateGrid?.[col]?.[row];
+              const next = toggleHistoryCellLocal(current, row, col);
+
+              if (localDate) {
+                pendingUpdatesRef.current.set(localDate, next.days[col][row]);
+                if (idleCommitRef.current) {
+                  clearTimeout(idleCommitRef.current);
+                }
+                idleCommitRef.current = setTimeout(() => {
+                  void flushDraft();
+                }, kHistoryCommitIdleMs);
+              }
+
+              return next;
+            });
           }}
           palette={palette}
         />

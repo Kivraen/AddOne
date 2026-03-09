@@ -76,12 +76,21 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
           invalidateDevices();
           invalidateSharedBoards();
         })
-        .on("postgres_changes", {
-          event: "*",
-          filter: `device_id=eq.${deviceId}`,
-          schema: "public",
-          table: "device_commands",
-        }, invalidateDevices)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            filter: `device_id=eq.${deviceId}`,
+            schema: "public",
+            table: "device_commands",
+          },
+          (payload) => {
+            const nextStatus = payload.new && typeof payload.new === "object" ? (payload.new as { status?: string }).status : null;
+            if (nextStatus === "failed" || nextStatus === "cancelled") {
+              invalidateDevices();
+            }
+          },
+        )
         .on("postgres_changes", {
           event: "*",
           filter: `device_id=eq.${deviceId}`,

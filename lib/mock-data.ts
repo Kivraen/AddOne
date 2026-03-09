@@ -1,7 +1,7 @@
 import { AddOneDevice, SharedBoard } from "@/types/addone";
 
 function fillWeeks(rows: number[][]): boolean[][] {
-  return rows.map((week) => week.map(Boolean));
+  return [...rows].reverse().map((week) => week.map(Boolean));
 }
 
 export const initialDevices: AddOneDevice[] = [
@@ -11,7 +11,7 @@ export const initialDevices: AddOneDevice[] = [
     ownerName: "Viktor",
     syncState: "online",
     weeklyTarget: 5,
-    weekStart: "locale",
+    weekStart: "monday",
     timezone: "America/Los_Angeles",
     resetTime: "00:00",
     nextResetLabel: "Resets at midnight",
@@ -29,7 +29,7 @@ export const initialDevices: AddOneDevice[] = [
     queueCount: 0,
     lastSyncedLabel: "Synced 3m ago",
     today: {
-      weekIndex: 20,
+      weekIndex: 0,
       dayIndex: 4,
     },
     days: fillWeeks([
@@ -62,7 +62,7 @@ export const initialDevices: AddOneDevice[] = [
     ownerName: "Viktor",
     syncState: "queued",
     weeklyTarget: 4,
-    weekStart: "locale",
+    weekStart: "monday",
     timezone: "America/Los_Angeles",
     resetTime: "02:00",
     nextResetLabel: "Resets at 2:00 AM",
@@ -80,7 +80,7 @@ export const initialDevices: AddOneDevice[] = [
     queueCount: 2,
     lastSyncedLabel: "2 actions queued",
     today: {
-      weekIndex: 20,
+      weekIndex: 0,
       dayIndex: 4,
     },
     days: fillWeeks([
@@ -118,7 +118,7 @@ export const initialSharedBoards: SharedBoard[] = [
     weeklyTarget: 5,
     paletteId: "ice",
     today: {
-      weekIndex: 20,
+      weekIndex: 0,
       dayIndex: 4,
     },
     days: fillWeeks([
@@ -153,7 +153,7 @@ export const initialSharedBoards: SharedBoard[] = [
     weeklyTarget: 3,
     paletteId: "rose",
     today: {
-      weekIndex: 20,
+      weekIndex: 0,
       dayIndex: 4,
     },
     days: fillWeeks([

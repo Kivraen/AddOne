@@ -1,0 +1,13 @@
+{
+  "name": "addone-realtime-broker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.mjs",
+    "start": "node src/index.mjs"
+  },
+  "dependencies": {
+    "aedes": "^0.51.3"
+  }
+}

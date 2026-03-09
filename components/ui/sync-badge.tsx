@@ -11,7 +11,7 @@ const syncConfig: Record<SyncState, { label: string; dot: string; background: st
     background: withAlpha("#8FD36A", 0.12),
   },
   syncing: {
-    label: "Syncing",
+    label: "Applying",
     dot: "#C7904A",
     background: withAlpha("#C7904A", 0.12),
   },

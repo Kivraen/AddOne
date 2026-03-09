@@ -13,14 +13,10 @@ import { SyncBadge } from "@/components/ui/sync-badge";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
-import { buildBoardCells, getMergedPalette, getTodayHighlight, targetStatusLabel } from "@/lib/board";
+import { buildBoardCells, getMergedPalette, targetStatusLabel } from "@/lib/board";
 import { SyncState } from "@/types/addone";
 
 function boardButtonState(isDone: boolean, syncState: SyncState): PrimaryActionState {
-  if (syncState === "queued") {
-    return "pendingSync";
-  }
-
   return isDone ? "done" : "notDone";
 }
 
@@ -44,7 +40,6 @@ export default function HomeScreen() {
         return {
           cells: buildBoardCells(device),
           device,
-          highlightToday: getTodayHighlight(device),
           palette,
           todayDone,
         };
@@ -213,7 +208,7 @@ export default function HomeScreen() {
             }
           }}
         >
-          {pages.map(({ cells, device, highlightToday, palette, todayDone }) => (
+          {pages.map(({ cells, device, palette, todayDone }) => (
             <View key={device.id} style={{ flex: 1, gap: 18, justifyContent: "space-between" }}>
               <GlassCard style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 18 }}>
                 <View style={{ gap: 16 }}>
@@ -244,7 +239,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <View style={{ alignItems: "center" }}>
-                    <PixelGrid cells={cells} highlightToday={highlightToday} mode="display" palette={palette} readOnly />
+                    <PixelGrid cells={cells} mode="display" palette={palette} readOnly />
                   </View>
                 </View>
               </GlassCard>
@@ -346,9 +341,11 @@ export default function HomeScreen() {
 
               <View style={{ gap: 16, paddingBottom: 8 }}>
                 <PrimaryActionButton
-                  onPress={async () => {
+                  onPress={() => {
                     setActiveDevice(device.id);
-                    await toggleToday();
+                    void toggleToday(device.id).catch((error) => {
+                      console.warn("Failed to toggle today from app", error);
+                    });
                   }}
                   state={boardButtonState(todayDone, device.syncState)}
                 />

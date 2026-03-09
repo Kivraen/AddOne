@@ -1,6 +1,6 @@
 # AddOne Device Cloud Contract
 
-Last locked: March 8, 2026
+Last locked: March 9, 2026
 
 This document defines the v1 contract between:
 - the mobile app during onboarding
@@ -10,6 +10,7 @@ This document defines the v1 contract between:
 This is the current target contract. Some parts are implemented in staging already, and some still need firmware to consume them.
 
 For the local AP HTTP contract, see [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
+For the low-latency device delivery lane, see [AddOne_Device_Realtime_Transport.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md).
 
 ## Identity Model
 - Every device has an internal `hardware_uid`.
@@ -42,6 +43,7 @@ For the local AP HTTP contract, see [AddOne_Device_AP_Provisioning_Contract.md](
 8. Device redeems the onboarding claim with `redeem_device_onboarding_claim(...)`.
 9. Backend binds the device to the signed-in user.
 10. App sees the session move to `claimed` and finishes setup.
+11. Online devices should then use the realtime transport lane for low-latency command delivery, with polling retained only as fallback.
 
 ## AP Provisioning Handoff
 - The exact local payload and endpoint contract now live in [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
@@ -114,6 +116,10 @@ Purpose:
 - returns queued commands
 - marks newly queued commands as `delivered`
 
+Notes:
+- this remains the fallback / backlog recovery path
+- low-latency online delivery now belongs to the MQTT realtime transport layer
+
 ### `ack_device_command(...)`
 Called by:
 - device firmware
@@ -158,10 +164,12 @@ Purpose:
   - save Wi-Fi locally
   - reboot or reconnect
   - redeem claim
-  - start heartbeat / command poll loop
+  - start heartbeat / realtime subscribe path
+  - keep fallback command poll enabled for backlog recovery
 - During steady state:
   - periodically call heartbeat
-  - periodically pull commands
+  - process realtime commands immediately when online
+  - periodically pull commands only as fallback / backlog recovery
   - ack command results
   - push local button-driven day events
 
@@ -175,5 +183,6 @@ Purpose:
 - Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
 - Firmware v2 now also applies `sync_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
 - Firmware v2 now has a real reward state for local button-triggered `clock` and `paint` display.
+- A dedicated realtime transport contract now exists for MQTT-based online command delivery, with fallback polling retained for reliability.
 - The remaining firmware gap is custom reward asset sync and end-to-end hardware validation.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.

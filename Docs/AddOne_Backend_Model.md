@@ -1,6 +1,6 @@
 # AddOne Backend Model
 
-Last locked: March 8, 2026
+Last locked: March 9, 2026
 
 This document defines the first real cloud data model for AddOne.
 It follows the canonical v1 product spec and assumes:
@@ -9,6 +9,7 @@ It follows the canonical v1 product spec and assumes:
 - AddOne uses its own staging and production Supabase projects
 
 For the firmware-facing RPC and provisioning handshake, see [AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md) and [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
+For low-latency online device delivery, see [AddOne_Device_Realtime_Transport.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md).
 
 ## Project Strategy
 - Keep the existing prototype Supabase project alive for already-distributed legacy devices.
@@ -170,10 +171,11 @@ Purpose:
 Notes:
 - updated automatically from `device_day_events`
 - this is the fast read model for the board
+- app-originated changes should not advance this table until the device confirms apply
 
 ### `device_commands`
 Purpose:
-- queue cloud-originated commands for devices to pull and acknowledge later
+- store cloud-originated commands as the authoritative command log
 
 Initial v1 usage:
 - remote fallback completion
@@ -181,6 +183,12 @@ Initial v1 usage:
 
 Current behavior:
 - a device settings update now automatically enqueues a fresh `sync_settings` command for that device in staging
+
+Transport model:
+- online devices should receive these commands over the MQTT realtime delivery lane
+- fallback polling still exists for offline recovery and backlog drain
+- command acknowledgement still writes back through Supabase
+- acknowledged `applied` commands are what materialize cloud-requested board changes into `device_day_states`
 
 ## RPC / Helper Functions
 The first migration includes helper functions for:
@@ -204,6 +212,11 @@ The device sync migration adds helper functions for:
 - device command pull
 - device command acknowledgement
 - device-originated day-state event writes
+
+The realtime transport layer adds:
+- MQTT topic contract for per-device command delivery
+- a small gateway service that bridges queued `device_commands` rows into broker publishes
+- MQTT presence / day-event topics so device-originated sync can stay off the blocking HTTP path when realtime is available
 
 These functions are important because they keep multi-table mutations atomic and reduce client-side mistakes.
 
@@ -242,3 +255,4 @@ These functions are important because they keep multi-table mutations atomic and
    - command pull / ack
    - day-event push
 7. Integrate firmware against those contracts.
+8. Bring up the realtime gateway and MQTT broker so online devices stop relying on polling as the primary delivery path.
