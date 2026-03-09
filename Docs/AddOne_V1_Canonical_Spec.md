@@ -175,10 +175,11 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Onboarding now has a real cloud-side claim-session flow.
 - The app now builds the exact AP provisioning payload, probes the configured local AP endpoints, and can send the provisioning payload to firmware.
 - History, settings, and rewards modals exist.
-- UI currently runs on mock data.
 - Real Supabase auth now exists with `demo mode` fallback.
 - Initial Supabase schema and migration foundation now exist locally under [supabase/migrations/20260308113000_init_addone_schema.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260308113000_init_addone_schema.sql).
 - Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
+- Cloud mode now drives the main board from live device/account data, while demo mode remains as a deliberate mock fallback.
+- The app now invalidates live board/share queries from Supabase realtime changes so firmware-originated updates can surface without manual refresh.
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
 - A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
 - Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
@@ -188,10 +189,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Firmware v2 now includes reward-state behavior with built-in `clock` and palette-based `paint` rendering for local button-triggered rewards.
 
 ## Canonical Next Steps
-1. Apply the new schema to `addone-staging`.
-2. Generate typed cloud models and add the real API/query layer.
-3. Replace mock store data with live device/account data.
-4. Build the new AddOne firmware v2 around the locked state model and contract surface.
-5. Add custom reward payload sync and remaining hardware polish to firmware v2.
-6. Test end-to-end onboarding and sync on real hardware.
-7. Replace remaining mock/demo board state with fully live device data.
+1. Flash a real test device with firmware v2 and validate the full onboarding, claim, and cloud-sync path.
+2. Add custom reward payload sync so app-configured reward art can flow through cloud and onto firmware.
+3. Remove staging-only onboarding shortcuts once real hardware validation is complete.
+4. Promote the current staging stack into a production-ready shape: branded auth email, production Supabase project, and release hardening.
