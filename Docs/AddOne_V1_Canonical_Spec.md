@@ -172,9 +172,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Board-first home screen exists.
 - Shared boards screen exists.
 - Onboarding and recovery screens exist.
-- Onboarding now has a real cloud-side claim-session flow, even though AP firmware provisioning is not wired yet.
-- The app now builds the exact AP provisioning payload and reflects the intended Wi-Fi handoff flow, even though firmware transport is still pending.
-- The app now probes the configured local AP endpoints and can send the provisioning payload when firmware exposes them.
+- Onboarding now has a real cloud-side claim-session flow.
+- The app now builds the exact AP provisioning payload, probes the configured local AP endpoints, and can send the provisioning payload to firmware.
 - History, settings, and rewards modals exist.
 - UI currently runs on mock data.
 - Real Supabase auth now exists with `demo mode` fallback.
@@ -183,14 +182,14 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, and device day-event writes now exist in staging schema.
 - A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
 - Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
-- Firmware v2 now includes claim-redemption and first-heartbeat plumbing against the AddOne cloud RPC contract.
-- Command pull/ack, device day-event sync, and real habit behavior are still not implemented in firmware v2.
+- Firmware v2 now includes claim redemption, heartbeat, command pull/ack, and device day-event sync against the AddOne cloud RPC contract.
+- Firmware v2 now includes the first real AddOne behavior layer: single-button local toggling, 21-week board persistence, RTC/NTP-backed time service, and LED board rendering.
 
 ## Canonical Next Steps
 1. Apply the new schema to `addone-staging`.
 2. Generate typed cloud models and add the real API/query layer.
 3. Replace mock store data with live device/account data.
 4. Build the new AddOne firmware v2 around the locked state model and contract surface.
-5. Wire firmware v2 to command pull/ack and device day-event sync.
-6. Add the AddOne single-button tracking logic and board rendering.
+5. Add optional reward logic, settings sync, and remaining hardware polish to firmware v2.
+6. Test end-to-end onboarding and sync on real hardware.
 7. Replace remaining mock/demo board state with fully live device data.

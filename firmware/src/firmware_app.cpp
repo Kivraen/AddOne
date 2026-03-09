@@ -25,14 +25,19 @@ const char* stateName(FirmwareState state) {
 } // namespace
 
 void FirmwareApp::begin() {
+  recoveryRequestedAtBoot_ = ButtonInput::recoveryHeldAtBoot();
+  buttonInput_.begin();
+  boardRenderer_.begin();
   habitTracker_.begin();
   provisioningStore_.begin();
   cloudClient_.begin(identity_);
+  timeService_.begin();
 
   Serial.printf("AddOne firmware %s\n", Config::kFirmwareVersion);
   Serial.printf("Hardware UID: %s\n", identity_.hardwareUid().c_str());
   Serial.printf("AP SSID: %s\n", identity_.apSsid().c_str());
   Serial.printf("Pending claim present: %s\n", provisioningStore_.hasPendingClaim() ? "yes" : "no");
+  Serial.printf("Recovery requested at boot: %s\n", recoveryRequestedAtBoot_ ? "yes" : "no");
 
   enterState_(FirmwareState::SetupRecovery);
 }
@@ -58,17 +63,26 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   lastCommandPollAtMs_ = 0;
   lastDeviceSyncAttemptAtMs_ = 0;
   lastHeartbeatAtMs_ = 0;
+  waitingForApFallback_ = false;
+  wifiReconnectStarted_ = false;
+  wifiReconnectStartedAtMs_ = 0;
   Serial.printf("State -> %s\n", stateName(nextState));
 }
 
 bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason) {
+  tm nowLocal{};
+  if (!timeService_.nowLocal(nowLocal)) {
+    failureReason = "Local time is unavailable.";
+    return false;
+  }
+
   if (command.kind == "set_day_state") {
     if (!command.hasSetDayStatePayload || command.localDate.isEmpty()) {
       failureReason = "set_day_state payload missing local_date or is_done.";
       return false;
     }
 
-    if (!habitTracker_.applyCloudState(command.localDate, command.isDone, command.effectiveAt)) {
+    if (!habitTracker_.applyCloudState(command.localDate, command.isDone, command.effectiveAt, nowLocal)) {
       failureReason = "Failed to apply cloud day state locally.";
       return false;
     }
@@ -135,21 +149,53 @@ void FirmwareApp::pollCommands_() {
   }
 }
 
-void FirmwareApp::tickSetupRecovery_() {
-  if (!apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
-    apServer_.begin(identity_, provisioningStore_);
+void FirmwareApp::beginWifiReconnect_() {
+  if (wifiReconnectStarted_) {
+    return;
   }
 
-  apServer_.loop();
+  WiFi.mode(WIFI_STA);
+  WiFi.begin();
+  wifiReconnectStarted_ = true;
+  wifiReconnectStartedAtMs_ = millis();
+  Serial.println("Attempting reconnect with stored Wi-Fi credentials.");
+}
+
+void FirmwareApp::tickSetupRecovery_() {
+  timeService_.update(WiFi.status() == WL_CONNECTED);
+
+  if (!provisioningStore_.hasPendingClaim() && !apServer_.isRunning()) {
+    beginWifiReconnect_();
+  }
+
+  if (wifiReconnectStarted_ && WiFi.status() == WL_CONNECTED && !provisioningStore_.hasPendingClaim()) {
+    enterState_(FirmwareState::Tracking);
+    return;
+  }
+
+  if (!apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
+    const bool reconnectTimedOut =
+        wifiReconnectStarted_ && (millis() - wifiReconnectStartedAtMs_ >= Config::kWifiReconnectTimeoutMs);
+    const bool forceRecovery =
+        recoveryRequestedAtBoot_ || !wifiReconnectStarted_ || waitingForApFallback_ || reconnectTimedOut || provisioningStore_.hasPendingClaim();
+
+    if (forceRecovery) {
+      apServer_.begin(identity_, provisioningStore_);
+      waitingForApFallback_ = true;
+    }
+  }
+
+  if (apServer_.isRunning()) {
+    apServer_.loop();
+  }
+  boardRenderer_.renderSetupState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED);
 
   if (!apServer_.hasCompletedProvisioning() || !apServer_.isWifiConnected()) {
     return;
   }
 
   if (!provisioningStore_.hasPendingClaim()) {
-    if (cloudClient_.isConfigured()) {
-      enterState_(FirmwareState::Tracking);
-    }
+    enterState_(FirmwareState::Tracking);
     return;
   }
 
@@ -176,6 +222,28 @@ void FirmwareApp::tickSetupRecovery_() {
 }
 
 void FirmwareApp::tickTracking_() {
+  buttonInput_.loop();
+  timeService_.update(WiFi.status() == WL_CONNECTED);
+
+  tm nowLocal{};
+  if (timeService_.nowLocal(nowLocal)) {
+    habitTracker_.checkWeekBoundary(nowLocal);
+
+    if (buttonInput_.consumeShortPress()) {
+      bool isDone = false;
+      const String effectiveAt = timeService_.currentUtcIsoTimestamp();
+      if (habitTracker_.queueLocalToggleToday(nowLocal, effectiveAt, isDone)) {
+        Serial.printf("Local toggle for %s -> %s\n",
+                      timeService_.currentLocalDate().c_str(),
+                      isDone ? "done" : "not_done");
+      }
+    }
+
+    boardRenderer_.render(habitTracker_, &nowLocal);
+  } else {
+    boardRenderer_.renderSetupState(false, WiFi.status() == WL_CONNECTED);
+  }
+
   if (!cloudClient_.isConfigured() || WiFi.status() != WL_CONNECTED) {
     return;
   }

@@ -169,8 +169,9 @@ Purpose:
 - App-side onboarding sessions are implemented.
 - Backend claim-session and device sync RPCs are implemented in staging schema.
 - The app-side AP payload builder and local endpoint contract are now implemented.
-- The app now probes the local AP and can POST the provisioning payload to firmware once those endpoints exist.
+- The app now probes the local AP and can POST the provisioning payload to firmware.
 - Firmware v2 now exposes the AP HTTP provisioning endpoints and can persist the local handoff payload.
 - Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and device-originated day-event sync plumbing against the cloud RPC surface.
-- The remaining firmware gap is no longer cloud transport. It is the real AddOne product behavior on top of that transport: button input, board rendering, reward handling, and time service.
+- Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
+- The remaining firmware gap is reward behavior, settings/brightness polish, and end-to-end hardware validation.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.

@@ -6,14 +6,35 @@ namespace Config {
 
 constexpr const char* kFirmwareVersion = "2.0.0-alpha.1";
 constexpr const char* kHardwareProfile = "addone-v1";
+constexpr const char* kDefaultTimezonePosix = "PST8PDT,M3.2.0/2,M11.1.0/2";
+constexpr const char* kNtpServer = "pool.ntp.org";
+constexpr const char* kNtpServer2 = "time.nist.gov";
+constexpr const char* kNtpServer3 = "time.google.com";
 
 constexpr uint8_t kButtonPin = 33;
+constexpr unsigned long kButtonDebounceMs = 25;
+constexpr unsigned long kRecoveryHoldMs = 5000;
 constexpr uint8_t kLedPin = 5;
 
 constexpr uint8_t kPanelRows = 8;
 constexpr uint8_t kPanelCols = 21;
+constexpr uint8_t kDaysPerWeek = 7;
+constexpr uint8_t kWeeks = 21;
+constexpr uint8_t kDefaultWeeklyMinimum = 3;
+
+constexpr uint8_t kDefaultBrightness = 30;
+constexpr uint8_t kSafeMaxBrightness = 40;
+constexpr uint16_t kLedVoltageMv = 5000;
+constexpr uint16_t kLedCurrentLimitMa = 1800;
+
+constexpr uint8_t kI2cSdaPin = 21;
+constexpr uint8_t kI2cSclPin = 22;
+constexpr uint32_t kI2cClockHz = 100000;
 
 constexpr uint16_t kRewardAutoDismissMs = 2500;
 constexpr uint16_t kMainLoopDelayMs = 10;
+constexpr unsigned long kWifiReconnectTimeoutMs = 15000;
+constexpr unsigned long kNtpResyncMs = 3600000;
+constexpr unsigned long kRtcWriteIntervalMs = 300000;
 
 } // namespace Config

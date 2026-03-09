@@ -109,8 +109,9 @@ Used for:
 - Device identity, pending claim persistence, and top-level state machine exist.
 - AP HTTP server now exists in firmware v2 and matches the locked local onboarding contract.
 - Cloud claim redemption, heartbeat, command polling, and command acknowledgement now exist in firmware v2.
-- Firmware v2 now has a minimal `habit_tracker.*` module that can persist the latest known day state and queue future device-originated events for cloud sync.
-- The next firmware milestone is real single-button tracking and board rendering.
+- Firmware v2 now has a real `habit_tracker.*` module with the 21-week AddOne board model, local toggle handling, and pending device-event persistence.
+- Firmware v2 now has initial `button_input.*`, `time_service.*`, `rtc_clock.*`, and `board_renderer.*` modules.
+- The next firmware milestone is optional reward behavior plus hardware polish around ambient brightness, settings sync, and recovery UX.
 
 ## Relation To The Prototype Spike
 The prototype spike was useful and should be treated as a reference note:

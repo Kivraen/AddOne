@@ -21,12 +21,11 @@ Current contents:
 - pending claim persistence
 - top-level firmware state machine skeleton
 - AP provisioning HTTP server for the locked local onboarding contract
-- cloud claim redemption and first heartbeat plumbing
+- cloud claim redemption, heartbeat, command sync, and device day-event sync plumbing
+- single-button input, RTC/NTP-backed time service, 21-week habit tracker, and LED board renderer
 
 Not implemented yet:
 - real cloud credentials/config for flashed hardware
-- command pull / ack
-- day-event sync
-- button handling
-- board rendering
 - reward rendering
+- settings sync application
+- ambient brightness handling
