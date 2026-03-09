@@ -1,5 +1,6 @@
 #include "cloud_client.h"
 
+#include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <WiFi.h>
@@ -77,6 +78,34 @@ void CloudClient::begin(const DeviceIdentity& identity) {
   ensureDeviceAuthToken_();
 }
 
+bool CloudClient::ackCommand(const String& commandId, CommandAckStatus status, const String& lastError) {
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_() || commandId.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_command_id\":\"";
+  payload += escapeJson(commandId);
+  payload += "\",\"p_status\":\"";
+  payload += ackStatusName_(status);
+  payload += "\"";
+
+  if (!lastError.isEmpty()) {
+    payload += ",\"p_last_error\":\"";
+    payload += escapeJson(lastError);
+    payload += "\"";
+  }
+
+  payload += "}";
+
+  String response;
+  return postRpc_("ack_device_command", payload, response);
+}
+
 bool CloudClient::isConfigured() const {
   return strlen(CloudConfig::kSupabaseProjectUrl) > 0 && strlen(CloudConfig::kSupabaseAnonKey) > 0;
 }
@@ -103,6 +132,97 @@ bool CloudClient::heartbeat() {
     Serial.println("Cloud heartbeat OK");
   }
   return ok;
+}
+
+bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount) {
+  outCount = 0;
+  if (!outCommands || maxCommands == 0 || !identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_limit\":";
+  payload += String(maxCommands);
+  payload += "}";
+
+  String response;
+  if (!postRpc_("pull_device_commands", payload, response)) {
+    return false;
+  }
+
+  DynamicJsonDocument doc(2048 + (maxCommands * 384));
+  DeserializationError error = deserializeJson(doc, response);
+  if (error) {
+    Serial.printf("Failed to parse command payload: %s\n", error.c_str());
+    return false;
+  }
+
+  JsonArray commands = doc.as<JsonArray>();
+  if (commands.isNull()) {
+    Serial.println("Command payload was not a JSON array.");
+    return false;
+  }
+
+  for (JsonObject entry : commands) {
+    if (outCount >= maxCommands) {
+      break;
+    }
+
+    DeviceCommand& command = outCommands[outCount++];
+    command.id = entry["id"] | "";
+    command.kind = entry["kind"] | "";
+
+    JsonVariantConst payloadObject = entry["payload"];
+    if (payloadObject.is<JsonObjectConst>()) {
+      JsonObjectConst payloadJson = payloadObject.as<JsonObjectConst>();
+      command.localDate = payloadJson["local_date"] | "";
+      command.effectiveAt = payloadJson["effective_at"] | "";
+      if (!payloadJson["is_done"].isNull()) {
+        command.isDone = payloadJson["is_done"].as<bool>();
+        command.hasSetDayStatePayload = !command.localDate.isEmpty();
+      }
+    }
+  }
+
+  return true;
+}
+
+bool CloudClient::recordDayState(const DayStateRecord& record) {
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  if (record.localDate.isEmpty() || record.deviceEventId.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_local_date\":\"";
+  payload += escapeJson(record.localDate);
+  payload += "\",\"p_is_done\":";
+  payload += record.isDone ? "true" : "false";
+  payload += ",\"p_device_event_id\":\"";
+  payload += escapeJson(record.deviceEventId);
+  payload += "\"";
+
+  if (!record.effectiveAt.isEmpty()) {
+    payload += ",\"p_effective_at\":\"";
+    payload += escapeJson(record.effectiveAt);
+    payload += "\"";
+  }
+
+  payload += "}";
+
+  String response;
+  return postRpc_("record_day_state_from_device", payload, response);
 }
 
 bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& claim) {
@@ -133,6 +253,18 @@ bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& c
     Serial.printf("Cloud claim redeemed for session %s\n", claim.onboardingSessionId);
   }
   return ok;
+}
+
+const char* CloudClient::ackStatusName_(CommandAckStatus status) const {
+  switch (status) {
+    case CommandAckStatus::Applied:
+      return "applied";
+    case CommandAckStatus::Cancelled:
+      return "cancelled";
+    case CommandAckStatus::Failed:
+    default:
+      return "failed";
+  }
 }
 
 bool CloudClient::ensureDeviceAuthToken_() {

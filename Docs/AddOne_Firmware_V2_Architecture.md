@@ -71,11 +71,8 @@ Purpose:
 - define the exact AP payload and response structures the app already targets
 
 ### Future modules after the skeleton
-- `ap_server.*`
-- `cloud_client.*`
 - `time_service.*`
 - `board_renderer.*`
-- `habit_tracker.*`
 - `reward_engine.*`
 - `button_input.*`
 
@@ -111,8 +108,9 @@ Used for:
 - Firmware v2 workspace exists and builds.
 - Device identity, pending claim persistence, and top-level state machine exist.
 - AP HTTP server now exists in firmware v2 and matches the locked local onboarding contract.
-- Cloud claim redemption and first heartbeat plumbing now exist in firmware v2.
-- The next firmware milestone is device command sync plus real single-button tracking and board rendering.
+- Cloud claim redemption, heartbeat, command polling, and command acknowledgement now exist in firmware v2.
+- Firmware v2 now has a minimal `habit_tracker.*` module that can persist the latest known day state and queue future device-originated events for cloud sync.
+- The next firmware milestone is real single-button tracking and board rendering.
 
 ## Relation To The Prototype Spike
 The prototype spike was useful and should be treated as a reference note:

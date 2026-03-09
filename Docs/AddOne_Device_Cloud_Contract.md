@@ -171,6 +171,6 @@ Purpose:
 - The app-side AP payload builder and local endpoint contract are now implemented.
 - The app now probes the local AP and can POST the provisioning payload to firmware once those endpoints exist.
 - Firmware v2 now exposes the AP HTTP provisioning endpoints and can persist the local handoff payload.
-- Firmware v2 now has claim-redemption and heartbeat plumbing against the cloud RPC surface.
-- Final cloud integration still needs real flashed credentials/config plus command pull/ack and day-event sync.
+- Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and device-originated day-event sync plumbing against the cloud RPC surface.
+- The remaining firmware gap is no longer cloud transport. It is the real AddOne product behavior on top of that transport: button input, board rendering, reward handling, and time service.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.
