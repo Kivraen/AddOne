@@ -251,6 +251,29 @@ bool HabitTracker::markPendingDeviceEventSynced() {
   return persist_();
 }
 
+bool HabitTracker::setMinimum(uint8_t minimum) {
+  const uint8_t nextMinimum = constrain(minimum, 1, Config::kDaysPerWeek);
+  if (minimum_ == nextMinimum) {
+    return true;
+  }
+
+  minimum_ = nextMinimum;
+  for (uint8_t week = 1; week < Config::kWeeks; ++week) {
+    if (grid_.success[week] >= 0) {
+      evaluateWeek_(week);
+    }
+  }
+
+  uint8_t currentCount = 0;
+  for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
+    if (grid_.days[day][0]) {
+      currentCount++;
+    }
+  }
+  grid_.success[0] = (currentCount >= minimum_) ? 1 : -1;
+  return persist_();
+}
+
 bool HabitTracker::pendingDeviceEvent(PendingDeviceEvent& outEvent) const {
   if (!pendingEvent_.isPending) {
     return false;

@@ -10,11 +10,13 @@ constexpr const char* kDefaultTimezonePosix = "PST8PDT,M3.2.0/2,M11.1.0/2";
 constexpr const char* kNtpServer = "pool.ntp.org";
 constexpr const char* kNtpServer2 = "time.nist.gov";
 constexpr const char* kNtpServer3 = "time.google.com";
+constexpr const char* kDefaultTimezoneIana = "America/Los_Angeles";
 
 constexpr uint8_t kButtonPin = 33;
 constexpr unsigned long kButtonDebounceMs = 25;
 constexpr unsigned long kRecoveryHoldMs = 5000;
 constexpr uint8_t kLedPin = 5;
+constexpr uint8_t kAmbientLightPin = 34;
 
 constexpr uint8_t kPanelRows = 8;
 constexpr uint8_t kPanelCols = 21;
@@ -26,6 +28,11 @@ constexpr uint8_t kDefaultBrightness = 30;
 constexpr uint8_t kSafeMaxBrightness = 40;
 constexpr uint16_t kLedVoltageMv = 5000;
 constexpr uint16_t kLedCurrentLimitMa = 1800;
+constexpr uint8_t kMinVisibleBrightness = 2;
+constexpr uint16_t kAmbientAdcDark = 150;
+constexpr uint16_t kAmbientAdcBright = 3500;
+constexpr unsigned long kAmbientSampleMs = 250;
+constexpr float kAmbientEmaAlpha = 0.08f;
 
 constexpr uint8_t kI2cSdaPin = 21;
 constexpr uint8_t kI2cSclPin = 22;

@@ -2,13 +2,16 @@
 
 #include <Arduino.h>
 
+#include "ambient_light.h"
 #include "ap_server.h"
 #include "board_renderer.h"
 #include "button_input.h"
 #include "cloud_client.h"
+#include "device_settings.h"
 #include "device_identity.h"
 #include "habit_tracker.h"
 #include "provisioning_store.h"
+#include "reward_engine.h"
 #include "time_service.h"
 
 enum class FirmwareState : uint8_t {
@@ -39,9 +42,12 @@ private:
   DeviceIdentity identity_{};
   FirmwareState state_ = FirmwareState::SetupRecovery;
   ApServer apServer_{};
+  AmbientLight ambientLight_{};
   CloudClient cloudClient_{};
+  DeviceSettingsStore deviceSettings_{};
   HabitTracker habitTracker_{};
   ProvisioningStore provisioningStore_{};
+  RewardEngine rewardEngine_{};
   TimeService timeService_{};
   unsigned long enteredStateAtMs_ = 0;
   unsigned long lastClaimAttemptAtMs_ = 0;

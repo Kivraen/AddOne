@@ -27,11 +27,16 @@ const char* stateName(FirmwareState state) {
 void FirmwareApp::begin() {
   recoveryRequestedAtBoot_ = ButtonInput::recoveryHeldAtBoot();
   buttonInput_.begin();
+  deviceSettings_.begin();
+  ambientLight_.begin();
   boardRenderer_.begin();
   habitTracker_.begin();
+  habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
   provisioningStore_.begin();
   cloudClient_.begin(identity_);
   timeService_.begin();
+  timeService_.applySettings(deviceSettings_.current());
+  rewardEngine_.clear();
 
   Serial.printf("AddOne firmware %s\n", Config::kFirmwareVersion);
   Serial.printf("Hardware UID: %s\n", identity_.hardwareUid().c_str());
@@ -66,23 +71,26 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   waitingForApFallback_ = false;
   wifiReconnectStarted_ = false;
   wifiReconnectStartedAtMs_ = 0;
+  if (nextState != FirmwareState::Reward) {
+    rewardEngine_.clear();
+  }
   Serial.printf("State -> %s\n", stateName(nextState));
 }
 
 bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason) {
-  tm nowLocal{};
-  if (!timeService_.nowLocal(nowLocal)) {
-    failureReason = "Local time is unavailable.";
-    return false;
-  }
-
   if (command.kind == "set_day_state") {
+    tm nowLogical{};
+    if (!timeService_.nowLogical(nowLogical)) {
+      failureReason = "Logical time is unavailable.";
+      return false;
+    }
+
     if (!command.hasSetDayStatePayload || command.localDate.isEmpty()) {
       failureReason = "set_day_state payload missing local_date or is_done.";
       return false;
     }
 
-    if (!habitTracker_.applyCloudState(command.localDate, command.isDone, command.effectiveAt, nowLocal)) {
+    if (!habitTracker_.applyCloudState(command.localDate, command.isDone, command.effectiveAt, nowLogical)) {
       failureReason = "Failed to apply cloud day state locally.";
       return false;
     }
@@ -94,8 +102,22 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   }
 
   if (command.kind == "sync_settings") {
-    failureReason = "sync_settings is not implemented yet.";
-    return false;
+    if (!command.hasSyncSettingsPayload) {
+      failureReason = "sync_settings payload missing required fields.";
+      return false;
+    }
+
+    if (!deviceSettings_.applySync(command.settingsSync, failureReason)) {
+      if (failureReason.isEmpty()) {
+        failureReason = "Failed to persist device settings.";
+      }
+      return false;
+    }
+
+    habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
+    timeService_.applySettings(deviceSettings_.current());
+    Serial.println("Applied cloud settings sync.");
+    return true;
   }
 
   failureReason = "Unsupported command kind.";
@@ -162,6 +184,7 @@ void FirmwareApp::beginWifiReconnect_() {
 }
 
 void FirmwareApp::tickSetupRecovery_() {
+  ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
 
   if (!provisioningStore_.hasPendingClaim() && !apServer_.isRunning()) {
@@ -188,7 +211,8 @@ void FirmwareApp::tickSetupRecovery_() {
   if (apServer_.isRunning()) {
     apServer_.loop();
   }
-  boardRenderer_.renderSetupState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED);
+  const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  boardRenderer_.renderSetupState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
 
   if (!apServer_.hasCompletedProvisioning() || !apServer_.isWifiConnected()) {
     return;
@@ -223,25 +247,36 @@ void FirmwareApp::tickSetupRecovery_() {
 
 void FirmwareApp::tickTracking_() {
   buttonInput_.loop();
+  ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
 
-  tm nowLocal{};
-  if (timeService_.nowLocal(nowLocal)) {
-    habitTracker_.checkWeekBoundary(nowLocal);
+  tm logicalNow{};
+  if (timeService_.nowLogical(logicalNow)) {
+    habitTracker_.checkWeekBoundary(logicalNow);
 
     if (buttonInput_.consumeShortPress()) {
       bool isDone = false;
+      const int8_t weekSuccessBefore = habitTracker_.currentWeekSuccess();
       const String effectiveAt = timeService_.currentUtcIsoTimestamp();
-      if (habitTracker_.queueLocalToggleToday(nowLocal, effectiveAt, isDone)) {
+      if (habitTracker_.queueLocalToggleToday(logicalNow, effectiveAt, isDone)) {
         Serial.printf("Local toggle for %s -> %s\n",
-                      timeService_.currentLocalDate().c_str(),
+                      timeService_.currentLogicalDate().c_str(),
                       isDone ? "done" : "not_done");
+
+        const int8_t weekSuccessAfter = habitTracker_.currentWeekSuccess();
+        if (rewardEngine_.shouldTrigger(deviceSettings_.current(), isDone, weekSuccessBefore, weekSuccessAfter)) {
+          rewardEngine_.start(deviceSettings_.current());
+          enterState_(FirmwareState::Reward);
+          return;
+        }
       }
     }
 
-    boardRenderer_.render(habitTracker_, &nowLocal);
+    const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+    boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
   } else {
-    boardRenderer_.renderSetupState(false, WiFi.status() == WL_CONNECTED);
+    const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+    boardRenderer_.renderSetupState(false, WiFi.status() == WL_CONNECTED, brightness);
   }
 
   if (!cloudClient_.isConfigured() || WiFi.status() != WL_CONNECTED) {
@@ -265,7 +300,21 @@ void FirmwareApp::tickTracking_() {
 }
 
 void FirmwareApp::tickReward_() {
-  if (millis() - enteredStateAtMs_ >= Config::kRewardAutoDismissMs) {
+  buttonInput_.loop();
+  ambientLight_.loop();
+  timeService_.update(WiFi.status() == WL_CONNECTED);
+
+  if (buttonInput_.consumeShortPress() || rewardEngine_.shouldDismiss()) {
     enterState_(FirmwareState::Tracking);
+    return;
   }
+
+  tm logicalNow{};
+  const tm* logicalNowPtr = timeService_.nowLogical(logicalNow) ? &logicalNow : nullptr;
+  const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  boardRenderer_.renderReward(deviceSettings_.current(),
+                              rewardEngine_.type(),
+                              logicalNowPtr,
+                              rewardEngine_.elapsedMs(),
+                              brightness);
 }

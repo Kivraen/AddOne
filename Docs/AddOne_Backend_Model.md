@@ -179,6 +179,9 @@ Initial v1 usage:
 - remote fallback completion
 - settings sync
 
+Current behavior:
+- a device settings update now automatically enqueues a fresh `sync_settings` command for that device in staging
+
 ## RPC / Helper Functions
 The first migration includes helper functions for:
 - claiming a new device into an owner account

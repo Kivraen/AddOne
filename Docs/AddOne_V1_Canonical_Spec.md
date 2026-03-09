@@ -184,12 +184,14 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
 - Firmware v2 now includes claim redemption, heartbeat, command pull/ack, and device day-event sync against the AddOne cloud RPC contract.
 - Firmware v2 now includes the first real AddOne behavior layer: single-button local toggling, 21-week board persistence, RTC/NTP-backed time service, and LED board rendering.
+- Firmware v2 now includes minimal settings sync application, palette preset handling, and ambient-light-driven brightness.
+- Firmware v2 now includes reward-state behavior with built-in `clock` and palette-based `paint` rendering for local button-triggered rewards.
 
 ## Canonical Next Steps
 1. Apply the new schema to `addone-staging`.
 2. Generate typed cloud models and add the real API/query layer.
 3. Replace mock store data with live device/account data.
 4. Build the new AddOne firmware v2 around the locked state model and contract surface.
-5. Add optional reward logic, settings sync, and remaining hardware polish to firmware v2.
+5. Add custom reward payload sync and remaining hardware polish to firmware v2.
 6. Test end-to-end onboarding and sync on real hardware.
 7. Replace remaining mock/demo board state with fully live device data.

@@ -5,9 +5,25 @@
 
 #include "config.h"
 
+namespace {
+time_t currentLocalEpoch() {
+  time_t now = time(nullptr);
+  tm localTime{};
+  if (!localtime_r(&now, &localTime)) {
+    return -1;
+  }
+
+  return mktime(&localTime);
+}
+} // namespace
+
+void TimeService::applySettings(const DeviceSettingsState& settings) {
+  applyTimezone_(settings.timezone);
+  dayResetMinutes_ = settings.dayResetMinutes();
+}
+
 void TimeService::begin() {
-  setenv("TZ", Config::kDefaultTimezonePosix, 1);
-  tzset();
+  applyTimezone_(Config::kDefaultTimezoneIana);
   rtc_.begin();
   loadRtcToSystem_();
 }
@@ -15,6 +31,22 @@ void TimeService::begin() {
 String TimeService::currentLocalDate() const {
   tm now{};
   if (!nowLocal(now)) {
+    return String();
+  }
+
+  char buffer[11];
+  snprintf(buffer,
+           sizeof(buffer),
+           "%04d-%02d-%02d",
+           now.tm_year + 1900,
+           now.tm_mon + 1,
+           now.tm_mday);
+  return String(buffer);
+}
+
+String TimeService::currentLogicalDate() const {
+  tm now{};
+  if (!nowLogical(now)) {
     return String();
   }
 
@@ -79,12 +111,58 @@ bool TimeService::nowLocal(tm& outLocalTime) const {
   return localtime_r(&now, &outLocalTime) != nullptr;
 }
 
+bool TimeService::nowLogical(tm& outLocalTime) const {
+  if (!hasValidTime()) {
+    return false;
+  }
+
+  const time_t localEpoch = currentLocalEpoch();
+  if (localEpoch == -1) {
+    return false;
+  }
+
+  const time_t shiftedEpoch = localEpoch - static_cast<time_t>(dayResetMinutes_) * 60;
+  return localtime_r(&shiftedEpoch, &outLocalTime) != nullptr;
+}
+
+void TimeService::applyTimezone_(const char* timezoneIana) {
+  const char* posixTz = posixTimezoneForIana_(timezoneIana);
+  setenv("TZ", posixTz, 1);
+  tzset();
+  strncpy(activeTimezoneIana_, timezoneIana ? timezoneIana : Config::kDefaultTimezoneIana, sizeof(activeTimezoneIana_) - 1);
+  activeTimezoneIana_[sizeof(activeTimezoneIana_) - 1] = '\0';
+}
+
+const char* TimeService::posixTimezoneForIana_(const char* timezoneIana) {
+  if (!timezoneIana || timezoneIana[0] == '\0') {
+    return Config::kDefaultTimezonePosix;
+  }
+
+  if (strcmp(timezoneIana, "UTC") == 0 || strcmp(timezoneIana, "Etc/UTC") == 0) {
+    return "UTC0";
+  }
+  if (strcmp(timezoneIana, "America/Los_Angeles") == 0) {
+    return "PST8PDT,M3.2.0/2,M11.1.0/2";
+  }
+  if (strcmp(timezoneIana, "America/Denver") == 0) {
+    return "MST7MDT,M3.2.0/2,M11.1.0/2";
+  }
+  if (strcmp(timezoneIana, "America/Chicago") == 0) {
+    return "CST6CDT,M3.2.0/2,M11.1.0/2";
+  }
+  if (strcmp(timezoneIana, "America/New_York") == 0) {
+    return "EST5EDT,M3.2.0/2,M11.1.0/2";
+  }
+
+  return Config::kDefaultTimezonePosix;
+}
+
 bool TimeService::saneUtc_(time_t utc) {
   return utc >= 1577836800 && utc <= 2145916800;
 }
 
 void TimeService::startNtpSync_() {
-  configTzTime(Config::kDefaultTimezonePosix,
+  configTzTime(posixTimezoneForIana_(activeTimezoneIana_),
                Config::kNtpServer,
                Config::kNtpServer2,
                Config::kNtpServer3);

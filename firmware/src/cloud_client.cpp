@@ -185,6 +185,20 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
         command.isDone = payloadJson["is_done"].as<bool>();
         command.hasSetDayStatePayload = !command.localDate.isEmpty();
       }
+
+      command.settingsSync.ambientAuto = payloadJson["ambient_auto"].isNull() ? true : payloadJson["ambient_auto"].as<bool>();
+      command.settingsSync.rewardEnabled = payloadJson["reward_enabled"].isNull() ? false : payloadJson["reward_enabled"].as<bool>();
+      command.settingsSync.dayResetTime = payloadJson["day_reset_time"] | "";
+      command.settingsSync.palettePreset = payloadJson["palette_preset"] | "";
+      command.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
+      command.settingsSync.rewardType = payloadJson["reward_type"] | "";
+      command.settingsSync.timezone = payloadJson["timezone"] | "";
+      command.settingsSync.brightness = payloadJson["brightness"].isNull() ? 70 : payloadJson["brightness"].as<uint8_t>();
+      command.settingsSync.weeklyTarget = payloadJson["weekly_target"].isNull()
+                                              ? Config::kDefaultWeeklyMinimum
+                                              : payloadJson["weekly_target"].as<uint8_t>();
+      command.hasSyncSettingsPayload =
+          !command.settingsSync.palettePreset.isEmpty() || !command.settingsSync.timezone.isEmpty() || !command.settingsSync.dayResetTime.isEmpty();
     }
   }
 

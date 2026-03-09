@@ -111,7 +111,9 @@ Used for:
 - Cloud claim redemption, heartbeat, command polling, and command acknowledgement now exist in firmware v2.
 - Firmware v2 now has a real `habit_tracker.*` module with the 21-week AddOne board model, local toggle handling, and pending device-event persistence.
 - Firmware v2 now has initial `button_input.*`, `time_service.*`, `rtc_clock.*`, and `board_renderer.*` modules.
-- The next firmware milestone is optional reward behavior plus hardware polish around ambient brightness, settings sync, and recovery UX.
+- Firmware v2 now has a minimal `device_settings.*` module, applies `sync_settings` commands from the cloud contract, and uses `ambient_light.*` to derive runtime brightness.
+- Firmware v2 now has a minimal `reward_engine.*` module and a real reward state with built-in `clock` and palette-based `paint` rendering.
+- The next firmware milestone is remaining hardware polish, custom reward payload sync, and real-device validation.
 
 ## Relation To The Prototype Spike
 The prototype spike was useful and should be treated as a reference note:

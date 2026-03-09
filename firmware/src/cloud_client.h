@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include "device_settings.h"
 #include "device_identity.h"
 #include "provisioning_contract.h"
 
@@ -25,7 +26,9 @@ public:
     String id{};
     String kind{};
     String localDate{};
+    DeviceSettingsSyncPayload settingsSync{};
     bool hasSetDayStatePayload = false;
+    bool hasSyncSettingsPayload = false;
     bool isDone = false;
   };
 

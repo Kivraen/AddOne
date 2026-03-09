@@ -28,6 +28,7 @@ public:
   void begin();
   bool applyCloudState(const String& localDate, bool isDone, const String& effectiveAt, const tm& nowDate);
   bool checkWeekBoundary(const tm& nowDate);
+  int8_t currentWeekSuccess() const { return grid_.success[0]; }
   const WeeklyGrid& grid() const { return grid_; }
   bool hasPendingDeviceEvent() const { return pendingEvent_.isPending; }
   bool isInitialized() const { return initialized_; }
@@ -35,6 +36,7 @@ public:
   bool pendingDeviceEvent(PendingDeviceEvent& outEvent) const;
   bool markPendingDeviceEventSynced();
   bool queueLocalToggleToday(const tm& nowDate, const String& effectiveAt, bool& outIsDone);
+  bool setMinimum(uint8_t minimum);
   bool syncDate(const tm& nowDate);
   uint8_t todayRow(const tm& nowDate) const;
 

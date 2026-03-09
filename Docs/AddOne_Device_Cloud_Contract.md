@@ -173,5 +173,7 @@ Purpose:
 - Firmware v2 now exposes the AP HTTP provisioning endpoints and can persist the local handoff payload.
 - Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and device-originated day-event sync plumbing against the cloud RPC surface.
 - Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
-- The remaining firmware gap is reward behavior, settings/brightness polish, and end-to-end hardware validation.
+- Firmware v2 now also applies `sync_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
+- Firmware v2 now has a real reward state for local button-triggered `clock` and `paint` display.
+- The remaining firmware gap is custom reward asset sync and end-to-end hardware validation.
 - Developer staging tools currently simulate claim redemption from the app until firmware is ready.
