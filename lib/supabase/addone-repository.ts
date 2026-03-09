@@ -102,15 +102,7 @@ function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
 }
 
-function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">, queueCount: number) {
-  if (queueCount > 0) {
-    if (deviceSeemsOnline(device)) {
-      return "Applying on device";
-    }
-
-    return `${queueCount} action${queueCount === 1 ? "" : "s"} queued`;
-  }
-
+function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">) {
   if (!device.last_sync_at) {
     return "Waiting for first sync";
   }
@@ -135,11 +127,7 @@ function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   return `Synced ${diffDays}d ago`;
 }
 
-function deriveSyncState(device: DeviceRow, queueCount: number): SyncState {
-  if (queueCount > 0) {
-    return deviceSeemsOnline(device) ? "syncing" : "queued";
-  }
-
+function deriveSyncState(device: DeviceRow): SyncState {
   if (deviceSeemsOnline(device)) {
     return "online";
   }
@@ -300,11 +288,10 @@ function mapDeviceRowToAppDevice(input: {
   device: DeviceRow;
   dayStates: DayStateRow[];
   membership: MembershipWithDevice;
-  queueCount: number;
   snapshot?: RuntimeSnapshotRow | null;
   sharedViewers: number;
 }): AddOneDevice {
-  const { currentUserName, dayStates, device, membership, queueCount, sharedViewers, snapshot } = input;
+  const { currentUserName, dayStates, device, membership, sharedViewers, snapshot } = input;
   const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
   const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
   const fallbackFrame = buildBoardFrame(device);
@@ -320,7 +307,7 @@ function mapDeviceRowToAppDevice(input: {
     name: device.name,
     ownerName: currentUserName,
     runtimeRevision: Number(snapshot?.revision ?? device.last_runtime_revision ?? 0),
-    syncState: deriveSyncState(device, queueCount),
+    syncState: deriveSyncState(device),
     weeklyTarget: device.weekly_target,
     weekStart: normalizeWeekStart(device.week_start),
     timezone: device.timezone,
@@ -338,14 +325,13 @@ function mapDeviceRowToAppDevice(input: {
     firmwareVersion: device.firmware_version,
     wifiName: "Managed on device",
     sharedViewers,
-    queueCount,
     days,
     dateGrid,
     today: {
       weekIndex: 0,
       dayIndex: todayDayIndex,
     },
-    lastSyncedLabel: relativeSyncLabel(device, queueCount),
+    lastSyncedLabel: relativeSyncLabel(device),
   };
 }
 
@@ -367,7 +353,7 @@ function mapDeviceRowToSharedBoard(input: {
     ownerName,
     habitName: device.name,
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
-    syncState: deriveSyncState(device, 0),
+    syncState: deriveSyncState(device),
     weeklyTarget: device.weekly_target,
     paletteId: paletteIdForDevice(device),
     days: snapshotDays ?? buildDays(dateGrid, buildStateMap(dayStates)),
@@ -506,7 +492,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     return [] as AddOneDevice[];
   }
 
-  const [snapshots, viewerRows, queuedCommands] = await Promise.all([
+  const [snapshots, viewerRows] = await Promise.all([
     fetchLatestRuntimeSnapshots(deviceIds),
     supabase
       .from("device_memberships")
@@ -514,11 +500,6 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
       .in("device_id", deviceIds)
       .eq("role", "viewer")
       .eq("status", "approved"),
-    supabase
-      .from("device_commands")
-      .select("device_id, status")
-      .in("device_id", deviceIds)
-      .eq("status", "queued"),
   ]);
 
   const viewerData = assertData(
@@ -526,12 +507,6 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     (viewerRows.data ?? []) as Array<Pick<MembershipRow, "device_id" | "user_id">>,
     "Failed to load viewer counts.",
   );
-  const queuedCommandData = assertData(
-    queuedCommands.error,
-    (queuedCommands.data ?? []) as Array<Pick<CommandRow, "device_id">>,
-    "Failed to load command queue state.",
-  );
-
   const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
     accumulator[row.device_id] ??= row;
     return accumulator;
@@ -550,18 +525,12 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     return accumulator;
   }, {});
 
-  const queuedCountByDevice = queuedCommandData.reduce<Record<string, number>>((accumulator, row) => {
-    accumulator[row.device_id] = (accumulator[row.device_id] ?? 0) + 1;
-    return accumulator;
-  }, {});
-
   return memberships.map((membership) =>
     mapDeviceRowToAppDevice({
       currentUserName,
       dayStates: dayStateByDevice[membership.device_id] ?? [],
       device: membership.device as DeviceRow,
       membership,
-      queueCount: queuedCountByDevice[membership.device_id] ?? 0,
       snapshot: snapshotByDevice[membership.device_id] ?? null,
       sharedViewers: viewerCountByDevice[membership.device_id] ?? 0,
     }),

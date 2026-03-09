@@ -50,6 +50,7 @@ export default function HomeScreen() {
   const { cycleSyncState, isApplyingToday, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
+  const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
   const statusLine = activeDevice
     ? mode === "demo"
       ? `Demo preview · ${activeDevice.lastSyncedLabel}`
@@ -209,7 +210,10 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 10 }}>
-          <SyncBadge onPress={() => void cycleSyncState()} state={activeDevice.syncState} />
+          <SyncBadge
+            onPress={() => void cycleSyncState()}
+            state={isApplyingToday || activePendingTodayState !== undefined ? "syncing" : activeDevice.syncState}
+          />
           <View style={{ flexDirection: "row", gap: 8 }}>
             <IconButton icon="people-outline" onPress={() => router.push("/shared")} />
             <IconButton icon="options-outline" onPress={() => router.push("/settings")} />

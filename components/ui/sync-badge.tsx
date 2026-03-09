@@ -20,11 +20,6 @@ const syncConfig: Record<SyncState, { label: string; dot: string; background: st
     dot: "#8F4E46",
     background: withAlpha("#8F4E46", 0.12),
   },
-  queued: {
-    label: "Queued",
-    dot: "#C7904A",
-    background: withAlpha("#C7904A", 0.18),
-  },
 };
 
 interface SyncBadgeProps {

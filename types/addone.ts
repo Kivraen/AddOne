@@ -1,4 +1,4 @@
-export type SyncState = "online" | "syncing" | "offline" | "queued";
+export type SyncState = "online" | "syncing" | "offline";
 export type RewardType = "clock" | "paint";
 export type RewardTrigger = "daily" | "weekly";
 export type PixelGridMode = "display" | "edit" | "preview" | "shared";
@@ -51,7 +51,6 @@ export interface AddOneDevice {
   firmwareVersion: string;
   wifiName: string;
   sharedViewers: number;
-  queueCount: number;
   days: boolean[][];
   dateGrid?: string[][];
   today: TodayPointer;

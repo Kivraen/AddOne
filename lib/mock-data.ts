@@ -30,7 +30,6 @@ export const initialDevices: AddOneDevice[] = [
     firmwareVersion: "v2.preview.1",
     wifiName: "Desk Studio",
     sharedViewers: 2,
-    queueCount: 0,
     lastSyncedLabel: "Synced 3m ago",
     today: {
       weekIndex: 0,
@@ -68,7 +67,7 @@ export const initialDevices: AddOneDevice[] = [
     name: "Evening Lift",
     ownerName: "Viktor",
     runtimeRevision: 17,
-    syncState: "queued",
+    syncState: "offline",
     weeklyTarget: 4,
     weekStart: "monday",
     timezone: "America/Los_Angeles",
@@ -85,8 +84,7 @@ export const initialDevices: AddOneDevice[] = [
     firmwareVersion: "v2.preview.1",
     wifiName: "Workshop Mesh",
     sharedViewers: 1,
-    queueCount: 2,
-    lastSyncedLabel: "2 actions queued",
+    lastSyncedLabel: "Synced 55m ago",
     today: {
       weekIndex: 0,
       dayIndex: 4,

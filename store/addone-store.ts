@@ -38,8 +38,6 @@ function nextSyncState(current: SyncState): SyncState {
       return "syncing";
     case "syncing":
       return "offline";
-    case "offline":
-      return "queued";
     default:
       return "online";
   }
@@ -63,13 +61,11 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
     set((state) => ({
       devices: updateDevice(state.devices, state.activeDeviceId, (device) => {
         const updated = toggleToday(device);
-        const queueing = device.syncState === "offline" || device.syncState === "queued";
 
         return {
           ...updated,
-          syncState: queueing ? "queued" : "syncing",
-          queueCount: queueing ? device.queueCount + 1 : 0,
-          lastSyncedLabel: queueing ? `${device.queueCount + 1} actions queued` : "Syncing now",
+          lastSyncedLabel: device.syncState === "offline" ? "Device offline" : "Applying on device",
+          syncState: device.syncState === "offline" ? "offline" : "syncing",
         };
       }),
     })),
@@ -85,15 +81,12 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
         return {
           ...device,
           syncState,
-          queueCount: syncState === "queued" ? Math.max(device.queueCount, 1) : 0,
           lastSyncedLabel:
             syncState === "online"
               ? "Synced moments ago"
               : syncState === "syncing"
                 ? "Pushing latest changes"
-                : syncState === "offline"
-                  ? "Device offline"
-                  : `${Math.max(device.queueCount, 1)} actions queued`,
+                : "Device offline",
         };
       }),
     })),
