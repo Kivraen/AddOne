@@ -47,7 +47,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { mode, userEmail } = useAuth();
   const { activeDevice, activeDeviceId, devices, isLoading, setActiveDevice } = useDevices();
-  const { cycleSyncState, isApplyingToday, toggleToday } = useDeviceActions();
+  const { isApplyingToday, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
@@ -210,10 +210,7 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 10 }}>
-          <SyncBadge
-            onPress={() => void cycleSyncState()}
-            state={isApplyingToday || activePendingTodayState !== undefined ? "syncing" : activeDevice.syncState}
-          />
+          <SyncBadge state={isApplyingToday || activePendingTodayState !== undefined ? "syncing" : activeDevice.syncState} />
           <View style={{ flexDirection: "row", gap: 8 }}>
             <IconButton icon="people-outline" onPress={() => router.push("/shared")} />
             <IconButton icon="options-outline" onPress={() => router.push("/settings")} />

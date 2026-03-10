@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { boardPalettes } from "@/constants/palettes";
 import { initialDevices, initialSharedBoards } from "@/lib/mock-data";
 import { toggleHistoryCell, toggleToday } from "@/lib/board";
-import { AddOneDevice, BoardPalette, RewardTrigger, RewardType, SharedBoard, SyncState } from "@/types/addone";
+import { AddOneDevice, BoardPalette, RewardTrigger, RewardType, SharedBoard } from "@/types/addone";
 
 interface AddOneState {
   activeDeviceId: string;
@@ -14,7 +14,6 @@ interface AddOneState {
   setActiveDevice: (deviceId: string) => void;
   toggleToday: () => void;
   toggleHistoryCell: (row: number, col: number) => void;
-  cycleSyncState: () => void;
   toggleReward: () => void;
   setRewardType: (value: RewardType) => void;
   setRewardTrigger: (value: RewardTrigger) => void;
@@ -30,17 +29,6 @@ interface AddOneState {
 
 function updateDevice(devices: AddOneDevice[], activeDeviceId: string, updater: (device: AddOneDevice) => AddOneDevice) {
   return devices.map((device) => (device.id === activeDeviceId ? updater(device) : device));
-}
-
-function nextSyncState(current: SyncState): SyncState {
-  switch (current) {
-    case "online":
-      return "syncing";
-    case "syncing":
-      return "offline";
-    default:
-      return "online";
-  }
 }
 
 function nextResetLabel(resetTime: string) {
@@ -72,23 +60,6 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
   toggleHistoryCell: (row, col) =>
     set((state) => ({
       devices: updateDevice(state.devices, state.activeDeviceId, (device) => toggleHistoryCell(device, row, col)),
-    })),
-  cycleSyncState: () =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => {
-        const syncState = nextSyncState(device.syncState);
-
-        return {
-          ...device,
-          syncState,
-          lastSyncedLabel:
-            syncState === "online"
-              ? "Synced moments ago"
-              : syncState === "syncing"
-                ? "Pushing latest changes"
-                : "Device offline",
-        };
-      }),
     })),
   toggleReward: () =>
     set((state) => ({

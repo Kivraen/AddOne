@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
@@ -24,16 +24,13 @@ const syncConfig: Record<SyncState, { label: string; dot: string; background: st
 
 interface SyncBadgeProps {
   state: SyncState;
-  onPress?: () => void;
 }
 
-export function SyncBadge({ state, onPress }: SyncBadgeProps) {
+export function SyncBadge({ state }: SyncBadgeProps) {
   const config = syncConfig[state];
 
   return (
-    <Pressable
-      accessibilityRole={onPress ? "button" : undefined}
-      onPress={onPress}
+    <View
       style={{
         alignSelf: "flex-start",
         borderRadius: theme.radius.pill,
@@ -64,6 +61,6 @@ export function SyncBadge({ state, onPress }: SyncBadgeProps) {
           {config.label}
         </Text>
       </View>
-    </Pressable>
+    </View>
   );
 }

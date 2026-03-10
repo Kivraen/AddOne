@@ -177,7 +177,6 @@ export function useDeviceActions() {
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
 
   const demoActions = {
-    cycleSyncState: useAddOneStore((state) => state.cycleSyncState),
     setAutoBrightness: useAddOneStore((state) => state.setAutoBrightness),
     setHabitName: useAddOneStore((state) => state.setHabitName),
     setPalette: useAddOneStore((state) => state.setPalette),
@@ -366,7 +365,6 @@ export function useDeviceActions() {
     return {
       claimDevice: claimMutation.mutateAsync,
       commitHistoryDraft: async () => undefined,
-      cycleSyncState: demoActions.cycleSyncState,
       isApplyingToday: false,
       isBusy,
       isRefreshingRuntimeSnapshot: false,
@@ -421,7 +419,6 @@ export function useDeviceActions() {
       );
       void invalidateCloudDevices();
     },
-    cycleSyncState: invalidateCloudDevices,
     isApplyingToday: setDayStateMutation.isPending,
     isBusy,
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
