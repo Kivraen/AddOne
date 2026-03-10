@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
@@ -10,6 +11,7 @@ import { useApProvisioning } from "@/hooks/use-ap-provisioning";
 import { useDeviceAp } from "@/hooks/use-device-ap";
 import { useDevices } from "@/hooks/use-devices";
 import { useOnboarding } from "@/hooks/use-onboarding";
+import { describeProvisioningAttemptDebug } from "@/lib/ap-provisioning";
 import { withAlpha } from "@/lib/color";
 import { DeviceApScannedNetwork, DeviceOnboardingSession } from "@/types/addone";
 
@@ -163,6 +165,31 @@ function signalLabel(rssi: number | null) {
   return "Weak";
 }
 
+function authModeLabel(authMode: string | null | undefined, secure: boolean) {
+  if (!secure) {
+    return "Open network";
+  }
+
+  switch (authMode) {
+    case "wpa":
+      return "WPA";
+    case "wpa2":
+      return "WPA2";
+    case "wpa_wpa2":
+      return "WPA/WPA2";
+    case "wpa3":
+      return "WPA3";
+    case "wpa2_wpa3":
+      return "WPA2/WPA3";
+    case "enterprise":
+      return "Enterprise";
+    case "wep":
+      return "WEP";
+    default:
+      return "Password required";
+  }
+}
+
 function NetworkRow({
   disabled = false,
   network,
@@ -209,7 +236,7 @@ function NetworkRow({
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            {network.secure ? "Password required" : "Open network"} · {signalLabel(network.rssi)}
+            {authModeLabel(network.authMode, network.secure)} · {signalLabel(network.rssi)}
           </Text>
         </View>
         {selected ? (
@@ -273,6 +300,7 @@ export default function RecoveryScreen() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [waitingSinceMs, setWaitingSinceMs] = useState<number | null>(null);
   const [waitingWarning, setWaitingWarning] = useState<string | null>(null);
   const [hasRedirectedAfterRecovery, setHasRedirectedAfterRecovery] = useState(false);
@@ -290,7 +318,13 @@ export default function RecoveryScreen() {
     liveSession.isExpired ||
     liveSession.status === "cancelled" ||
     liveSession.status === "failed" ||
-    (liveSession.status === "awaiting_ap" && !hasClaimToken);
+    liveSession.status === "claimed" ||
+    !hasClaimToken;
+  const missingRecoveryClaimContext =
+    !!liveSession &&
+    !liveSession.isExpired &&
+    liveSession.status !== "claimed" &&
+    !hasClaimToken;
   const sortedNetworks = useMemo(
     () =>
       [...networks].sort((left, right) => {
@@ -302,6 +336,10 @@ export default function RecoveryScreen() {
   );
   const selectedNetwork = sortedNetworks.find((network) => network.ssid === draft.wifiSsid) ?? null;
   const isAwaitingReconnect = liveSession?.status === "awaiting_cloud" && !waitingWarning;
+  const displayStatusLabel =
+    liveSession?.status === "awaiting_cloud" && apInfo?.provisioning_state === "ready"
+      ? "Ready for Wi‑Fi"
+      : statusLabel(liveSession);
 
   useEffect(() => {
     if (!recoveryCompleted || hasRedirectedAfterRecovery) {
@@ -337,6 +375,48 @@ export default function RecoveryScreen() {
 
     return () => clearTimeout(timeoutId);
   }, [liveSession?.status, waitingSinceMs]);
+
+  useEffect(() => {
+    if (liveSession?.status !== "awaiting_cloud" || waitingWarning) {
+      return;
+    }
+
+    let active = true;
+    const intervalId = setInterval(() => {
+      void (async () => {
+        try {
+          const info = await checkAp();
+          if (!active) {
+            return;
+          }
+
+          if (info.provisioning_state === "ready" && info.last_failure_reason) {
+            setWaitingWarning(info.last_failure_reason);
+            setStatusMessage(`Connected to ${info.device_ap_ssid}. Update the Wi‑Fi details and try again.`);
+            return;
+          }
+
+          if (info.provisioning_state === "ready") {
+            setWaitingWarning("The device is back in setup mode. Check the Wi‑Fi details and try again.");
+            setStatusMessage(`Connected to ${info.device_ap_ssid}. Update the Wi‑Fi details and try again.`);
+            return;
+          }
+
+          if (info.provisioning_state === "provisioned") {
+            void refreshSession();
+          }
+        } catch {
+          // If the phone leaves AddOne-XXXX during a good reconnect, local AP checks can fail.
+          // Keep waiting on the cloud session in that case.
+        }
+      })();
+    }, 2000);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [checkAp, liveSession?.status, refreshSession, waitingWarning]);
 
   async function handleStartRecovery() {
     setStatusError(null);
@@ -378,6 +458,8 @@ export default function RecoveryScreen() {
       setStatusError(null);
       setStatusMessage(null);
       setWaitingWarning(null);
+      const attemptDebug = describeProvisioningAttemptDebug(draft);
+      console.log("[recovery] provisioning attempt", attemptDebug);
       const response = await submitProvisioning(preparedRequest);
       if (!response.accepted) {
         setStatusError(response.message ?? "The AddOne AP rejected the Wi‑Fi payload.");
@@ -386,7 +468,7 @@ export default function RecoveryScreen() {
 
       await markWaiting(liveSession.id);
       setWaitingSinceMs(Date.now());
-      setStatusMessage("Trying to join Wi‑Fi…");
+      setStatusMessage("Trying to join this Wi‑Fi…");
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : "Failed to continue the recovery session.");
     }
@@ -396,13 +478,13 @@ export default function RecoveryScreen() {
     try {
       const info = await checkAp();
       if (info.provisioning_state === "ready") {
-        setWaitingWarning("The device is still in setup mode. Check the password and try again.");
+        setWaitingWarning(info.last_failure_reason ?? "The device is still in setup mode. Check the password and try again.");
         setStatusMessage(`Connected to ${info.device_ap_ssid}. Update the Wi‑Fi details and retry.`);
         return;
       }
 
       if (info.provisioning_state === "busy") {
-        setWaitingWarning("The device is still trying the previous Wi‑Fi. You can replace it now.");
+        setWaitingWarning(info.last_failure_reason ?? "The device is still trying the previous Wi‑Fi. You can replace it now.");
         setStatusMessage(`Connected to ${info.device_ap_ssid}. Update the Wi‑Fi details and reconnect.`);
         return;
       }
@@ -555,8 +637,8 @@ export default function RecoveryScreen() {
                 letterSpacing: theme.typography.micro.letterSpacing,
                 textTransform: "uppercase",
               }}
-            >
-              {statusLabel(liveSession)}
+              >
+              {displayStatusLabel}
             </Text>
           </View>
 
@@ -570,6 +652,19 @@ export default function RecoveryScreen() {
               }}
             >
               Temporary setup session · {formatExpirationLabel(liveSession.expiresAt)}
+            </Text>
+          ) : null}
+
+          {missingRecoveryClaimContext ? (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              Recovery needs a fresh local session on this phone. Start recovery again to continue.
             </Text>
           ) : null}
 
@@ -589,7 +684,7 @@ export default function RecoveryScreen() {
           {canStartFreshSession && !recoveryCompleted ? (
             <ActionButton
               disabled={isBusy}
-              label={isBusy ? "Starting…" : "Start recovery"}
+              label={isBusy ? "Starting…" : missingRecoveryClaimContext ? "Restart recovery" : "Start recovery"}
               onPress={() => {
                 void handleStartRecovery();
               }}
@@ -639,12 +734,12 @@ export default function RecoveryScreen() {
               style={{
                 color: theme.colors.textSecondary,
                 fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              1. Join `AddOne-XXXX`. 2. Choose your Wi‑Fi. 3. Enter the password and reconnect.
-            </Text>
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Join `AddOne-XXXX`, pick your Wi‑Fi, enter the password, then reconnect.
+              </Text>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
               <ActionButton
@@ -723,6 +818,19 @@ export default function RecoveryScreen() {
               >
                 Device AP: {apInfo.device_ap_ssid}
                 {apInfo.firmware_version ? ` · firmware ${apInfo.firmware_version}` : ""}
+              </Text>
+            ) : null}
+
+            {apInfo?.last_failure_reason ? (
+              <Text
+                style={{
+                  color: theme.colors.statusErrorMuted,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                {apInfo.last_failure_reason}
               </Text>
             ) : null}
 
@@ -805,7 +913,7 @@ export default function RecoveryScreen() {
                     lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  {selectedNetwork.secure ? "Password required" : "Open network"} · {signalLabel(selectedNetwork.rssi)}
+                  {authModeLabel(selectedNetwork.authMode, selectedNetwork.secure)} · {signalLabel(selectedNetwork.rssi)}
                 </Text>
               ) : null}
               {validation.errors.wifiSsid ? (
@@ -824,33 +932,58 @@ export default function RecoveryScreen() {
 
             <View style={{ gap: 10 }}>
               <FieldLabel>Password</FieldLabel>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isSubmittingProvisioning}
-                onChangeText={(value) => {
-                  setWifiPassword(value);
-                  setStatusError(null);
-                  setStatusMessage(null);
-                  setWaitingWarning(null);
-                }}
-                placeholder="Enter the Wi-Fi password"
-                placeholderTextColor={theme.colors.textTertiary}
-                secureTextEntry
+              <View
                 style={{
                   borderRadius: theme.radius.sheet,
                   borderWidth: 1,
                   borderColor: withAlpha(theme.colors.textPrimary, 0.08),
                   backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingLeft: 16,
                 }}
-                value={draft.wifiPassword}
-              />
+              >
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isSubmittingProvisioning}
+                  onChangeText={(value) => {
+                    setWifiPassword(value);
+                    setStatusError(null);
+                    setStatusMessage(null);
+                    setWaitingWarning(null);
+                  }}
+                  placeholder="Enter the Wi‑Fi password"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  secureTextEntry={!showWifiPassword}
+                  style={{
+                    flex: 1,
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                    paddingVertical: 16,
+                  }}
+                  value={draft.wifiPassword}
+                />
+                <Pressable
+                  disabled={isSubmittingProvisioning}
+                  onPress={() => setShowWifiPassword((current) => !current)}
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: 48,
+                    width: 48,
+                    opacity: isSubmittingProvisioning ? 0.45 : 1,
+                  }}
+                >
+                  <Ionicons
+                    color={theme.colors.textSecondary}
+                    name={showWifiPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                  />
+                </Pressable>
+              </View>
               {validation.errors.wifiPassword ? (
                 <Text
                   style={{
@@ -875,7 +1008,7 @@ export default function RecoveryScreen() {
                   {provisioningError}
                 </Text>
               ) : null}
-              {provisioningResponse?.message ? (
+              {provisioningResponse?.message && !isAwaitingReconnect && !waitingWarning ? (
                 <Text
                   style={{
                     color: theme.colors.textSecondary,
@@ -885,6 +1018,18 @@ export default function RecoveryScreen() {
                   }}
                 >
                   {provisioningResponse.message}
+                </Text>
+              ) : null}
+              {isAwaitingReconnect && !waitingWarning ? (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  If the password is correct, the device should come back in a few seconds.
                 </Text>
               ) : null}
             </View>

@@ -37,6 +37,15 @@ export function buildDeviceApProvisioningEndpoint() {
   return `${runtimeConfig.deviceApBaseUrl}${ADDONE_DEVICE_AP_SESSION_PATH}`;
 }
 
+function shortSecretFingerprint(secret: string) {
+  let hash = 0;
+  for (let index = 0; index < secret.length; index += 1) {
+    hash = (hash * 31 + secret.charCodeAt(index)) % 65535;
+  }
+
+  return hash.toString(16).padStart(4, "0");
+}
+
 export function validateApProvisioningDraft(params: {
   claimToken: string | null;
   draft: ApProvisioningDraft;
@@ -92,5 +101,13 @@ export function buildApProvisioningRequest(params: {
       wifi_password: params.draft.wifiPassword,
       wifi_ssid: trimOrEmpty(params.draft.wifiSsid),
     },
+  };
+}
+
+export function describeProvisioningAttemptDebug(draft: ApProvisioningDraft) {
+  return {
+    passwordFingerprint: shortSecretFingerprint(draft.wifiPassword),
+    passwordLength: draft.wifiPassword.length,
+    ssid: trimOrEmpty(draft.wifiSsid),
   };
 }

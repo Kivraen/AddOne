@@ -78,6 +78,7 @@ function mapProvisioningInfo(data: unknown): DeviceApProvisioningInfo {
     device_ap_ssid: data.device_ap_ssid,
     firmware_version: typeof data.firmware_version === "string" ? data.firmware_version : null,
     hardware_profile: typeof data.hardware_profile === "string" ? data.hardware_profile : null,
+    last_failure_reason: typeof data.last_failure_reason === "string" ? data.last_failure_reason : null,
     provisioning_state: data.provisioning_state,
     schema_version: 1,
   };
@@ -111,6 +112,7 @@ function mapScannedNetwork(data: unknown): DeviceApScannedNetwork {
   }
 
   return {
+    authMode: typeof data.auth_mode === "string" ? data.auth_mode : null,
     rssi: typeof data.rssi === "number" ? data.rssi : null,
     secure: typeof data.secure === "boolean" ? data.secure : true,
     ssid: data.ssid,

@@ -5,6 +5,15 @@
 #include "config.h"
 
 namespace {
+uint16_t shortSecretFingerprint(const String& secret) {
+  uint32_t hash = 0;
+  for (size_t index = 0; index < secret.length(); ++index) {
+    hash = (hash * 31 + static_cast<uint8_t>(secret[index])) % 65535;
+  }
+
+  return static_cast<uint16_t>(hash);
+}
+
 String escapeJson(const String& input) {
   String output;
   output.reserve(input.length() + 8);
@@ -134,12 +143,20 @@ void ApServer::begin(const DeviceIdentity& identity, ProvisioningStore& provisio
   provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
   completedProvisioning_ = false;
   provisioningAttemptStartedAtMs_ = 0;
+  lastFailureReason_ = "";
 
   WiFi.persistent(true);
   WiFi.disconnect(false, false);
   delay(100);
   WiFi.mode(WIFI_AP_STA);
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setMinSecurity(WIFI_AUTH_OPEN);
   delay(100);
+  if (!wifiEventHandlerId_) {
+    wifiEventHandlerId_ = WiFi.onEvent([this](arduino_event_id_t event, arduino_event_info_t info) {
+      handleWifiEvent_(event, info);
+    });
+  }
   WiFi.softAP(identity_->apSsid().c_str(), nullptr, 1, false, 4);
 
   server_.on("/", HTTP_GET, [this]() {
@@ -188,6 +205,9 @@ void ApServer::loop() {
 
     if (millis() - provisioningAttemptStartedAtMs_ >= kWifiConnectTimeoutMs) {
       Serial.println("AP provisioning timed out waiting for Wi-Fi.");
+      if (lastFailureReason_.isEmpty()) {
+        lastFailureReason_ = "The device could not join that Wi‑Fi in time. Check the password and try again.";
+      }
       resetProvisioningAttempt_();
     }
   }
@@ -216,6 +236,7 @@ void ApServer::resetForRecovery() {
   provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
   completedProvisioning_ = false;
   provisioningAttemptStartedAtMs_ = 0;
+  lastFailureReason_ = "";
 }
 
 void ApServer::handleRoot_() {
@@ -292,12 +313,18 @@ void ApServer::handleSession_() {
   provisioningState_ = ProvisioningContract::ProvisioningState::Busy;
   completedProvisioning_ = false;
   provisioningAttemptStartedAtMs_ = millis();
+  lastFailureReason_ = "";
 
   Serial.printf("AP provisioning accepted for session %s on SSID '%s'\n",
                 claim.onboardingSessionId,
                 wifiSsid.c_str());
+  Serial.printf("AP provisioning password fingerprint=%04x length=%u\n",
+                shortSecretFingerprint(wifiPassword),
+                static_cast<unsigned>(wifiPassword.length()));
 
   WiFi.mode(WIFI_AP_STA);
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setMinSecurity(WIFI_AUTH_OPEN);
   delay(100);
   if (wifiPassword.isEmpty()) {
     WiFi.begin(wifiSsid.c_str());
@@ -341,6 +368,9 @@ String ApServer::buildNetworksJson_() {
     json += String(WiFi.RSSI(index));
     json += ",\"secure\":";
     json += WiFi.encryptionType(index) == WIFI_AUTH_OPEN ? "false" : "true";
+    json += ",\"auth_mode\":\"";
+    json += escapeJson(describeAuthMode_(WiFi.encryptionType(index)));
+    json += "\"";
     json += "}";
     first = false;
   }
@@ -354,6 +384,21 @@ void ApServer::resetProvisioningAttempt_() {
   provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
   provisioningAttemptStartedAtMs_ = 0;
   completedProvisioning_ = false;
+}
+
+void ApServer::handleWifiEvent_(arduino_event_id_t event, arduino_event_info_t info) {
+  if (event != ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+    return;
+  }
+
+  if (provisioningState_ != ProvisioningContract::ProvisioningState::Busy) {
+    return;
+  }
+
+  lastFailureReason_ = describeDisconnectReason_(info.wifi_sta_disconnected.reason);
+  Serial.printf("AP provisioning disconnect reason %u: %s\n",
+                info.wifi_sta_disconnected.reason,
+                lastFailureReason_.c_str());
 }
 
 void ApServer::sendJson_(int statusCode, const String& body) {
@@ -372,8 +417,39 @@ String ApServer::buildInfoJson_() const {
   json += escapeJson(Config::kFirmwareVersion);
   json += "\",\"provisioning_state\":\"";
   json += currentProvisioningStateName_();
-  json += "\"}";
+  json += "\"";
+  if (!lastFailureReason_.isEmpty()) {
+    json += ",\"last_failure_reason\":\"";
+    json += escapeJson(lastFailureReason_);
+    json += "\"";
+  }
+  json += "}";
   return json;
+}
+
+String ApServer::describeAuthMode_(wifi_auth_mode_t authMode) const {
+  switch (authMode) {
+    case WIFI_AUTH_OPEN:
+      return "open";
+    case WIFI_AUTH_WEP:
+      return "wep";
+    case WIFI_AUTH_WPA_PSK:
+      return "wpa";
+    case WIFI_AUTH_WPA2_PSK:
+      return "wpa2";
+    case WIFI_AUTH_WPA_WPA2_PSK:
+      return "wpa_wpa2";
+    case WIFI_AUTH_WPA2_ENTERPRISE:
+      return "enterprise";
+    case WIFI_AUTH_WPA3_PSK:
+      return "wpa3";
+    case WIFI_AUTH_WPA2_WPA3_PSK:
+      return "wpa2_wpa3";
+    case WIFI_AUTH_WAPI_PSK:
+      return "wapi";
+    default:
+      return "unknown";
+  }
 }
 
 String ApServer::buildSessionResponseJson_(bool accepted,
@@ -404,5 +480,16 @@ String ApServer::currentProvisioningStateName_() const {
     case ProvisioningContract::ProvisioningState::Ready:
     default:
       return "ready";
+  }
+}
+
+String ApServer::describeDisconnectReason_(uint8_t reason) const {
+  switch (reason) {
+    case WIFI_REASON_AUTH_FAIL:
+      return "The password was rejected by that Wi‑Fi network.";
+    case WIFI_REASON_NO_AP_FOUND:
+      return "The device could not find that Wi‑Fi network.";
+    default:
+      return "The device could not join that Wi‑Fi network.";
   }
 }

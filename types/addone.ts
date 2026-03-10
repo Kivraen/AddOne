@@ -9,6 +9,7 @@ export type DeviceApProvisioningState = "ready" | "busy" | "provisioned";
 export type DeviceApProvisioningNextStep = "connect_to_cloud" | "retry";
 
 export interface DeviceApScannedNetwork {
+  authMode?: string | null;
   rssi: number | null;
   secure: boolean;
   ssid: string;
@@ -149,6 +150,7 @@ export interface DeviceApProvisioningInfo {
   device_ap_ssid: string;
   firmware_version: string | null;
   hardware_profile: string | null;
+  last_failure_reason?: string | null;
   provisioning_state: DeviceApProvisioningState;
   schema_version: 1;
 }

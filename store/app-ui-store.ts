@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 import { ApProvisioningDraft } from "@/types/addone";
 
@@ -22,46 +24,60 @@ interface AppUiState {
   setPendingTodayState: (deviceId: string, isDone: boolean) => void;
 }
 
-export const useAppUiStore = create<AppUiState>((set) => ({
-  activeDeviceId: null,
-  activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
-  activeOnboardingClaimToken: null,
-  activeOnboardingSessionId: null,
-  pendingTodayStateByDevice: {},
-  clearApProvisioningDraft: () =>
-    set({
-      activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
-    }),
-  clearOnboardingSession: () =>
-    set({
+export const useAppUiStore = create<AppUiState>()(
+  persist(
+    (set) => ({
+      activeDeviceId: null,
       activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
       activeOnboardingClaimToken: null,
       activeOnboardingSessionId: null,
+      pendingTodayStateByDevice: {},
+      clearApProvisioningDraft: () =>
+        set({
+          activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
+        }),
+      clearOnboardingSession: () =>
+        set({
+          activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
+          activeOnboardingClaimToken: null,
+          activeOnboardingSessionId: null,
+        }),
+      clearPendingTodayState: (deviceId) =>
+        set((state) => {
+          const next = { ...state.pendingTodayStateByDevice };
+          delete next[deviceId];
+          return { pendingTodayStateByDevice: next };
+        }),
+      setActiveApProvisioningDraft: (patch) =>
+        set((state) => ({
+          activeApProvisioningDraft: {
+            ...state.activeApProvisioningDraft,
+            ...patch,
+          },
+        })),
+      setActiveOnboardingSession: ({ claimToken = null, sessionId }) =>
+        set({
+          activeOnboardingClaimToken: claimToken,
+          activeOnboardingSessionId: sessionId,
+        }),
+      setActiveDeviceId: (deviceId) => set({ activeDeviceId: deviceId }),
+      setPendingTodayState: (deviceId, isDone) =>
+        set((state) => ({
+          pendingTodayStateByDevice: {
+            ...state.pendingTodayStateByDevice,
+            [deviceId]: isDone,
+          },
+        })),
     }),
-  clearPendingTodayState: (deviceId) =>
-    set((state) => {
-      const next = { ...state.pendingTodayStateByDevice };
-      delete next[deviceId];
-      return { pendingTodayStateByDevice: next };
-    }),
-  setActiveApProvisioningDraft: (patch) =>
-    set((state) => ({
-      activeApProvisioningDraft: {
-        ...state.activeApProvisioningDraft,
-        ...patch,
-      },
-    })),
-  setActiveOnboardingSession: ({ claimToken = null, sessionId }) =>
-    set({
-      activeOnboardingClaimToken: claimToken,
-      activeOnboardingSessionId: sessionId,
-    }),
-  setActiveDeviceId: (deviceId) => set({ activeDeviceId: deviceId }),
-  setPendingTodayState: (deviceId, isDone) =>
-    set((state) => ({
-      pendingTodayStateByDevice: {
-        ...state.pendingTodayStateByDevice,
-        [deviceId]: isDone,
-      },
-    })),
-}));
+    {
+      name: "addone-app-ui",
+      partialize: (state) => ({
+        activeApProvisioningDraft: state.activeApProvisioningDraft,
+        activeDeviceId: state.activeDeviceId,
+        activeOnboardingClaimToken: state.activeOnboardingClaimToken,
+        activeOnboardingSessionId: state.activeOnboardingSessionId,
+      }),
+      storage: createJSONStorage(() => AsyncStorage),
+    },
+  ),
+);
