@@ -322,7 +322,7 @@ export default function OnboardingScreen() {
               lineHeight: theme.typography.title.lineHeight,
             }}
           >
-            Setup session
+            Start setup
           </Text>
           <Text
             style={{
@@ -332,7 +332,7 @@ export default function OnboardingScreen() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Join the device Wi-Fi, choose your network, let the device connect, then finish the few settings that matter.
+            Connect to `AddOne-XXXX`, join your Wi‑Fi, then finish the few settings that matter.
           </Text>
 
           <View
@@ -367,7 +367,7 @@ export default function OnboardingScreen() {
                 lineHeight: theme.typography.body.lineHeight,
               }}
             >
-              Session prefix: {session.claimTokenPrefix} · {formatExpirationLabel(session.expiresAt)}
+              Setup session · {formatExpirationLabel(session.expiresAt)}
             </Text>
           ) : null}
 
@@ -417,9 +417,9 @@ export default function OnboardingScreen() {
                 fontSize: theme.typography.title.fontSize,
                 lineHeight: theme.typography.title.lineHeight,
               }}
-            >
-              Connect Wi-Fi
-            </Text>
+          >
+            Connect Wi-Fi
+          </Text>
             <Text
               style={{
                 color: theme.colors.textSecondary,
@@ -427,14 +427,14 @@ export default function OnboardingScreen() {
                 fontSize: theme.typography.body.fontSize,
                 lineHeight: theme.typography.body.lineHeight,
               }}
-            >
-              Join the device network in system Wi-Fi settings first, then return here to scan and choose your home network.
+          >
+              First join the device network in system Wi‑Fi settings, then come back here and choose your network.
             </Text>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
               <ActionButton
                 disabled={isCheckingAp || isScanningNetworks}
-                label={isCheckingAp || isScanningNetworks ? "Scanning…" : "Check device AP"}
+                label={isCheckingAp || isScanningNetworks ? "Scanning…" : "Check device"}
                 onPress={() => {
                   void handleCheckDeviceAp();
                 }}
@@ -456,12 +456,12 @@ export default function OnboardingScreen() {
                   fontFamily: theme.typography.body.fontFamily,
                   fontSize: theme.typography.body.fontSize,
                   lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Device AP: {apInfo.device_ap_ssid}
-                {apInfo.firmware_version ? ` · firmware ${apInfo.firmware_version}` : ""}
-              </Text>
-            ) : null}
+                  }}
+                >
+                  Device AP · {apInfo.device_ap_ssid}
+                  {apInfo.firmware_version ? ` · firmware ${apInfo.firmware_version}` : ""}
+                </Text>
+              ) : null}
 
             {apInfoError ? (
               <Text
@@ -478,7 +478,7 @@ export default function OnboardingScreen() {
 
             {networkListVisible ? (
               <View style={{ gap: 10 }}>
-                <FieldLabel>Nearby Wi-Fi</FieldLabel>
+              <FieldLabel>Nearby Wi-Fi</FieldLabel>
                 {networksError ? (
                   <Text
                     style={{
@@ -521,7 +521,7 @@ export default function OnboardingScreen() {
                   setSetupError(null);
                   setSetupMessage(null);
                 }}
-                placeholder="Choose from the list or enter a hidden network"
+                placeholder="Choose or type a network"
                 placeholderTextColor={theme.colors.textTertiary}
                 style={{
                   borderRadius: theme.radius.sheet,
@@ -562,7 +562,7 @@ export default function OnboardingScreen() {
                   setSetupError(null);
                   setSetupMessage(null);
                 }}
-                placeholder="Enter the Wi-Fi password"
+                placeholder="Enter password"
                 placeholderTextColor={theme.colors.textTertiary}
                 secureTextEntry
                 style={{
@@ -639,7 +639,7 @@ export default function OnboardingScreen() {
                 lineHeight: theme.typography.body.lineHeight,
               }}
             >
-              The device is joining Wi-Fi, claiming itself in cloud, and publishing its first live snapshot.
+              The device is joining Wi‑Fi and publishing its first live board.
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <ActionButton
@@ -675,7 +675,7 @@ export default function OnboardingScreen() {
                   lineHeight: theme.typography.body.lineHeight,
                 }}
               >
-                Waiting for the first live device snapshot…
+                Waiting for the first live board…
               </Text>
             ) : (
               <>

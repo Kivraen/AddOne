@@ -31,33 +31,46 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
       <StatusBar style="light" />
       <View className="absolute inset-0">
         <LinearGradient
-          colors={[theme.colors.bgBase, theme.colors.bgSurface]}
+          colors={[theme.colors.bgBase, "#090909", theme.colors.bgSurface]}
           end={{ x: 0.5, y: 1 }}
           start={{ x: 0.5, y: 0 }}
           style={{ flex: 1 }}
         />
-        <View
-          pointerEvents="none"
+        <LinearGradient
+          colors={[withAlpha(theme.colors.textPrimary, 0.045), "transparent"]}
+          end={{ x: 1, y: 0 }}
+          start={{ x: 0, y: 0 }}
           style={{
+            height: 1,
+            left: 0,
             position: "absolute",
-            right: -40,
-            top: 36,
-            height: 240,
-            width: 240,
-            borderRadius: 240,
-            backgroundColor: withAlpha(theme.colors.accentAmber, 0.09),
+            right: 0,
+            top: 0,
           }}
         />
-        <View
-          pointerEvents="none"
+        <LinearGradient
+          colors={[withAlpha(theme.colors.accentAmber, 0.08), "transparent"]}
+          end={{ x: 0.95, y: 0.8 }}
+          start={{ x: 0.05, y: 0 }}
           style={{
-            position: "absolute",
-            left: -80,
-            bottom: 120,
             height: 220,
-            width: 220,
-            borderRadius: 220,
-            backgroundColor: withAlpha(theme.colors.textPrimary, 0.035),
+            left: 24,
+            opacity: 0.55,
+            position: "absolute",
+            right: 24,
+            top: 24,
+          }}
+        />
+        <LinearGradient
+          colors={["transparent", withAlpha(theme.colors.textPrimary, 0.03)]}
+          end={{ x: 0.5, y: 1 }}
+          start={{ x: 0.5, y: 0 }}
+          style={{
+            bottom: 0,
+            height: 180,
+            left: 0,
+            position: "absolute",
+            right: 0,
           }}
         />
       </View>
@@ -67,8 +80,8 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
         keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
         style={{ flex: 1 }}
       >
-        {header ? <View className="px-4 pt-2">{header}</View> : null}
-        <View className="flex-1 px-4 pb-6">{content}</View>
+        {header ? <View className="px-5 pt-3">{header}</View> : null}
+        <View className="flex-1 px-5 pb-7">{content}</View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

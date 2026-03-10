@@ -17,13 +17,13 @@ const stateStyle: Record<PrimaryActionState, { background: string; text: string;
     background: "#F2EEE6",
     text: "#070707",
     border: withAlpha("#F2EEE6", 0.25),
-    label: "Marked for today",
+    label: "Clear today",
   },
   notDone: {
     background: withAlpha("#F2EEE6", 0.06),
     text: "#F2EEE6",
     border: withAlpha("#F2EEE6", 0.12),
-    label: "Add today",
+    label: "Mark today",
   },
   pendingSync: {
     background: withAlpha("#C7904A", 0.15),
@@ -41,7 +41,7 @@ const stateStyle: Record<PrimaryActionState, { background: string; text: string;
     background: withAlpha("#F2EEE6", 0.04),
     text: "#7B766E",
     border: withAlpha("#F2EEE6", 0.08),
-    label: "Unavailable",
+    label: "Device offline",
   },
 };
 
@@ -70,7 +70,8 @@ export function PrimaryActionButton({ state, onPress }: PrimaryActionButtonProps
           borderWidth: 1,
           borderColor: config.border,
           backgroundColor: config.background,
-          paddingHorizontal: 20,
+          minHeight: 64,
+          paddingHorizontal: 22,
           paddingVertical: 18,
         }}
       >

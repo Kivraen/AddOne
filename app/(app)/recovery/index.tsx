@@ -543,7 +543,7 @@ export default function RecoveryScreen() {
               paddingVertical: 16,
             }}
           >
-            <GlassCard style={{ gap: 14, height: "88%", paddingHorizontal: 16, paddingVertical: 18, width: "100%" }}>
+            <GlassCard style={{ gap: 14, height: "92%", paddingHorizontal: 16, paddingVertical: 18, width: "100%" }}>
               <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
                 <Text
                   style={{
@@ -590,7 +590,7 @@ export default function RecoveryScreen() {
                     lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  No networks showed up yet. You can type the Wi‑Fi name manually.
+                  No networks showed up yet. You can still type the name manually.
                 </Text>
               )}
             </GlassCard>
@@ -616,7 +616,7 @@ export default function RecoveryScreen() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Use recovery when the router or password changes. Ownership, history, and settings stay intact.
+            Use this only when the router or password changes. History and settings stay intact.
           </Text>
 
           <View
@@ -651,7 +651,7 @@ export default function RecoveryScreen() {
                 lineHeight: theme.typography.body.lineHeight,
               }}
             >
-              Temporary setup session · {formatExpirationLabel(liveSession.expiresAt)}
+              Recovery session · {formatExpirationLabel(liveSession.expiresAt)}
             </Text>
           ) : null}
 
@@ -663,8 +663,8 @@ export default function RecoveryScreen() {
                 fontSize: theme.typography.body.fontSize,
                 lineHeight: theme.typography.body.lineHeight,
               }}
-            >
-              Recovery needs a fresh local session on this phone. Start recovery again to continue.
+          >
+              Start recovery again on this phone to continue.
             </Text>
           ) : null}
 
@@ -676,8 +676,8 @@ export default function RecoveryScreen() {
                 fontSize: theme.typography.body.fontSize,
                 lineHeight: theme.typography.body.lineHeight,
               }}
-            >
-              Device: {activeDevice.name}
+          >
+              Device · {activeDevice.name}
             </Text>
           ) : null}
 
@@ -727,24 +727,24 @@ export default function RecoveryScreen() {
                 fontSize: theme.typography.title.fontSize,
                 lineHeight: theme.typography.title.lineHeight,
               }}
-            >
-              Choose Wi‑Fi
-            </Text>
+          >
+            Choose Wi‑Fi
+          </Text>
             <Text
               style={{
                 color: theme.colors.textSecondary,
                 fontFamily: theme.typography.body.fontFamily,
                   fontSize: theme.typography.body.fontSize,
                   lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Join `AddOne-XXXX`, pick your Wi‑Fi, enter the password, then reconnect.
+              }}
+            >
+                Connect to `AddOne-XXXX`, choose your Wi‑Fi, then enter the password.
               </Text>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
               <ActionButton
                 disabled={isCheckingAp || isScanningNetworks}
-                label={isCheckingAp || isScanningNetworks ? "Checking…" : "Check AddOne Wi‑Fi"}
+                label={isCheckingAp || isScanningNetworks ? "Checking…" : "Check device"}
                 onPress={() => {
                   void handleCheckDeviceAp();
                 }}
@@ -778,7 +778,7 @@ export default function RecoveryScreen() {
                     lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  Trying to join Wi‑Fi and return to the cloud…
+                  Connecting to this Wi‑Fi…
                 </Text>
               </View>
             ) : null}
@@ -799,7 +799,7 @@ export default function RecoveryScreen() {
             {liveSession?.status === "awaiting_cloud" ? (
               <ActionButton
                 disabled={isCheckingAp}
-                label={isCheckingAp ? "Checking…" : "Check AddOne Wi‑Fi"}
+                label={isCheckingAp ? "Checking…" : "Check device"}
                 onPress={() => {
                   void handleCheckWaitingState();
                 }}
@@ -1041,9 +1041,9 @@ export default function RecoveryScreen() {
                 fontSize: theme.typography.body.fontSize,
                 lineHeight: theme.typography.body.lineHeight,
               }}
-            >
-              Hidden network? Type the Wi‑Fi name manually.
-            </Text>
+              >
+                Hidden network? Type the name manually.
+              </Text>
 
             <GlassCard style={{ gap: 6, paddingHorizontal: 14, paddingVertical: 12 }}>
               <Text

@@ -48,7 +48,7 @@ export function GlassSheet({ children, subtitle, title, variant = "full" }: Glas
         onClose={() => router.back()}
         snapPoints={snapPoints}
       >
-        <View className="gap-2 px-5 pb-3 pt-1">
+        <View className="gap-1 px-5 pb-4 pt-2">
           <Text
             style={{
               color: theme.colors.textPrimary,
@@ -72,7 +72,7 @@ export function GlassSheet({ children, subtitle, title, variant = "full" }: Glas
             </Text>
           ) : null}
         </View>
-        <BottomSheetScrollView contentContainerStyle={{ gap: 16, paddingBottom: 36, paddingHorizontal: 20 }}>
+        <BottomSheetScrollView contentContainerStyle={{ gap: 14, paddingBottom: 42, paddingHorizontal: 20 }}>
           {children}
         </BottomSheetScrollView>
       </BottomSheet>

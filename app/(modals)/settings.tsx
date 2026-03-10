@@ -258,7 +258,7 @@ export default function SettingsModal() {
   }
 
   return (
-    <GlassSheet subtitle="Core settings stay local in this draft until you tap Apply." title="Settings" variant="full">
+    <GlassSheet subtitle={`${device.name} · Edit your device, then apply once.`} title="Device settings" variant="full">
       {!liveDeviceSession ? (
         <GlassCard style={{ gap: 8, paddingHorizontal: 16, paddingVertical: 14 }}>
           <Text
@@ -279,7 +279,7 @@ export default function SettingsModal() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Core settings are live-only. Rejoin Wi-Fi before changing them.
+            Settings apply only while the device is live. Rejoin Wi‑Fi to continue.
           </Text>
           <View style={{ alignItems: "flex-start", marginTop: 8 }}>
             <ActionButton
@@ -346,7 +346,7 @@ export default function SettingsModal() {
           <View style={{ alignItems: "flex-start" }}>
             <ActionButton
               disabled={!liveDeviceSession || isSavingSettings || timezoneInput === phoneTimezone}
-              label="Use phone timezone"
+              label="Use phone time"
               onPress={() => {
                 setTimezoneInput(phoneTimezone);
                 setStatusError(null);
@@ -392,7 +392,7 @@ export default function SettingsModal() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Use 24-hour format like 00:00 or 03:30.
+            Use 24-hour time, like 00:00 or 03:30.
           </Text>
         </GlassCard>
       </View>
@@ -451,7 +451,7 @@ export default function SettingsModal() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            {autoBrightness ? "Auto-adjust is enabled. Manual brightness is saved but inactive." : "Choose a level from 0 to 100."}
+            {autoBrightness ? "Auto mode is on. Manual brightness is saved but inactive." : "Choose a level from 0 to 100."}
           </Text>
         </GlassCard>
 
@@ -477,23 +477,23 @@ export default function SettingsModal() {
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Device</SectionTitle>
-        <SettingRow label="Firmware" value={device.firmwareVersion} />
         <SettingRow
-          label="Recovery"
-          value="Use Rejoin Wi‑Fi if the router or password changes. As a fallback, hold the main button while reconnecting power."
+          label="Wi‑Fi"
+          value="Use recovery if the router or password changes."
         />
         <View style={{ alignItems: "flex-start" }}>
           <ActionButton
             disabled={!liveDeviceSession || isStartingWifiRecovery || isSavingSettings}
-            label={isStartingWifiRecovery ? "Starting recovery…" : "Enter Wi‑Fi recovery"}
+            label={isStartingWifiRecovery ? "Starting recovery…" : "Rejoin Wi‑Fi"}
             onPress={confirmWifiRecovery}
           />
         </View>
+        <SettingRow label="Firmware" value={device.firmwareVersion} />
       </View>
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Account</SectionTitle>
-        <SettingRow label="Session" value={mode === "demo" ? "Demo preview" : userEmail ?? "Email OTP session"} />
+        <SettingRow label="Signed in" value={mode === "demo" ? "Demo preview" : userEmail ?? "Email OTP session"} />
         {mode === "cloud" ? (
           <Pressable
             onPress={async () => {
@@ -543,29 +543,40 @@ export default function SettingsModal() {
       </View>
 
       {statusMessage ? (
-        <Text
-          style={{
-            color: theme.colors.textSecondary,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: theme.typography.body.fontSize,
-            lineHeight: theme.typography.body.lineHeight,
-          }}
-        >
-          {statusMessage}
-        </Text>
+        <GlassCard style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            {statusMessage}
+          </Text>
+        </GlassCard>
       ) : null}
 
       {statusError ? (
-        <Text
+        <GlassCard
           style={{
-            color: theme.colors.statusErrorMuted,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: theme.typography.body.fontSize,
-            lineHeight: theme.typography.body.lineHeight,
+            borderColor: withAlpha(theme.colors.statusErrorMuted, 0.26),
+            borderWidth: 1,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
           }}
         >
-          {statusError}
-        </Text>
+          <Text
+            style={{
+              color: theme.colors.statusErrorMuted,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            {statusError}
+          </Text>
+        </GlassCard>
       ) : null}
     </GlassSheet>
   );

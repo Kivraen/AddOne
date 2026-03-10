@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useWindowDimensions, Pressable, Text, View } from "react-native";
 import Animated, {
   FadeIn,
@@ -26,8 +27,10 @@ function PendingPulse({ cellSize }: { cellSize: number }) {
   const opacity = useSharedValue(0.24);
   const scale = useSharedValue(1);
 
-  opacity.value = withRepeat(withSequence(withTiming(0.5, { duration: 320 }), withTiming(0.18, { duration: 320 })), -1, true);
-  scale.value = withRepeat(withSequence(withTiming(1.08, { duration: 320 }), withTiming(1, { duration: 320 })), -1, true);
+  useEffect(() => {
+    opacity.value = withRepeat(withSequence(withTiming(0.5, { duration: 320 }), withTiming(0.18, { duration: 320 })), -1, true);
+    scale.value = withRepeat(withSequence(withTiming(1.08, { duration: 320 }), withTiming(1, { duration: 320 })), -1, true);
+  }, [opacity, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

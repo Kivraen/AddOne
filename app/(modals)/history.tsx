@@ -169,7 +169,7 @@ export default function HistoryModal() {
 
   return (
     <GlassSheet
-      subtitle="History is editable only during a live device session. Changes stay local in this draft until you tap Save."
+      subtitle="Edit the board here, then save once to apply it on the device."
       title="History"
       variant="full"
     >
@@ -193,7 +193,7 @@ export default function HistoryModal() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            To edit history, the device must be live through the cloud or through a direct AddOne AP maintenance session.
+            This board can only be edited while the device is live.
           </Text>
         </GlassCard>
       ) : (
@@ -217,7 +217,7 @@ export default function HistoryModal() {
             />
           </GlassCard>
 
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flexDirection: "row", gap: 10, paddingTop: 2 }}>
             <ActionButton
               disabled={busy || !isDirty}
               label="Reset"
@@ -242,18 +242,20 @@ export default function HistoryModal() {
       )}
 
       {isLoadingLiveBoard || isRefreshingRuntimeSnapshot ? (
-        <GlassCard style={{ gap: 8, paddingHorizontal: 16, paddingVertical: 16 }}>
+        <View style={{ paddingHorizontal: 4 }}>
           <Text
             style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
+              color: theme.colors.textTertiary,
+              fontFamily: theme.typography.micro.fontFamily,
+              fontSize: theme.typography.micro.fontSize,
+              lineHeight: theme.typography.micro.lineHeight,
+              letterSpacing: theme.typography.micro.letterSpacing,
+              textTransform: "uppercase",
             }}
           >
-            Refreshing the live device board in the background.
+            Refreshing the live board in the background.
           </Text>
-        </GlassCard>
+        </View>
       ) : null}
 
       {statusError ? (
@@ -261,9 +263,9 @@ export default function HistoryModal() {
           style={{
             borderColor: withAlpha(theme.colors.statusErrorMuted, 0.3),
             borderWidth: 1,
-            gap: 8,
+            gap: 6,
             paddingHorizontal: 16,
-            paddingVertical: 16,
+            paddingVertical: 14,
           }}
         >
           <Text
@@ -280,7 +282,7 @@ export default function HistoryModal() {
       ) : null}
 
       {statusMessage ? (
-        <GlassCard style={{ gap: 8, paddingHorizontal: 16, paddingVertical: 16 }}>
+        <GlassCard style={{ gap: 6, paddingHorizontal: 16, paddingVertical: 14 }}>
           <Text
             style={{
               color: theme.colors.textSecondary,

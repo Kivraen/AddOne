@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, targetStatusLabel } from "@/lib/board";
 import { formatBoardVerifiedLabel } from "@/lib/device-status";
+import { withAlpha } from "@/lib/color";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice } from "@/types/addone";
 
@@ -43,25 +44,53 @@ function withPendingTodayState(device: AddOneDevice, pendingTodayState?: boolean
   };
 }
 
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        gap: 5,
+        borderRadius: theme.radius.pill,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.06),
+        backgroundColor: withAlpha(theme.colors.bgBase, 0.5),
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+      }}
+    >
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: theme.typography.label.fontSize,
+          lineHeight: theme.typography.label.lineHeight,
+        }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
-  const { mode, userEmail } = useAuth();
+  const { mode } = useAuth();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
   const { isApplyingToday, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
-  const liveStatusLabel = activeDevice
-    ? isApplyingToday || activePendingTodayState !== undefined
-      ? "Applying on device"
-      : activeDevice.syncState === "offline"
-        ? "Device offline"
-        : formatBoardVerifiedLabel(activeDevice.lastSnapshotAt)
-    : null;
-  const statusLine = activeDevice
-    ? mode === "demo"
-      ? `Demo preview · ${liveStatusLabel}`
-      : `${userEmail ?? "Signed in"} · ${liveStatusLabel}`
-    : null;
   const effectiveDevice = useMemo(
     () => (activeDevice ? withPendingTodayState(activeDevice, activePendingTodayState) : null),
     [activeDevice, activePendingTodayState],
@@ -92,46 +121,48 @@ export default function HomeScreen() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Loading your boards…
+            Loading your board…
           </Text>
         </View>
       </ScreenFrame>
     );
   }
 
-  if (!activeDevice) {
+  const header = (
+    <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 18 }}>
+      <View style={{ gap: 4 }}>
+        <Text
+          style={{
+            color: theme.colors.textTertiary,
+            fontFamily: theme.typography.micro.fontFamily,
+            fontSize: theme.typography.micro.fontSize,
+            lineHeight: theme.typography.micro.lineHeight,
+            letterSpacing: theme.typography.micro.letterSpacing,
+            textTransform: "uppercase",
+          }}
+        >
+          {mode === "demo" ? "Preview" : "AddOne"}
+        </Text>
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.display.fontFamily,
+            fontSize: theme.typography.display.fontSize,
+            lineHeight: theme.typography.display.lineHeight,
+          }}
+        >
+          {activeDevice ? "Today" : "Board"}
+        </Text>
+      </View>
+      {activeDevice ? <IconButton icon="options-outline" onPress={() => router.push("/settings")} /> : null}
+    </View>
+  );
+
+  if (!activeDevice || !effectiveDevice || !palette) {
     return (
-      <ScreenFrame
-        header={
-          <View className="pb-5">
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              {mode === "demo" ? "AddOne demo" : "AddOne cloud"}
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.display.fontFamily,
-                fontSize: theme.typography.display.fontSize,
-                lineHeight: theme.typography.display.lineHeight,
-                marginTop: 4,
-              }}
-            >
-              No devices yet
-            </Text>
-          </View>
-        }
-      >
-        <View style={{ flex: 1, justifyContent: "center", gap: 16 }}>
-          <GlassCard style={{ gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+      <ScreenFrame header={header}>
+        <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
+          <GlassCard style={{ gap: 12, paddingHorizontal: 20, paddingVertical: 20 }}>
             <Text
               style={{
                 color: theme.colors.textPrimary,
@@ -150,29 +181,34 @@ export default function HomeScreen() {
                 lineHeight: theme.typography.body.lineHeight,
               }}
             >
-              Use onboarding to claim a device into this account. In demo mode, the board uses mock data instead.
+              Start nearby setup to claim your device and bring it online.
             </Text>
           </GlassCard>
 
           <Pressable
-            onPress={() => router.push("/onboarding")}
+            onPress={() => {
+              router.push("/onboarding");
+            }}
             style={{
               alignItems: "center",
-              justifyContent: "center",
-              minHeight: 58,
               borderRadius: theme.radius.sheet,
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, 0.12),
               backgroundColor: theme.colors.textPrimary,
+              justifyContent: "center",
+              minHeight: 64,
+              paddingHorizontal: 22,
             }}
           >
             <Text
               style={{
                 color: theme.colors.bgBase,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: theme.typography.label.fontSize,
-                lineHeight: theme.typography.label.lineHeight,
+                fontFamily: theme.typography.title.fontFamily,
+                fontSize: theme.typography.title.fontSize,
+                lineHeight: theme.typography.title.lineHeight,
               }}
             >
-              Open onboarding
+              Start setup
             </Text>
           </Pressable>
         </View>
@@ -180,189 +216,90 @@ export default function HomeScreen() {
     );
   }
 
-  const header = (
-    <View className="pb-5">
-      <View style={{ alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text
-            style={{
-              color: theme.colors.textTertiary,
-              fontFamily: theme.typography.micro.fontFamily,
-              fontSize: theme.typography.micro.fontSize,
-              lineHeight: theme.typography.micro.lineHeight,
-              letterSpacing: theme.typography.micro.letterSpacing,
-              textTransform: "uppercase",
-            }}
-          >
-            {mode === "demo" ? "AddOne demo" : "AddOne cloud"}
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.display.fontFamily,
-              fontSize: theme.typography.display.fontSize,
-              lineHeight: theme.typography.display.lineHeight,
-            }}
-          >
-            {activeDevice.name}
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            {statusLine}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 10 }}>
-          <SyncBadge state={isApplyingToday || activePendingTodayState !== undefined ? "syncing" : activeDevice.syncState} />
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-
-  const device = effectiveDevice!;
+  const liveStatusLabel =
+    isApplyingToday || activePendingTodayState !== undefined
+      ? "Applying on device"
+      : effectiveDevice.syncState === "offline"
+        ? "Device offline"
+        : formatBoardVerifiedLabel(effectiveDevice.lastSnapshotAt);
+  const device = effectiveDevice;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
 
   return (
     <ScreenFrame header={header}>
       <View style={{ flex: 1, gap: 18, justifyContent: "space-between" }}>
-        <GlassCard style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 18 }}>
-          <View style={{ gap: 16 }}>
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              {device.ownerName}
-            </Text>
-            <View style={{ alignItems: "center" }}>
-              <PixelGrid cells={cells} mode="display" palette={palette!} pendingPulse={pendingPulse} readOnly />
+        <View style={{ gap: 14 }}>
+          <GlassCard style={{ marginTop: 2, paddingHorizontal: 16, paddingVertical: 18 }}>
+            <View style={{ gap: 16 }}>
+              <View style={{ alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                <View style={{ flex: 1, gap: 5 }}>
+                  <Text
+                    style={{
+                      color: theme.colors.textTertiary,
+                      fontFamily: theme.typography.micro.fontFamily,
+                      fontSize: theme.typography.micro.fontSize,
+                      lineHeight: theme.typography.micro.lineHeight,
+                      letterSpacing: theme.typography.micro.letterSpacing,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {device.name}
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    {liveStatusLabel}
+                  </Text>
+                </View>
+                <SyncBadge state={isApplyingToday || activePendingTodayState !== undefined ? "syncing" : device.syncState} />
+              </View>
+
+              <View style={{ alignItems: "center" }}>
+                <PixelGrid cells={cells} mode="display" palette={palette} pendingPulse={pendingPulse} readOnly />
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <StatPill label="Target" value={targetStatusLabel(device)} />
+                <StatPill label="Reset" value={device.nextResetLabel} />
+              </View>
+
+              <Pressable
+                disabled={!device.isLive}
+                onPress={() => router.push("/history")}
+                style={{
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  opacity: device.isLive ? 1 : 0.45,
+                  paddingHorizontal: 2,
+                  paddingTop: 2,
+                }}
+              >
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+                  <Ionicons color={theme.colors.textSecondary} name="grid-outline" size={16} />
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.label.fontFamily,
+                      fontSize: theme.typography.label.fontSize,
+                      lineHeight: theme.typography.label.lineHeight,
+                    }}
+                  >
+                    Edit history
+                  </Text>
+                </View>
+                <Ionicons color={theme.colors.textTertiary} name="chevron-forward" size={16} />
+              </Pressable>
             </View>
-          </View>
-        </GlassCard>
-
-        <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <GlassCard style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 14 }}>
-              <Text
-                style={{
-                  color: theme.colors.textTertiary,
-                  fontFamily: theme.typography.micro.fontFamily,
-                  fontSize: theme.typography.micro.fontSize,
-                  lineHeight: theme.typography.micro.lineHeight,
-                  letterSpacing: theme.typography.micro.letterSpacing,
-                  textTransform: "uppercase",
-                }}
-              >
-                Weekly target
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.label.fontFamily,
-                  fontSize: theme.typography.label.fontSize,
-                  lineHeight: theme.typography.label.lineHeight,
-                  marginTop: 8,
-                }}
-              >
-                {targetStatusLabel(device)}
-              </Text>
-            </GlassCard>
-
-            <GlassCard style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 14 }}>
-              <Text
-                style={{
-                  color: theme.colors.textTertiary,
-                  fontFamily: theme.typography.micro.fontFamily,
-                  fontSize: theme.typography.micro.fontSize,
-                  lineHeight: theme.typography.micro.lineHeight,
-                  letterSpacing: theme.typography.micro.letterSpacing,
-                  textTransform: "uppercase",
-                }}
-              >
-                Reset
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.label.fontFamily,
-                  fontSize: theme.typography.label.fontSize,
-                  lineHeight: theme.typography.label.lineHeight,
-                  marginTop: 8,
-                }}
-              >
-                {device.nextResetLabel}
-              </Text>
-            </GlassCard>
-          </View>
-
-          <Pressable
-            disabled={!device.isLive}
-            onPress={() => router.push("/history")}
-            style={{
-              alignItems: "center",
-              flexDirection: "row",
-              justifyContent: "space-between",
-              borderRadius: theme.radius.card,
-              borderWidth: 1,
-              borderColor: "rgba(242, 238, 230, 0.08)",
-              backgroundColor: "rgba(23, 23, 23, 0.92)",
-              opacity: device.isLive ? 1 : 0.55,
-              paddingHorizontal: 16,
-              paddingVertical: 15,
-            }}
-          >
-            <View style={{ gap: 4 }}>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.label.fontFamily,
-                  fontSize: theme.typography.label.fontSize,
-                  lineHeight: theme.typography.label.lineHeight,
-                }}
-              >
-                Edit history
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-                >
-                  Correct day cells directly on the board.
-                </Text>
-              {!device.isLive ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  Available only while the device is live.
-                </Text>
-              ) : null}
-            </View>
-            <Ionicons color={theme.colors.textSecondary} name="chevron-forward" size={18} />
-          </Pressable>
+          </GlassCard>
         </View>
 
-        <View style={{ gap: 16, paddingBottom: 8 }}>
+        <View style={{ gap: 10, paddingBottom: 8 }}>
           <PrimaryActionButton
             onPress={() => {
               void toggleToday(device.id).catch((error) => {
@@ -371,6 +308,17 @@ export default function HomeScreen() {
             }}
             state={boardButtonState(device, buttonIsApplying)}
           />
+          <Text
+            style={{
+              color: theme.colors.textTertiary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+              textAlign: "center",
+            }}
+          >
+            {device.isLive ? "App changes confirm against the device." : "Reconnect Wi‑Fi to control this device from the app."}
+          </Text>
         </View>
       </View>
     </ScreenFrame>
