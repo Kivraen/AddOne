@@ -101,33 +101,29 @@ function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
 }
 
-function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_snapshot_at" | "last_sync_at">) {
+function relativeSyncLabel(device: Pick<DeviceRow, "last_snapshot_at">) {
   if (!device.last_snapshot_at) {
     return "Waiting for first device snapshot";
   }
 
-  if (!device.last_sync_at) {
-    return "Waiting for sync";
-  }
-
-  const diffMs = Date.now() - new Date(device.last_sync_at).getTime();
+  const diffMs = Date.now() - new Date(device.last_snapshot_at).getTime();
   const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
 
   if (diffMinutes <= 1) {
-    return "Synced moments ago";
+    return "Board verified moments ago";
   }
 
   if (diffMinutes < 60) {
-    return `Synced ${diffMinutes}m ago`;
+    return `Board verified ${diffMinutes}m ago`;
   }
 
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) {
-    return `Synced ${diffHours}h ago`;
+    return `Board verified ${diffHours}h ago`;
   }
 
   const diffDays = Math.round(diffHours / 24);
-  return `Synced ${diffDays}d ago`;
+  return `Board verified ${diffDays}d ago`;
 }
 
 function deriveSyncState(device: DeviceRow): SyncState {
@@ -330,9 +326,7 @@ function mapDeviceRowToAppDevice(input: {
       dayIndex: todayDayIndex,
     },
     lastSyncedLabel: relativeSyncLabel({
-      last_seen_at: device.last_seen_at,
       last_snapshot_at: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
-      last_sync_at: device.last_sync_at,
     }),
   };
 }
