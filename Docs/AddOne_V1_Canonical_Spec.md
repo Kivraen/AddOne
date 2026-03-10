@@ -194,11 +194,14 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
 - Cloud mode now drives the main board from live device/account data, while demo mode remains as a deliberate mock fallback.
 - The app now invalidates live board/share queries from Supabase realtime changes so firmware-originated updates can surface without manual refresh.
+- `device_runtime_snapshots` are now in Supabase realtime publication, with only a light self-heal refetch kept in the app as backup.
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, runtime snapshot upload, runtime refresh request, history draft apply, and live settings apply now exist in staging schema.
 - The app now applies optimistic board/history updates immediately for cloud-backed actions.
 - The current rebuild direction is `device-authoritative runtime state`: app requests live intents or drafts, and the cloud mirror catches up from device-confirmed apply or runtime snapshots.
 - Operational lesson now locked:
   - runtime feels reliable only when the app reads from the latest device-confirmed snapshot, not from mixed command status, derived rows, and local shadow state at the same time
+- The app runtime board now reads from `device_runtime_snapshots`; `device_day_states` remains derived compatibility data only.
+- Wi-Fi recovery is now a real AP reprovisioning flow from the app, not just a placeholder screen.
 - A clean `firmware v2` workspace now exists in this repo; the prototype firmware is now reference-only.
 - Firmware v2 now exposes the AP provisioning endpoint layer and persists pending onboarding claim context locally.
 - Firmware v2 now includes claim redemption, heartbeat, command pull/ack, runtime revision tracking, and snapshot-based cloud healing against the AddOne cloud RPC contract.
@@ -206,13 +209,23 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Firmware v2 now includes minimal settings sync application, palette preset handling, and ambient-light-driven brightness.
 - Firmware v2 now includes reward-state behavior with built-in `clock` and palette-based `paint` rendering for local button-triggered rewards.
 - A dedicated MQTT-based realtime transport contract and gateway scaffold now exist for low-latency online device delivery, with polling retained only as fallback.
+- The runtime cleanup pass removed the old user-facing `queued` state, command-row polling waits, and `device_day_states` live invalidation from the app runtime path.
+
+## Known Gaps
+- Custom reward payload sync is not implemented yet. The reward editor still exposes placeholder saved-art / AI surfaces without full device delivery.
+- Nearby AP maintenance currently covers setup and Wi-Fi recovery cleanly; nearby history/settings editing as a first-class AP flow is not finished.
+- Reminder preferences exist, but real push reminder delivery is not implemented yet.
+- Auth is still staging-grade `email OTP`; branded mail, production redirect configuration, and optional Google/password login remain future work.
+- Production broker hardening and release deployment shape are not finished; the current broker/gateway path is still staging/development oriented.
 
 ## Canonical Next Steps
-1. Complete the runtime consistency rebuild from [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md):
-   - one canonical board projection
-   - local-first button reliability
-   - live-only `Draft + Save` history sync
-2. Revalidate the rebuilt button, board parity, app toggle, and history flows on real hardware.
-3. Add custom reward payload sync so app-configured reward art can flow through cloud and onto firmware.
-4. Remove staging-only onboarding shortcuts once real hardware validation is complete.
-5. Promote the current staging stack into a production-ready shape: branded auth email, production Supabase project, broker hardening, and release hardening.
+1. Revalidate the current runtime path on real hardware as a locked baseline:
+   - board parity
+   - local button reliability
+   - app today toggle latency
+   - history `Draft + Save`
+   - offline/reconnect snapshot healing
+2. Add custom reward payload sync so app-configured paint/saved-art rewards can flow through cloud and onto firmware.
+3. Finish nearby AP maintenance beyond Wi-Fi recovery so settings/history edit also have a clean local path when cloud is unavailable.
+4. Implement real push reminders and finish the reminder delivery contract.
+5. Remove staging-only onboarding shortcuts and promote the current staging stack into a production-ready shape: branded auth email, production Supabase project, broker hardening, and release hardening.
