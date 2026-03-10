@@ -193,7 +193,7 @@ The app must:
 - show immediate feedback for in-flight today toggles
 - confirm runtime changes from a newer device snapshot revision
 - reserve `queued` for actual offline/backlog cases
-- keep a short polling fallback if realtime snapshot delivery is unavailable
+- keep only a light self-heal refetch if realtime snapshot delivery is unavailable
 
 ## Deployment Notes
 

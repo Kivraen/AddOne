@@ -87,7 +87,7 @@ Last locked: March 9, 2026
   - `device -> MQTT -> gateway -> Supabase`
 - Direct device -> Supabase snapshot upload may remain as fallback, but not as the preferred hot path.
 - `device_runtime_snapshots` must be included in the `supabase_realtime` publication so app subscriptions can see fresh device-confirmed state without relying only on polling.
-- The app may keep a short polling fallback for resilience, but this is backup behavior, not the primary runtime design.
+- The app may keep a light self-heal refetch for resilience, but this is backup behavior, not the primary runtime design.
 
 ## Implementation Priority
 1. Make app board rendering prefer `device_runtime_snapshots`

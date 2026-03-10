@@ -46,8 +46,10 @@ function sleep(ms: number) {
   });
 }
 
-const DEVICE_SNAPSHOT_POLL_MS = 500;
-const SHARED_BOARD_POLL_MS = 3000;
+const DEVICE_SNAPSHOT_SELF_HEAL_MS = 30_000;
+const SHARED_BOARD_SELF_HEAL_MS = 30_000;
+const LIVE_WAIT_CACHE_POLL_MS = 100;
+const LIVE_WAIT_REFRESH_MS = 1_500;
 
 function getDayStateByLocalDate(device: AddOneDevice, localDate: string) {
   const dateGrid = device.dateGrid ?? [];
@@ -113,8 +115,8 @@ export function useDevices() {
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchOwnedDevices({ userEmail, userId: user!.id }),
     queryKey: addOneQueryKeys.devices(user?.id),
-    // This stays in place until device_runtime_snapshots is reliably delivered via Supabase realtime.
-    refetchInterval: mode === "cloud" && status === "signedIn" ? DEVICE_SNAPSHOT_POLL_MS : false,
+    // Keep a light self-heal refetch even with realtime enabled.
+    refetchInterval: mode === "cloud" && status === "signedIn" ? DEVICE_SNAPSHOT_SELF_HEAL_MS : false,
     refetchIntervalInBackground: true,
   });
 
@@ -159,7 +161,7 @@ export function useSharedBoardsData() {
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchSharedBoards(user!.id),
     queryKey: addOneQueryKeys.sharedBoards(user?.id),
-    refetchInterval: mode === "cloud" && status === "signedIn" ? SHARED_BOARD_POLL_MS : false,
+    refetchInterval: mode === "cloud" && status === "signedIn" ? SHARED_BOARD_SELF_HEAL_MS : false,
     refetchIntervalInBackground: true,
   });
 
@@ -201,6 +203,14 @@ export function useDeviceActions() {
       queryFn: () => fetchOwnedDevices({ userEmail, userId: user.id }),
       queryKey: addOneQueryKeys.devices(user.id),
     });
+  };
+
+  const getCachedDevices = () => {
+    if (!user?.id) {
+      return [] as AddOneDevice[];
+    }
+
+    return queryClient.getQueryData<AddOneDevice[]>(addOneQueryKeys.devices(user.id)) ?? [];
   };
 
   const invalidateCloudDevices = async () => {
@@ -267,15 +277,31 @@ export function useDeviceActions() {
   ) => {
     const timeoutMs = options.timeoutMs ?? 12_000;
     const startedAt = Date.now();
+    let lastRefreshAt = 0;
 
     while (Date.now() - startedAt < timeoutMs) {
-      const latestDevices = await loadLatestDevices();
+      const latestDevices = getCachedDevices();
       const next = latestDevices.find((device) => device.id === deviceId);
       if (next && (options.baseRevision === undefined || next.runtimeRevision > options.baseRevision) && predicate(next)) {
         return next;
       }
 
-      await sleep(250);
+      if (Date.now() - lastRefreshAt >= LIVE_WAIT_REFRESH_MS) {
+        void invalidateCloudDevices();
+        lastRefreshAt = Date.now();
+      }
+
+      await sleep(LIVE_WAIT_CACHE_POLL_MS);
+    }
+
+    const finalDevices = await loadLatestDevices();
+    const finalMatch = finalDevices.find((device) => device.id === deviceId);
+    if (
+      finalMatch &&
+      (options.baseRevision === undefined || finalMatch.runtimeRevision > options.baseRevision) &&
+      predicate(finalMatch)
+    ) {
+      return finalMatch;
     }
 
     const failure = await readCommandFailure(options.commandId);
