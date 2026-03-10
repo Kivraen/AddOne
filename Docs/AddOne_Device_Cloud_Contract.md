@@ -158,6 +158,7 @@ Purpose:
 - Device commands are at-least-once, not exactly-once.
 - `request_key` is used on the cloud side to avoid duplicate queueing.
 - `set_day_state` and `apply_history_draft` carry `base_revision` so the device can reject stale requests.
+- `enter_wifi_recovery` is a deliberate owner-triggered command that tells the device to stop normal cloud control and start its temporary `AddOne-XXXX` AP without clearing ownership, history, or settings.
 - Firmware should tolerate receiving the same command more than once.
 
 ## Firmware Expectations
@@ -185,7 +186,6 @@ Purpose:
 - Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and runtime snapshot upload plumbing against the cloud RPC surface.
 - Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
 - Firmware v2 now also applies `apply_device_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
-- Firmware v2 now has a real reward state for local button-triggered `clock` and `paint` display.
 - A dedicated realtime transport contract now exists for MQTT-based online command delivery, with fallback polling retained for reliability.
 - Runtime snapshots should now use the same realtime lane whenever possible:
   - `device -> MQTT -> gateway -> upload_device_runtime_snapshot(...)`

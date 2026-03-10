@@ -12,6 +12,7 @@ constexpr unsigned long kFallbackCommandPollWhenNoRealtimeMs = 5000;
 constexpr unsigned long kRuntimeSnapshotSyncIntervalMs = 250;
 constexpr unsigned long kHeartbeatIntervalMs = 60000;
 constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
+constexpr unsigned long kRecoveryCommandCooldownMs = 15000;
 
 const char* stateName(FirmwareState state) {
   switch (state) {
@@ -244,6 +245,26 @@ void FirmwareApp::flushPendingCommandAcks_() {
 
 }
 
+bool FirmwareApp::hasPendingAcks_() {
+  if (queueMutex_ && xSemaphoreTake(queueMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return true;
+  }
+
+  const bool hasPending = pendingCommandAckCount_ > 0;
+  if (queueMutex_) {
+    xSemaphoreGive(queueMutex_);
+  }
+  return hasPending;
+}
+
+void FirmwareApp::enterWifiRecoveryMode_() {
+  Serial.println("Entering Wi-Fi recovery mode.");
+  apServer_.resetForRecovery();
+  WiFi.disconnect(false, false);
+  delay(50);
+  enterState_(FirmwareState::SetupRecovery);
+}
+
 bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
                                               String& settingsJson,
                                               HabitTracker::WeekDate& currentWeekStart,
@@ -413,6 +434,16 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   if (command.kind == "request_runtime_snapshot") {
     markRuntimeSnapshotDirty_();
     Serial.println("Runtime snapshot requested.");
+    return true;
+  }
+
+  if (command.kind == "enter_wifi_recovery") {
+    if (ignoreRecoveryCommandsUntilMs_ > millis()) {
+      Serial.println("Ignoring stale Wi-Fi recovery command during recovery cooldown.");
+      return true;
+    }
+    recoveryRequestedAtRuntime_ = true;
+    Serial.println("Wi-Fi recovery requested from app.");
     return true;
   }
 
@@ -609,7 +640,7 @@ void FirmwareApp::tickSetupRecovery_() {
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
 
-  if (!provisioningStore_.hasPendingClaim() && !apServer_.isRunning()) {
+  if (!recoveryRequestedAtRuntime_ && !provisioningStore_.hasPendingClaim() && !apServer_.isRunning()) {
     beginWifiReconnect_();
   }
 
@@ -622,11 +653,13 @@ void FirmwareApp::tickSetupRecovery_() {
     const bool reconnectTimedOut =
         wifiReconnectStarted_ && (millis() - wifiReconnectStartedAtMs_ >= Config::kWifiReconnectTimeoutMs);
     const bool forceRecovery =
-        recoveryRequestedAtBoot_ || !wifiReconnectStarted_ || waitingForApFallback_ || reconnectTimedOut || provisioningStore_.hasPendingClaim();
+        recoveryRequestedAtRuntime_ || recoveryRequestedAtBoot_ || !wifiReconnectStarted_ || waitingForApFallback_ ||
+        reconnectTimedOut || provisioningStore_.hasPendingClaim();
 
     if (forceRecovery) {
       apServer_.begin(identity_, provisioningStore_);
       waitingForApFallback_ = true;
+      recoveryRequestedAtRuntime_ = false;
     }
   }
 
@@ -641,6 +674,7 @@ void FirmwareApp::tickSetupRecovery_() {
   }
 
   if (!provisioningStore_.hasPendingClaim()) {
+    ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
     enterState_(FirmwareState::Tracking);
     return;
   }
@@ -664,6 +698,7 @@ void FirmwareApp::tickSetupRecovery_() {
   if (cloudClient_.redeemPendingClaim(claim)) {
     provisioningStore_.clearPendingClaim();
     markRuntimeSnapshotDirty_();
+    ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
     enterState_(FirmwareState::Tracking);
   }
 }
@@ -709,6 +744,10 @@ void FirmwareApp::tickTracking_() {
   } else {
     const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
     boardRenderer_.renderSetupState(false, WiFi.status() == WL_CONNECTED, brightness);
+  }
+
+  if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
+    enterWifiRecoveryMode_();
   }
 }
 

@@ -58,11 +58,13 @@ private:
   bool dequeueIncomingCommand_(CloudClient::DeviceCommand& outCommand);
   bool dequeuePendingAck_(PendingCommandAck& outAck);
   void drainIncomingCommands_();
+  void enterWifiRecoveryMode_();
   bool enqueueIncomingCommand_(const CloudClient::DeviceCommand& command);
   bool enqueuePendingAck_(const String& commandId, CloudClient::CommandAckStatus status, const String& failureReason);
   void enterState_(FirmwareState nextState);
   void flushPendingCommandAcks_();
   bool flushRuntimeSnapshot_();
+  bool hasPendingAcks_();
   void pollCommands_();
   void processRealtimeCommands_();
   void syncTask_();
@@ -97,7 +99,9 @@ private:
   unsigned long lastRuntimeSnapshotAttemptAtMs_ = 0;
   unsigned long lastHeartbeatAtMs_ = 0;
   unsigned long lastLocalInteractionAtMs_ = 0;
+  unsigned long ignoreRecoveryCommandsUntilMs_ = 0;
   bool recoveryRequestedAtBoot_ = false;
+  bool recoveryRequestedAtRuntime_ = false;
   volatile bool runtimeSnapshotDirty_ = true;
   bool wifiReconnectStarted_ = false;
   bool waitingForApFallback_ = false;

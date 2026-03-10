@@ -76,6 +76,10 @@ If another doc conflicts with this one, this file wins until an explicit new dec
   - saved Wi-Fi join failure after reboot
 - Wi-Fi recovery reuses the same temporary AP + short-lived session contract as onboarding.
 - Wi-Fi recovery does not transfer ownership or factory-reset the device; it only reprovisions network access for the current owner.
+- First-user v1 stores one active Wi-Fi profile only. Rejoining Wi-Fi replaces the previous credentials instead of keeping a saved multi-network list.
+- Wi-Fi recovery can be started either:
+  - from the app while the device is still online
+  - by holding the main button while reconnecting power
 - Cloud failure alone must never trigger AP mode.
 - AP should time out after about `10 minutes idle`.
 - First-user v1 requires Wi-Fi during first setup.

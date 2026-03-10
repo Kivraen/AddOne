@@ -15,6 +15,10 @@ This document covers only the local AP handoff. For cloud claim and steady-state
 - The app creates a cloud onboarding session first, then hands local Wi-Fi credentials and the one-time claim token to the device over AP.
 - The AP handoff should collect only what is needed to get the device online.
 - Recovery reuses the same AP/session contract. For an already-owned device, reclaiming through the same owner is idempotent and acts as Wi-Fi reprovisioning, not ownership transfer.
+- First-user v1 stores one active Wi-Fi profile only. Recovery overwrites the previous credentials instead of keeping multiple saved networks.
+- Recovery AP can be entered:
+  - by app command while the device is still online
+  - or by holding the main button while reconnecting power
 
 ## Local Network Assumptions
 - Device AP SSID pattern: `AddOne-XXXX`

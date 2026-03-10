@@ -5,6 +5,7 @@ import {
   applyDeviceSettingsFromApp,
   applyHistoryDraftFromApp,
   claimDevice,
+  enterWifiRecoveryFromApp,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
   requestRuntimeSnapshotFromApp,
@@ -293,13 +294,17 @@ export function useDeviceActions() {
     mutationFn: ({ deviceId, patch }: { deviceId: string; patch: DeviceSettingsPatch }) =>
       applyDeviceSettingsFromApp(deviceId, patch),
   });
+  const wifiRecoveryMutation = useMutation({
+    mutationFn: enterWifiRecoveryFromApp,
+  });
 
   const isBusy =
     claimMutation.isPending ||
     refreshRuntimeMutation.isPending ||
     setDayStateMutation.isPending ||
     historyDraftMutation.isPending ||
-    applySettingsMutation.isPending;
+    applySettingsMutation.isPending ||
+    wifiRecoveryMutation.isPending;
 
   const refreshRuntimeSnapshot = async (deviceId?: string) => {
     const targetDevice = await resolveFreshLiveDevice(deviceId);
@@ -382,6 +387,8 @@ export function useDeviceActions() {
       isRefreshingRuntimeSnapshot: false,
       isSavingHistoryDraft: false,
       isSavingSettings: false,
+      isStartingWifiRecovery: false,
+      requestWifiRecovery: async (_deviceId?: string) => undefined,
       refreshRuntimeSnapshot: async () => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleToday: async (_deviceId?: string) => {
@@ -426,6 +433,14 @@ export function useDeviceActions() {
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
     isSavingHistoryDraft: historyDraftMutation.isPending,
     isSavingSettings: applySettingsMutation.isPending,
+    isStartingWifiRecovery: wifiRecoveryMutation.isPending,
+    requestWifiRecovery: async (deviceId?: string) => {
+      const targetDevice = await resolveFreshLiveDevice(deviceId);
+      await wifiRecoveryMutation.mutateAsync({
+        deviceId: targetDevice.id,
+        requestId: makeClientEventId(),
+      });
+    },
     refreshRuntimeSnapshot,
     toggleHistoryCell: async () => undefined,
     toggleToday: async (deviceId?: string) => {

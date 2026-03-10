@@ -728,6 +728,23 @@ export async function applyDeviceSettingsFromApp(deviceId: string, patch: Device
   );
 }
 
+export async function enterWifiRecoveryFromApp(params: {
+  deviceId: string;
+  requestId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("enter_wifi_recovery_from_app", {
+    p_device_id: params.deviceId,
+    p_request_id: params.requestId,
+  });
+
+  return assertData(
+    error,
+    data as { command_id: string; status: string },
+    "Failed to request Wi‑Fi recovery mode.",
+  );
+}
+
 export async function fetchDeviceCommandStatus(commandId: string) {
   const supabase = ensureSupabase();
   const { data, error } = await supabase

@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { PropsWithChildren, ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { theme } from "@/constants/theme";
@@ -62,8 +62,14 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
         />
       </View>
 
-      {header ? <View className="px-4 pt-2">{header}</View> : null}
-      <View className="flex-1 px-4 pb-6">{content}</View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+        style={{ flex: 1 }}
+      >
+        {header ? <View className="px-4 pt-2">{header}</View> : null}
+        <View className="flex-1 px-4 pb-6">{content}</View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

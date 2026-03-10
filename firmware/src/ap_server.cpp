@@ -208,6 +208,16 @@ void ApServer::stop() {
   Serial.println("AP server stopped");
 }
 
+void ApServer::resetForRecovery() {
+  if (running_) {
+    stop();
+  }
+
+  provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
+  completedProvisioning_ = false;
+  provisioningAttemptStartedAtMs_ = 0;
+}
+
 void ApServer::handleRoot_() {
   String response = "<html><body style=\"background:#070707;color:#f2eee6;font-family:sans-serif;padding:24px;\">";
   response += "<h1>AddOne setup</h1>";
@@ -260,8 +270,9 @@ void ApServer::handleSession_() {
   }
 
   if (provisioningState_ == ProvisioningContract::ProvisioningState::Busy) {
-    sendJson_(409, buildSessionResponseJson_(false, "retry", false, "Device is already provisioning."));
-    return;
+    Serial.println("Replacing active AP provisioning attempt.");
+    WiFi.disconnect(false, false);
+    delay(100);
   }
 
   strncpy(claim.claimToken, claimToken.c_str(), sizeof(claim.claimToken) - 1);

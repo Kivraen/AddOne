@@ -286,6 +286,11 @@ bool RealtimeClient::replaceExistingQueuedCommand_(const CloudClient::DeviceComm
       return true;
     }
 
+    if (command.kind == "enter_wifi_recovery" && queued.kind == "enter_wifi_recovery") {
+      queued = command;
+      return true;
+    }
+
     if (command.kind == "set_day_state" &&
         queued.kind == "set_day_state" &&
         !command.localDate.isEmpty() &&

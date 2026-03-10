@@ -14,6 +14,7 @@ public:
   bool isWifiConnected() const;
   bool isRunning() const { return running_; }
   void loop();
+  void resetForRecovery();
   void stop();
 
 private:

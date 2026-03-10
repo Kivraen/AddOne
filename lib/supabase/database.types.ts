@@ -815,6 +815,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      enter_wifi_recovery_from_app: {
+        Args: { p_device_id: string; p_request_id?: string }
+        Returns: Json
+      }
       generate_share_code: { Args: { p_length?: number }; Returns: string }
       hash_claim_token: { Args: { p_claim_token: string }; Returns: string }
       is_device_member: {
@@ -1203,6 +1207,7 @@ export type Database = {
         | "request_runtime_snapshot"
         | "apply_history_draft"
         | "apply_device_settings"
+        | "enter_wifi_recovery"
       device_command_status:
         | "queued"
         | "delivered"
@@ -1362,6 +1367,7 @@ export const Constants = {
         "request_runtime_snapshot",
         "apply_history_draft",
         "apply_device_settings",
+        "enter_wifi_recovery",
       ],
       device_command_status: [
         "queued",

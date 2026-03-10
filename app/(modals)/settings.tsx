@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, Switch, Text, TextInput, View } from "react-native";
 
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -149,7 +149,7 @@ export default function SettingsModal() {
   const router = useRouter();
   const { mode, signOut, userEmail } = useAuth();
   const device = useActiveDevice();
-  const { applySettingsDraft, isSavingSettings } = useDeviceActions();
+  const { applySettingsDraft, isSavingSettings, isStartingWifiRecovery, requestWifiRecovery } = useDeviceActions();
   const [weeklyTarget, setWeeklyTarget] = useState(device.weeklyTarget);
   const [timezoneInput, setTimezoneInput] = useState(device.timezone);
   const [resetTimeInput, setResetTimeInput] = useState(device.resetTime);
@@ -226,6 +226,35 @@ export default function SettingsModal() {
     setPaletteId(device.paletteId);
     setStatusError(null);
     setStatusMessage("Draft reset to the latest device-confirmed settings.");
+  }
+
+  function confirmWifiRecovery() {
+    Alert.alert(
+      "Enter Wi‑Fi recovery?",
+      "The device will leave normal cloud control and start its AddOne setup Wi‑Fi. Ownership, history, and settings stay intact.",
+      [
+        {
+          style: "cancel",
+          text: "Cancel",
+        },
+        {
+          text: "Enter recovery",
+          onPress: () => {
+            void (async () => {
+              try {
+                setStatusError(null);
+                setStatusMessage(null);
+                await requestWifiRecovery(device.id);
+                setStatusMessage("Asked the device to enter Wi‑Fi recovery. Wait for AddOne-XXXX, then continue the recovery flow.");
+                router.push("/recovery");
+              } catch (error) {
+                setStatusError(error instanceof Error ? error.message : "Failed to start Wi‑Fi recovery.");
+              }
+            })();
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -449,13 +478,15 @@ export default function SettingsModal() {
       <View style={{ gap: 10 }}>
         <SectionTitle>Device</SectionTitle>
         <SettingRow label="Firmware" value={device.firmwareVersion} />
-        <SettingRow label="Recovery" value="Use Rejoin Wi-Fi if the router or password changes." />
+        <SettingRow
+          label="Recovery"
+          value="Use Rejoin Wi‑Fi if the router or password changes. As a fallback, hold the main button while reconnecting power."
+        />
         <View style={{ alignItems: "flex-start" }}>
           <ActionButton
-            label="Open Wi-Fi recovery"
-            onPress={() => {
-              router.push("/recovery");
-            }}
+            disabled={!liveDeviceSession || isStartingWifiRecovery || isSavingSettings}
+            label={isStartingWifiRecovery ? "Starting recovery…" : "Enter Wi‑Fi recovery"}
+            onPress={confirmWifiRecovery}
           />
         </View>
       </View>
