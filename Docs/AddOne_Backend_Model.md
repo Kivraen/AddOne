@@ -169,7 +169,7 @@ Purpose:
 
 Notes:
 - updated from device-confirmed apply and device-authored runtime snapshots
-- this is the fast read model for the board
+- this is a derived compatibility/read table, not the active app runtime board source
 - app-originated changes should not advance this table until the device confirms apply
 
 ### `device_runtime_snapshots`

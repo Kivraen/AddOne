@@ -21,7 +21,6 @@ type DeviceRow = Tables<"devices"> & {
   last_snapshot_hash?: string | null;
 };
 type MembershipRow = Tables<"device_memberships">;
-type DayStateRow = Tables<"device_day_states">;
 type RuntimeSnapshotRow = Tables<"device_runtime_snapshots">;
 type CommandRow = Tables<"device_commands">;
 type DeviceOnboardingSessionRow = Tables<"device_onboarding_sessions">;
@@ -102,9 +101,13 @@ function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
 }
 
-function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">) {
+function relativeSyncLabel(device: Pick<DeviceRow, "last_seen_at" | "last_snapshot_at" | "last_sync_at">) {
+  if (!device.last_snapshot_at) {
+    return "Waiting for first device snapshot";
+  }
+
   if (!device.last_sync_at) {
-    return "Waiting for first sync";
+    return "Waiting for sync";
   }
 
   const diffMs = Date.now() - new Date(device.last_sync_at).getTime();
@@ -242,8 +245,8 @@ function buildBoardFrame(device: Pick<DeviceRow, "day_reset_time" | "timezone" |
   };
 }
 
-function buildDays(dateGrid: string[][], stateMap: Map<string, boolean>) {
-  return dateGrid.map((week) => week.map((localDate) => stateMap.get(localDate) ?? false));
+function buildEmptyDays(dateGrid: string[][]) {
+  return dateGrid.map((week) => week.map(() => false));
 }
 
 function buildBoardFrameFromSnapshot(snapshot: Pick<RuntimeSnapshotRow, "current_week_start" | "today_row">) {
@@ -275,10 +278,6 @@ function parseSnapshotBoardDays(snapshot: Pick<RuntimeSnapshotRow, "board_days">
   return days.every(Boolean) ? (days as boolean[][]) : null;
 }
 
-function buildStateMap(dayStates: DayStateRow[]) {
-  return new Map(dayStates.map((row) => [row.local_date, row.is_done]));
-}
-
 function paletteIdForDevice(device: DeviceRow) {
   return paletteById[device.palette_preset] ? device.palette_preset : "classic";
 }
@@ -286,18 +285,17 @@ function paletteIdForDevice(device: DeviceRow) {
 function mapDeviceRowToAppDevice(input: {
   currentUserName: string;
   device: DeviceRow;
-  dayStates: DayStateRow[];
   membership: MembershipWithDevice;
   snapshot?: RuntimeSnapshotRow | null;
   sharedViewers: number;
 }): AddOneDevice {
-  const { currentUserName, dayStates, device, membership, sharedViewers, snapshot } = input;
+  const { currentUserName, device, membership, sharedViewers, snapshot } = input;
   const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
   const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
   const fallbackFrame = buildBoardFrame(device);
   const dateGrid = snapshotFrame?.dateGrid ?? fallbackFrame.dateGrid;
   const todayDayIndex = snapshotFrame?.todayDayIndex ?? fallbackFrame.todayDayIndex;
-  const days = snapshotDays ?? buildDays(dateGrid, buildStateMap(dayStates));
+  const days = snapshotDays ?? buildEmptyDays(dateGrid);
 
   return {
     id: device.id,
@@ -331,17 +329,20 @@ function mapDeviceRowToAppDevice(input: {
       weekIndex: 0,
       dayIndex: todayDayIndex,
     },
-    lastSyncedLabel: relativeSyncLabel(device),
+    lastSyncedLabel: relativeSyncLabel({
+      last_seen_at: device.last_seen_at,
+      last_snapshot_at: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
+      last_sync_at: device.last_sync_at,
+    }),
   };
 }
 
 function mapDeviceRowToSharedBoard(input: {
   device: DeviceRow;
-  dayStates: DayStateRow[];
   ownerName: string;
   snapshot?: RuntimeSnapshotRow | null;
 }): SharedBoard {
-  const { dayStates, device, ownerName, snapshot } = input;
+  const { device, ownerName, snapshot } = input;
   const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
   const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
   const fallbackFrame = buildBoardFrame(device);
@@ -356,32 +357,13 @@ function mapDeviceRowToSharedBoard(input: {
     syncState: deriveSyncState(device),
     weeklyTarget: device.weekly_target,
     paletteId: paletteIdForDevice(device),
-    days: snapshotDays ?? buildDays(dateGrid, buildStateMap(dayStates)),
+    days: snapshotDays ?? buildEmptyDays(dateGrid),
     dateGrid,
     today: {
       weekIndex: 0,
       dayIndex: todayDayIndex,
     },
   };
-}
-
-function getMinBoardDate() {
-  return addDays(toLocalDateString(new Date()), -180);
-}
-
-async function fetchDeviceDayStates(deviceIds: string[]) {
-  if (deviceIds.length === 0) {
-    return [] as DayStateRow[];
-  }
-
-  const supabase = ensureSupabase();
-  const { data, error } = await supabase
-    .from("device_day_states")
-    .select("*")
-    .in("device_id", deviceIds)
-    .gte("local_date", getMinBoardDate());
-
-  return assertData(error, data ?? [], "Failed to load device day states.");
 }
 
 async function fetchLatestRuntimeSnapshots(deviceIds: string[]) {
@@ -512,14 +494,6 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     return accumulator;
   }, {});
 
-  const fallbackDeviceIds = deviceIds.filter((deviceId) => !snapshotByDevice[deviceId]);
-  const dayStates = await fetchDeviceDayStates(fallbackDeviceIds);
-  const dayStateByDevice = dayStates.reduce<Record<string, DayStateRow[]>>((accumulator, row) => {
-    accumulator[row.device_id] ??= [];
-    accumulator[row.device_id].push(row);
-    return accumulator;
-  }, {});
-
   const viewerCountByDevice = viewerData.reduce<Record<string, number>>((accumulator, row) => {
     accumulator[row.device_id] = (accumulator[row.device_id] ?? 0) + 1;
     return accumulator;
@@ -528,7 +502,6 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
   return memberships.map((membership) =>
     mapDeviceRowToAppDevice({
       currentUserName,
-      dayStates: dayStateByDevice[membership.device_id] ?? [],
       device: membership.device as DeviceRow,
       membership,
       snapshot: snapshotByDevice[membership.device_id] ?? null,
@@ -587,17 +560,8 @@ export async function fetchSharedBoards(userId: string) {
     return accumulator;
   }, {});
 
-  const fallbackDeviceIds = deviceIds.filter((deviceId) => !snapshotByDevice[deviceId]);
-  const dayStates = await fetchDeviceDayStates(fallbackDeviceIds);
-  const dayStateByDevice = dayStates.reduce<Record<string, DayStateRow[]>>((accumulator, row) => {
-    accumulator[row.device_id] ??= [];
-    accumulator[row.device_id].push(row);
-    return accumulator;
-  }, {});
-
   return devices.map((device) =>
     mapDeviceRowToSharedBoard({
-      dayStates: dayStateByDevice[device.id] ?? [],
       device,
       ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
       snapshot: snapshotByDevice[device.id] ?? null,

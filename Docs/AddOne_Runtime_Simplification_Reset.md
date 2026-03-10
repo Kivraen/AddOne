@@ -34,6 +34,7 @@ Last locked: March 9, 2026
 - If a snapshot exists, the app should render from that snapshot
 - The app should invalidate live board state from `device_runtime_snapshots`, not from `device_day_states`
 - Backend command rows may still use `queued` for delivery, but `queued` should not be treated as a user-facing board runtime state
+- The app should no longer fetch `device_day_states` for runtime board rendering; devices without a snapshot remain in bootstrap state until the first snapshot arrives
 
 ### Runtime write model
 - App sends commands only during a live device session
