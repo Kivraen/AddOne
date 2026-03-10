@@ -228,6 +228,14 @@ export default function SettingsModal() {
           >
             Device settings are live-only. Reconnect through cloud or join the AddOne AP to change them.
           </Text>
+          <View style={{ alignItems: "flex-start", marginTop: 8 }}>
+            <ActionButton
+              label="Open Wi-Fi recovery"
+              onPress={() => {
+                router.push("/recovery");
+              }}
+            />
+          </View>
         </GlassCard>
       ) : null}
 
@@ -449,6 +457,14 @@ export default function SettingsModal() {
         <SectionTitle>Device</SectionTitle>
         <SettingRow label="Firmware" value={device.firmwareVersion} />
         <SettingRow label="Recovery" value="AP mode on first boot, power-up hold, or Wi-Fi join failure" />
+        <View style={{ alignItems: "flex-start" }}>
+          <ActionButton
+            label="Rejoin Wi-Fi"
+            onPress={() => {
+              router.push("/recovery");
+            }}
+          />
+        </View>
       </View>
 
       <View style={{ gap: 10 }}>

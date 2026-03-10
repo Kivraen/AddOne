@@ -13,6 +13,7 @@ This document covers only the local AP handoff. For cloud claim and steady-state
 - The printed customer QR stays generic and points to `addone.studio/start`.
 - The app creates a cloud onboarding session first, then hands local Wi-Fi credentials and the one-time claim token to the device over AP.
 - The AP handoff should collect only what is needed to get the device online.
+- Recovery reuses the same AP/session contract. For an already-owned device, reclaiming through the same owner is idempotent and acts as Wi-Fi reprovisioning, not ownership transfer.
 
 ## Local Network Assumptions
 - Device AP SSID pattern: `AddOne-XXXX`

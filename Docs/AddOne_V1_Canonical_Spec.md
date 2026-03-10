@@ -79,6 +79,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
   - first boot
   - manual power-up hold
   - saved Wi-Fi join failure after reboot
+- Wi-Fi recovery reuses the same temporary AP + short-lived session contract as onboarding.
+- Wi-Fi recovery does not transfer ownership or factory-reset the device; it only reprovisions network access for the current owner.
 - Cloud failure alone must never trigger AP mode.
 - AP should time out after about `10 minutes idle`.
 - Permanently offline devices still support basic nearby non-cloud functions:
@@ -183,7 +185,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Expo app scaffold exists in this repo.
 - Board-first home screen exists.
 - Shared boards screen exists.
-- Onboarding and recovery screens exist.
+- Onboarding exists as a real AP + claim flow, and recovery now reuses that contract as a real `Rejoin Wi-Fi` flow.
 - Onboarding now has a real cloud-side claim-session flow.
 - The app now builds the exact AP provisioning payload, probes the configured local AP endpoints, and can send the provisioning payload to firmware.
 - History, settings, and rewards modals exist.
