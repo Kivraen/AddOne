@@ -48,12 +48,10 @@ export interface AddOneDevice {
   reminderEnabled: boolean;
   reminderTime: string;
   firmwareVersion: string;
-  wifiName: string;
   sharedViewers: number;
   days: boolean[][];
   dateGrid?: string[][];
   today: TodayPointer;
-  lastSyncedLabel: string;
 }
 
 export interface SharedBoard {

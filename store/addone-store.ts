@@ -52,7 +52,6 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
 
         return {
           ...updated,
-          lastSyncedLabel: device.syncState === "offline" ? "Device offline" : "Applying on device",
           syncState: device.syncState === "offline" ? "offline" : "syncing",
         };
       }),

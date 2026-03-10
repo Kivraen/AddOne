@@ -27,9 +27,7 @@ export const initialDevices: AddOneDevice[] = [
     reminderEnabled: true,
     reminderTime: "19:30",
     firmwareVersion: "v2.preview.1",
-    wifiName: "Desk Studio",
     sharedViewers: 2,
-    lastSyncedLabel: "Synced 3m ago",
     today: {
       weekIndex: 0,
       dayIndex: 4,
@@ -80,9 +78,7 @@ export const initialDevices: AddOneDevice[] = [
     reminderEnabled: false,
     reminderTime: "20:30",
     firmwareVersion: "v2.preview.1",
-    wifiName: "Workshop Mesh",
     sharedViewers: 1,
-    lastSyncedLabel: "Synced 55m ago",
     today: {
       weekIndex: 0,
       dayIndex: 4,

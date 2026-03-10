@@ -14,6 +14,7 @@ import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, targetStatusLabel } from "@/lib/board";
+import { formatBoardVerifiedLabel } from "@/lib/device-status";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice } from "@/types/addone";
 
@@ -51,10 +52,17 @@ export default function HomeScreen() {
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
+  const liveStatusLabel = activeDevice
+    ? isApplyingToday || activePendingTodayState !== undefined
+      ? "Applying on device"
+      : activeDevice.syncState === "offline"
+        ? "Device offline"
+        : formatBoardVerifiedLabel(activeDevice.lastSnapshotAt)
+    : null;
   const statusLine = activeDevice
     ? mode === "demo"
-      ? `Demo preview · ${activeDevice.lastSyncedLabel}`
-      : `${userEmail ?? "Signed in"} · ${activeDevice.lastSyncedLabel}`
+      ? `Demo preview · ${liveStatusLabel}`
+      : `${userEmail ?? "Signed in"} · ${liveStatusLabel}`
     : null;
   const pages = useMemo(
     () =>

@@ -447,7 +447,6 @@ export default function SettingsModal() {
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Device</SectionTitle>
-        <SettingRow label="Wi-Fi" value={device.wifiName} />
         <SettingRow label="Firmware" value={device.firmwareVersion} />
         <SettingRow label="Recovery" value="AP mode on first boot, power-up hold, or Wi-Fi join failure" />
       </View>

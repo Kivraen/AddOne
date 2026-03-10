@@ -101,31 +101,6 @@ function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
 }
 
-function relativeSyncLabel(device: Pick<DeviceRow, "last_snapshot_at">) {
-  if (!device.last_snapshot_at) {
-    return "Waiting for first device snapshot";
-  }
-
-  const diffMs = Date.now() - new Date(device.last_snapshot_at).getTime();
-  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
-
-  if (diffMinutes <= 1) {
-    return "Board verified moments ago";
-  }
-
-  if (diffMinutes < 60) {
-    return `Board verified ${diffMinutes}m ago`;
-  }
-
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `Board verified ${diffHours}h ago`;
-  }
-
-  const diffDays = Math.round(diffHours / 24);
-  return `Board verified ${diffDays}d ago`;
-}
-
 function deriveSyncState(device: DeviceRow): SyncState {
   if (deviceSeemsOnline(device)) {
     return "online";
@@ -316,7 +291,6 @@ function mapDeviceRowToAppDevice(input: {
     reminderEnabled: membership.reminder_enabled,
     reminderTime: stripSeconds(membership.reminder_time, "19:30"),
     firmwareVersion: device.firmware_version,
-    wifiName: "Managed on device",
     sharedViewers,
     days,
     dateGrid,
@@ -324,9 +298,6 @@ function mapDeviceRowToAppDevice(input: {
       weekIndex: 0,
       dayIndex: todayDayIndex,
     },
-    lastSyncedLabel: relativeSyncLabel({
-      last_snapshot_at: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
-    }),
   };
 }
 
