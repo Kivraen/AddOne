@@ -32,7 +32,6 @@ export interface AddOneDevice {
   syncState: SyncState;
   isLive: boolean;
   lastSnapshotAt: string | null;
-  lastSeenAt: string | null;
   runtimeRevision: number;
   weeklyTarget: number;
   weekStart: WeekStart;

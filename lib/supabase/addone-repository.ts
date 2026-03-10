@@ -296,7 +296,6 @@ function mapDeviceRowToAppDevice(input: {
   return {
     id: device.id,
     isLive: deviceSeemsOnline(device),
-    lastSeenAt: device.last_seen_at,
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
     name: device.name,
     ownerName: currentUserName,
