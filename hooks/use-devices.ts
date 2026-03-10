@@ -16,7 +16,7 @@ import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, RewardTrigger, RewardType, SharedBoard, WeekStart } from "@/types/addone";
+import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, RewardTrigger, RewardType, SharedBoard } from "@/types/addone";
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -187,7 +187,6 @@ export function useDeviceActions() {
     setRewardTrigger: useAddOneStore((state) => state.setRewardTrigger),
     setRewardType: useAddOneStore((state) => state.setRewardType),
     setTimezone: useAddOneStore((state) => state.setTimezone),
-    setWeekStart: useAddOneStore((state) => state.setWeekStart),
     setWeeklyTarget: useAddOneStore((state) => state.setWeeklyTarget),
     toggleHistoryCell: useAddOneStore((state) => state.toggleHistoryCell),
     toggleReward: useAddOneStore((state) => state.toggleReward),
@@ -405,7 +404,6 @@ export function useDeviceActions() {
       setRewardTrigger: demoActions.setRewardTrigger,
       setRewardType: demoActions.setRewardType,
       setTimezone: demoActions.setTimezone,
-      setWeekStart: demoActions.setWeekStart,
       setWeeklyTarget: demoActions.setWeeklyTarget,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleReward: demoActions.toggleReward,
@@ -481,7 +479,6 @@ export function useDeviceActions() {
       const targetDevice = requireLiveDevice(activeDevice);
       await applySettingsPatch({ timezone: value.trim() || targetDevice.timezone });
     },
-    setWeekStart: async (_value: WeekStart) => undefined,
     setWeeklyTarget: async (value: number) => {
       await applySettingsPatch({ weekly_target: value });
     },

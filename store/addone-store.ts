@@ -22,7 +22,6 @@ interface AddOneState {
   setResetTime: (value: string) => void;
   setTimezone: (value: string) => void;
   setWeeklyTarget: (value: number) => void;
-  setWeekStart: (value: AddOneDevice["weekStart"]) => void;
   setReminderEnabled: (value: boolean) => void;
   setAutoBrightness: (value: boolean) => void;
 }
@@ -115,13 +114,6 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
       devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
         ...device,
         weeklyTarget: value,
-      })),
-    })),
-  setWeekStart: (value) =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
-        ...device,
-        weekStart: value,
       })),
     })),
   setReminderEnabled: (value) =>
