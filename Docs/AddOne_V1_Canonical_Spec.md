@@ -6,10 +6,10 @@ This document is the canonical product and UI spec for AddOne v1.
 If another doc conflicts with this one, this file wins until an explicit new decision is made.
 
 ## Product Summary
-- AddOne v1 is a `new-device-first`, `single-button`, `single-habit`, `cloud-backed`, `offline-tolerant` product.
+- AddOne v1 is a `single-owner`, `single-device`, `single-button`, `single-habit`, `cloud-backed`, `offline-tolerant` product.
 - The device remains the main daily ritual.
 - The app is part of v1, but it is not the main daily interaction surface.
-- The app handles setup, settings, history correction, reminders, sharing, and remote fallback completion.
+- The app handles setup, Wi-Fi recovery, settings, history correction, and live today control while the device is online.
 
 ## Locked Hardware And Device Behavior
 - Final hardware is `1 button + LED matrix + RTC + ambient sensor`.
@@ -17,11 +17,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Normal idle screen is `habit grid only`.
 - Daily device action is `short-press toggle` for today.
 - No normal runtime long-press behavior.
-- Rewards are `off by default`.
-- Reward types are `clock` and `paint`.
-- Reward trigger is user-selectable: `daily completion` or `weekly success`.
-- Reward display is `auto-show after confirmation`, then `auto-timeout`, with `button dismiss`.
-- Rewards do not replay later from the device in v1.
+- Rewards are out of scope for first-user v1.
 
 ## Board And Habit Rules
 - Board is `8 x 21`.
@@ -54,9 +50,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - The app requires sign-in.
 - Current app auth flow is `email OTP`.
 - Future auth can add Google or password-based login later without changing the data model.
-- Sharing v1 is `code + approval + view-only`.
-- Ownership model is `single owner + approved viewers`.
-- Ownership transfer requires `factory reset / re-pair`.
+- Sharing is out of scope for first-user v1.
+- Ownership model for first-user v1 is `single owner, one device`.
 
 ## Future Domain And Branding
 - Reserved production domain: `addone.studio`.
@@ -68,8 +63,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
   - future production Supabase URL configuration
 
 ## Nearby Local Mode
-- Local nearby mode exists only for `setup, Wi-Fi recovery, settings, and history edit`.
-- Local nearby mode is not a second full everyday control system.
+- Local nearby mode exists only for `setup` and `Wi-Fi recovery`.
+- Local nearby mode is not a second full everyday control system and is not used for ongoing settings/history editing in first-user v1.
 - Local nearby transport is `temporary AP mode`, not LAN discovery.
 - Customer-facing device QR in v1 is `generic`, pointing to `addone.studio/start`.
 - The generic QR is for setup instructions and app/web handoff, not for encoding a unique public claim identifier.
@@ -83,12 +78,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Wi-Fi recovery does not transfer ownership or factory-reset the device; it only reprovisions network access for the current owner.
 - Cloud failure alone must never trigger AP mode.
 - AP should time out after about `10 minutes idle`.
-- Permanently offline devices still support basic nearby non-cloud functions:
-  - setup
-  - Wi-Fi changes
-  - settings
-  - history edit
-  - palette changes
+- First-user v1 requires Wi-Fi during first setup.
+- After onboarding, the device itself must continue working locally even if Wi-Fi is later lost.
 
 ## Onboarding Contract
 - Devices may be pre-registered during manufacturing / firmware flashing.
@@ -103,25 +94,31 @@ If another doc conflicts with this one, this file wins until an explicit new dec
   1. scan the printed QR or open `addone.studio/start`
   2. sign in to the app
   3. power the device and join its temporary `AddOne-XXXX` Wi-Fi access point
-  4. app sends Wi-Fi credentials and a one-time claim token to the device over AP
-  5. device joins home Wi-Fi and connects to cloud
-  6. backend binds the device to the signed-in user when the device redeems the claim
-  7. app confirms ownership and continues with habit setup
+  4. app scans nearby Wi-Fi networks through the device AP and lets the user choose a network or enter a hidden SSID manually
+  5. app sends Wi-Fi credentials and a one-time claim token to the device over AP
+  6. device joins home Wi-Fi and connects to cloud
+  7. backend binds the device to the signed-in user when the device redeems the claim
+  8. app confirms ownership and collects onboarding settings:
+     - weekly target
+     - timezone from phone by default
+     - palette
+  9. app lands on the board
 - v1 does **not** rely on LAN discovery as the primary claim or onboarding mechanism.
 - LAN discovery can exist later as a support or nearby-maintenance convenience, but not as the first-boot dependency.
-- The first AP step should collect only what is necessary to get the device online; habit naming and deeper settings happen after cloud confirmation.
+- The first AP step should collect only what is necessary to get the device online.
+- Defaults:
+  - timezone from phone during onboarding
+  - reset time = midnight
+  - brightness = auto-adjust enabled
 
 ## App Structure
-- Main screen is the `last-viewed device board`.
-- Users can swipe left/right between devices.
+- Main screen is the active device board.
 - Main screen is `board-first`, with one primary action button below the board.
 - Header contains:
   - device name
   - sync status
-  - shared entry
   - settings entry
 - `History edit` belongs to the main habit surface and opens as a full-height sheet/modal.
-- Shared boards live in a separate route and remain read-only.
 - Settings use layered sheets and focused flows.
 - Advanced/dev tools are hidden behind a deliberate gesture.
 
@@ -184,14 +181,13 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 ## Current Implementation Status
 - Expo app scaffold exists in this repo.
 - Board-first home screen exists.
-- Shared boards screen exists.
-- Onboarding exists as a real AP + claim flow, and recovery now reuses that contract as a real `Rejoin Wi-Fi` flow.
+- Onboarding exists as a real AP + claim flow, and recovery reuses that contract as a real `Rejoin Wi-Fi` flow.
 - Onboarding now has a real cloud-side claim-session flow.
 - The app now builds the exact AP provisioning payload, probes the configured local AP endpoints, and can send the provisioning payload to firmware.
-- History, settings, and rewards modals exist.
+- History and settings modals exist.
 - Real Supabase auth now exists with `demo mode` fallback.
 - Initial Supabase schema and migration foundation now exist locally under [supabase/migrations/20260308113000_init_addone_schema.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260308113000_init_addone_schema.sql).
-- Real device/account data reads, sharing, and onboarding-session queries now exist against staging.
+- Real device/account data reads and onboarding-session queries now exist against staging.
 - Cloud mode now drives the main board from live device/account data, while demo mode remains as a deliberate mock fallback.
 - The app now invalidates live board/share queries from Supabase realtime changes so firmware-originated updates can surface without manual refresh.
 - `device_runtime_snapshots` are now in Supabase realtime publication, with only a light self-heal refetch kept in the app as backup.
@@ -207,16 +203,15 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Firmware v2 now includes claim redemption, heartbeat, command pull/ack, runtime revision tracking, and snapshot-based cloud healing against the AddOne cloud RPC contract.
 - Firmware v2 now includes the first real AddOne behavior layer: single-button local toggling, 21-week board persistence, RTC/NTP-backed time service, and LED board rendering.
 - Firmware v2 now includes minimal settings sync application, palette preset handling, and ambient-light-driven brightness.
-- Firmware v2 now includes reward-state behavior with built-in `clock` and palette-based `paint` rendering for local button-triggered rewards.
 - A dedicated MQTT-based realtime transport contract and gateway scaffold now exist for low-latency online device delivery, with polling retained only as fallback.
 - The runtime cleanup pass removed the old user-facing `queued` state, command-row polling waits, and `device_day_states` live invalidation from the app runtime path.
 
 ## Known Gaps
-- Custom reward payload sync is not implemented yet. The reward editor still exposes placeholder saved-art / AI surfaces without full device delivery.
-- Nearby AP maintenance currently covers setup and Wi-Fi recovery cleanly; nearby history/settings editing as a first-class AP flow is not finished.
-- Reminder preferences exist, but real push reminder delivery is not implemented yet.
+- AP onboarding currently uses direct SSID/password entry; device-side scan-list flow is now the intended v1 UX and must be treated as required.
+- Nearby AP maintenance currently covers setup and Wi-Fi recovery only, which is the intended first-user v1 scope.
 - Auth is still staging-grade `email OTP`; branded mail, production redirect configuration, and optional Google/password login remain future work.
 - Production broker hardening and release deployment shape are not finished; the current broker/gateway path is still staging/development oriented.
+- Rewards, reminders, sharing, and multi-device UX are intentionally out of scope for first-user v1 and should stay hidden.
 
 ## Canonical Next Steps
 1. Revalidate the current runtime path on real hardware as a locked baseline:
@@ -224,8 +219,16 @@ If another doc conflicts with this one, this file wins until an explicit new dec
    - local button reliability
    - app today toggle latency
    - history `Draft + Save`
+   - settings `Draft + Apply`
    - offline/reconnect snapshot healing
-2. Add custom reward payload sync so app-configured paint/saved-art rewards can flow through cloud and onto firmware.
-3. Finish nearby AP maintenance beyond Wi-Fi recovery so settings/history edit also have a clean local path when cloud is unavailable.
-4. Implement real push reminders and finish the reminder delivery contract.
-5. Remove staging-only onboarding shortcuts and promote the current staging stack into a production-ready shape: branded auth email, production Supabase project, broker hardening, and release hardening.
+2. Finish the MVP onboarding flow with device-side Wi-Fi scan list plus manual hidden-network fallback.
+3. Remove or hide all out-of-scope first-user v1 surfaces:
+   - rewards
+   - reminders
+   - sharing
+   - multi-device UX
+4. Promote the current staging stack into a production-ready beta shape:
+   - branded auth email
+   - production Supabase project
+   - broker hardening
+   - release hardening

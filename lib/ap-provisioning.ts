@@ -6,6 +6,7 @@ import {
 } from "@/types/addone";
 
 export const ADDONE_DEVICE_AP_INFO_PATH = "/api/v1/provisioning/info";
+export const ADDONE_DEVICE_AP_NETWORKS_PATH = "/api/v1/provisioning/networks";
 export const ADDONE_DEVICE_AP_SESSION_PATH = "/api/v1/provisioning/session";
 
 function trimOrEmpty(value: string | null | undefined) {
@@ -26,6 +27,10 @@ export function maskProvisioningSecret(secret: string) {
 
 export function buildDeviceApInfoUrl() {
   return `${runtimeConfig.deviceApBaseUrl}${ADDONE_DEVICE_AP_INFO_PATH}`;
+}
+
+export function buildDeviceApNetworksUrl() {
+  return `${runtimeConfig.deviceApBaseUrl}${ADDONE_DEVICE_AP_NETWORKS_PATH}`;
 }
 
 export function buildDeviceApProvisioningEndpoint() {

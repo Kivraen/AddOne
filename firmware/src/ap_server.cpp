@@ -138,7 +138,7 @@ void ApServer::begin(const DeviceIdentity& identity, ProvisioningStore& provisio
   WiFi.persistent(true);
   WiFi.disconnect(false, false);
   delay(100);
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(WIFI_AP_STA);
   delay(100);
   WiFi.softAP(identity_->apSsid().c_str(), nullptr, 1, false, 4);
 
@@ -147,6 +147,9 @@ void ApServer::begin(const DeviceIdentity& identity, ProvisioningStore& provisio
   });
   server_.on(ProvisioningContract::kInfoPath, HTTP_GET, [this]() {
     handleInfo_();
+  });
+  server_.on("/api/v1/provisioning/networks", HTTP_GET, [this]() {
+    handleNetworks_();
   });
   server_.on(ProvisioningContract::kSessionPath, HTTP_POST, [this]() {
     handleSession_();
@@ -215,6 +218,10 @@ void ApServer::handleRoot_() {
 
 void ApServer::handleInfo_() {
   sendJson_(200, buildInfoJson_());
+}
+
+void ApServer::handleNetworks_() {
+  sendJson_(200, buildNetworksJson_());
 }
 
 void ApServer::handleSession_() {
@@ -288,6 +295,48 @@ void ApServer::handleSession_() {
   }
 
   sendJson_(200, buildSessionResponseJson_(true, "connect_to_cloud", true, "Provisioning accepted."));
+}
+
+String ApServer::buildNetworksJson_() {
+  const int networkCount = WiFi.scanNetworks(false, false);
+  String json = "{\"schema_version\":1,\"networks\":[";
+  bool first = true;
+
+  for (int index = 0; index < networkCount; index += 1) {
+    const String ssid = WiFi.SSID(index);
+    if (ssid.isEmpty()) {
+      continue;
+    }
+
+    bool duplicate = false;
+    for (int previous = 0; previous < index; previous += 1) {
+      if (ssid == WiFi.SSID(previous)) {
+        duplicate = true;
+        break;
+      }
+    }
+
+    if (duplicate) {
+      continue;
+    }
+
+    if (!first) {
+      json += ",";
+    }
+
+    json += "{\"ssid\":\"";
+    json += escapeJson(ssid);
+    json += "\",\"rssi\":";
+    json += String(WiFi.RSSI(index));
+    json += ",\"secure\":";
+    json += WiFi.encryptionType(index) == WIFI_AUTH_OPEN ? "false" : "true";
+    json += "}";
+    first = false;
+  }
+
+  json += "]}";
+  WiFi.scanDelete();
+  return json;
 }
 
 void ApServer::resetProvisioningAttempt_() {

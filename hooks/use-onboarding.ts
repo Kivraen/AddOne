@@ -57,6 +57,16 @@ export function useOnboarding() {
 
   const session = onboardingSessionQuery.data ?? (sessionId === latestActiveSessionQuery.data?.id ? latestActiveSessionQuery.data : null);
 
+  useEffect(() => {
+    if (session?.status !== "claimed" || !session.deviceId) {
+      return;
+    }
+
+    setActiveDeviceId(session.deviceId);
+    void queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) });
+    void queryClient.invalidateQueries({ queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) });
+  }, [queryClient, session?.deviceId, session?.status, setActiveDeviceId, user?.id]);
+
   const createSessionMutation = useMutation({
     mutationFn: createDeviceOnboardingSession,
     onSuccess: async (nextSession) => {

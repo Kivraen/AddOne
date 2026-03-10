@@ -7,6 +7,8 @@ It follows the canonical v1 product spec and assumes:
 - new AddOne devices first
 - legacy prototype backend stays separate
 - AddOne uses its own staging and production Supabase projects
+- first-user v1 active product surface is `single owner, one device`
+- sharing, rewards, and reminders may still exist in schema for future phases, but they are not active first-user v1 product requirements
 
 For the firmware-facing RPC and provisioning handshake, see [AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md) and [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
 For low-latency online device delivery, see [AddOne_Device_Realtime_Transport.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md).
@@ -256,7 +258,6 @@ These functions are important because they keep multi-table mutations atomic and
 3. Add repository/query hooks for:
    - active user profile
    - owned devices
-   - shared boards
    - settings updates
    - day history reads and writes
 4. Replace the mock device store with real Supabase-backed reads.

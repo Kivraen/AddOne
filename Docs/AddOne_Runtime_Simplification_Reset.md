@@ -80,7 +80,7 @@ Last locked: March 9, 2026
 
 ## Required Runtime Setup
 - `MQTT` is the primary online runtime transport.
-- `Supabase` remains auth, ownership, sharing, backup, and mirrored-state storage.
+- `Supabase` remains auth, ownership, backup, and mirrored-state storage.
 - Runtime commands should flow:
   - `app -> Supabase RPC -> gateway -> MQTT -> device`
 - Runtime snapshots should flow:

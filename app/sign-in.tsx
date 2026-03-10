@@ -179,7 +179,7 @@ export default function SignInScreen() {
           <View style={{ flex: 1, justifyContent: "center", gap: 20, minHeight: "100%" }}>
             <GlassCard style={{ gap: 18, paddingHorizontal: 18, paddingVertical: 18 }}>
               <SectionCopy>
-                Cloud mode is enabled. Use your email to unlock syncing, shared boards, remote fallback completion, and automatic backups.
+                Cloud mode is enabled. Use your email to unlock setup, Wi-Fi recovery, board sync, history editing, and automatic backups.
               </SectionCopy>
 
               {message ? <SectionCopy>{message}</SectionCopy> : null}

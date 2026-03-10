@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
-import { DevicePager } from "@/components/layout/device-pager";
 import { ScreenFrame } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { IconButton } from "@/components/ui/icon-button";
@@ -47,10 +46,9 @@ function withPendingTodayState(device: AddOneDevice, pendingTodayState?: boolean
 export default function HomeScreen() {
   const router = useRouter();
   const { mode, userEmail } = useAuth();
-  const { activeDevice, activeDeviceId, devices, isLoading, setActiveDevice } = useDevices();
+  const { activeDevice, activeDeviceId, isLoading } = useDevices();
   const { isApplyingToday, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
-  const initialPage = Math.max(0, devices.findIndex((device) => device.id === activeDeviceId));
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
   const liveStatusLabel = activeDevice
     ? isApplyingToday || activePendingTodayState !== undefined
@@ -64,20 +62,22 @@ export default function HomeScreen() {
       ? `Demo preview · ${liveStatusLabel}`
       : `${userEmail ?? "Signed in"} · ${liveStatusLabel}`
     : null;
-  const pages = useMemo(
-    () =>
-      devices.map((device) => {
-        const effectiveDevice = withPendingTodayState(device, pendingTodayStateByDevice[device.id]);
-        const palette = getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette);
-
-        return {
-          cells: buildBoardCells(effectiveDevice),
-          device: effectiveDevice,
-          palette,
-        };
-      }),
-    [devices, pendingTodayStateByDevice],
+  const effectiveDevice = useMemo(
+    () => (activeDevice ? withPendingTodayState(activeDevice, activePendingTodayState) : null),
+    [activeDevice, activePendingTodayState],
   );
+  const palette = useMemo(
+    () => (effectiveDevice ? getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette) : null),
+    [effectiveDevice],
+  );
+  const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
+  const pendingPulse =
+    effectiveDevice && activePendingTodayState !== undefined
+      ? {
+          col: effectiveDevice.today.weekIndex,
+          row: effectiveDevice.today.dayIndex,
+        }
+      : null;
 
   if (isLoading) {
     return (
@@ -220,7 +220,6 @@ export default function HomeScreen() {
         <View style={{ alignItems: "flex-end", gap: 10 }}>
           <SyncBadge state={isApplyingToday || activePendingTodayState !== undefined ? "syncing" : activeDevice.syncState} />
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <IconButton icon="people-outline" onPress={() => router.push("/shared")} />
             <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
           </View>
         </View>
@@ -228,190 +227,151 @@ export default function HomeScreen() {
     </View>
   );
 
+  const device = effectiveDevice!;
+  const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
+
   return (
     <ScreenFrame header={header}>
-      <View style={{ flex: 1 }}>
-        <DevicePager
-          initialPage={initialPage}
-          onPageChange={(index) => {
-            const next = devices[index];
-            if (next) {
-              setActiveDevice(next.id);
-            }
-          }}
-        >
-          {pages.map(({ cells, device, palette }) => (
-            <View key={device.id} style={{ flex: 1, gap: 18, justifyContent: "space-between" }}>
-              <GlassCard style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 18 }}>
-                <View style={{ gap: 16 }}>
-                  <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text
-                      style={{
-                        color: theme.colors.textTertiary,
-                        fontFamily: theme.typography.micro.fontFamily,
-                        fontSize: theme.typography.micro.fontSize,
-                        lineHeight: theme.typography.micro.lineHeight,
-                        letterSpacing: theme.typography.micro.letterSpacing,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {device.ownerName}
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.textTertiary,
-                        fontFamily: theme.typography.micro.fontFamily,
-                        fontSize: theme.typography.micro.fontSize,
-                        lineHeight: theme.typography.micro.lineHeight,
-                        letterSpacing: theme.typography.micro.letterSpacing,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {device.sharedViewers} viewers
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: "center" }}>
-                    <PixelGrid cells={cells} mode="display" palette={palette} readOnly />
-                  </View>
-                </View>
-              </GlassCard>
+      <View style={{ flex: 1, gap: 18, justifyContent: "space-between" }}>
+        <GlassCard style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 18 }}>
+          <View style={{ gap: 16 }}>
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontFamily: theme.typography.micro.fontFamily,
+                fontSize: theme.typography.micro.fontSize,
+                lineHeight: theme.typography.micro.lineHeight,
+                letterSpacing: theme.typography.micro.letterSpacing,
+                textTransform: "uppercase",
+              }}
+            >
+              {device.ownerName}
+            </Text>
+            <View style={{ alignItems: "center" }}>
+              <PixelGrid cells={cells} mode="display" palette={palette!} pendingPulse={pendingPulse} readOnly />
+            </View>
+          </View>
+        </GlassCard>
 
-              <View style={{ gap: 12 }}>
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  <GlassCard style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 14 }}>
-                    <Text
-                      style={{
-                        color: theme.colors.textTertiary,
-                        fontFamily: theme.typography.micro.fontFamily,
-                        fontSize: theme.typography.micro.fontSize,
-                        lineHeight: theme.typography.micro.lineHeight,
-                        letterSpacing: theme.typography.micro.letterSpacing,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Weekly target
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontFamily: theme.typography.label.fontFamily,
-                        fontSize: theme.typography.label.fontSize,
-                        lineHeight: theme.typography.label.lineHeight,
-                        marginTop: 8,
-                      }}
-                    >
-                      {targetStatusLabel(device)}
-                    </Text>
-                  </GlassCard>
+        <View style={{ gap: 12 }}>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <GlassCard style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 14 }}>
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  fontFamily: theme.typography.micro.fontFamily,
+                  fontSize: theme.typography.micro.fontSize,
+                  lineHeight: theme.typography.micro.lineHeight,
+                  letterSpacing: theme.typography.micro.letterSpacing,
+                  textTransform: "uppercase",
+                }}
+              >
+                Weekly target
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                  marginTop: 8,
+                }}
+              >
+                {targetStatusLabel(device)}
+              </Text>
+            </GlassCard>
 
-                  <GlassCard style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 14 }}>
-                    <Text
-                      style={{
-                        color: theme.colors.textTertiary,
-                        fontFamily: theme.typography.micro.fontFamily,
-                        fontSize: theme.typography.micro.fontSize,
-                        lineHeight: theme.typography.micro.lineHeight,
-                        letterSpacing: theme.typography.micro.letterSpacing,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Reset
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontFamily: theme.typography.label.fontFamily,
-                        fontSize: theme.typography.label.fontSize,
-                        lineHeight: theme.typography.label.lineHeight,
-                        marginTop: 8,
-                      }}
-                    >
-                      {device.nextResetLabel}
-                    </Text>
-                  </GlassCard>
-                </View>
+            <GlassCard style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 14 }}>
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  fontFamily: theme.typography.micro.fontFamily,
+                  fontSize: theme.typography.micro.fontSize,
+                  lineHeight: theme.typography.micro.lineHeight,
+                  letterSpacing: theme.typography.micro.letterSpacing,
+                  textTransform: "uppercase",
+                }}
+              >
+                Reset
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                  marginTop: 8,
+                }}
+              >
+                {device.nextResetLabel}
+              </Text>
+            </GlassCard>
+          </View>
 
-                <Pressable
-                  disabled={!device.isLive}
-                  onPress={() => router.push("/history")}
+          <Pressable
+            disabled={!device.isLive}
+            onPress={() => router.push("/history")}
+            style={{
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              borderRadius: theme.radius.card,
+              borderWidth: 1,
+              borderColor: "rgba(242, 238, 230, 0.08)",
+              backgroundColor: "rgba(23, 23, 23, 0.92)",
+              opacity: device.isLive ? 1 : 0.55,
+              paddingHorizontal: 16,
+              paddingVertical: 15,
+            }}
+          >
+            <View style={{ gap: 4 }}>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                }}
+              >
+                Edit history
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+                >
+                  Correct day cells directly on the board.
+                </Text>
+              {!device.isLive ? (
+                <Text
                   style={{
-                    alignItems: "center",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    borderRadius: theme.radius.card,
-                    borderWidth: 1,
-                    borderColor: "rgba(242, 238, 230, 0.08)",
-                    backgroundColor: "rgba(23, 23, 23, 0.92)",
-                    opacity: device.isLive ? 1 : 0.55,
-                    paddingHorizontal: 16,
-                    paddingVertical: 15,
+                    color: theme.colors.statusErrorMuted,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  <View style={{ gap: 4 }}>
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontFamily: theme.typography.label.fontFamily,
-                        fontSize: theme.typography.label.fontSize,
-                        lineHeight: theme.typography.label.lineHeight,
-                      }}
-                    >
-                      Edit history
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontFamily: theme.typography.body.fontFamily,
-                        fontSize: theme.typography.body.fontSize,
-                        lineHeight: theme.typography.body.lineHeight,
-                      }}
-                    >
-                      Correct day cells directly on the board.
-                    </Text>
-                    {!device.isLive ? (
-                      <Text
-                        style={{
-                          color: theme.colors.statusErrorMuted,
-                          fontFamily: theme.typography.body.fontFamily,
-                          fontSize: theme.typography.body.fontSize,
-                          lineHeight: theme.typography.body.lineHeight,
-                        }}
-                      >
-                        Available only while the device is live.
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Ionicons color={theme.colors.textSecondary} name="chevron-forward" size={18} />
-                </Pressable>
-              </View>
-
-              <View style={{ gap: 16, paddingBottom: 8 }}>
-                <PrimaryActionButton
-                  onPress={() => {
-                    setActiveDevice(device.id);
-                    void toggleToday(device.id).catch((error) => {
-                      console.warn("Failed to toggle today from app", error);
-                    });
-                  }}
-                  state={boardButtonState(device, isApplyingToday && activeDeviceId === device.id)}
-                />
-                <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
-                  {devices.map((page) => (
-                    <View
-                      key={`indicator-${page.id}`}
-                      style={{
-                        height: 6,
-                        width: page.id === device.id ? 24 : 6,
-                        borderRadius: 6,
-                        backgroundColor: page.id === device.id ? theme.colors.textPrimary : "rgba(242, 238, 230, 0.12)",
-                      }}
-                    />
-                  ))}
-                </View>
-              </View>
+                  Available only while the device is live.
+                </Text>
+              ) : null}
             </View>
-          ))}
-        </DevicePager>
+            <Ionicons color={theme.colors.textSecondary} name="chevron-forward" size={18} />
+          </Pressable>
+        </View>
+
+        <View style={{ gap: 16, paddingBottom: 8 }}>
+          <PrimaryActionButton
+            onPress={() => {
+              void toggleToday(device.id).catch((error) => {
+                console.warn("Failed to toggle today from app", error);
+              });
+            }}
+            state={boardButtonState(device, buttonIsApplying)}
+          />
+        </View>
       </View>
     </ScreenFrame>
   );

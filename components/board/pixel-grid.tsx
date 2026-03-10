@@ -1,5 +1,12 @@
 import { useWindowDimensions, Pressable, Text, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
@@ -10,8 +17,42 @@ interface PixelGridProps {
   palette: BoardPalette;
   mode: PixelGridMode;
   highlightToday?: HighlightTarget;
+  pendingPulse?: HighlightTarget | null;
   onCellPress?: (row: number, col: number) => void;
   readOnly?: boolean;
+}
+
+function PendingPulse({ cellSize }: { cellSize: number }) {
+  const opacity = useSharedValue(0.24);
+  const scale = useSharedValue(1);
+
+  opacity.value = withRepeat(withSequence(withTiming(0.5, { duration: 320 }), withTiming(0.18, { duration: 320 })), -1, true);
+  scale.value = withRepeat(withSequence(withTiming(1.08, { duration: 320 }), withTiming(1, { duration: 320 })), -1, true);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          top: -2,
+          right: -2,
+          bottom: -2,
+          left: -2,
+          borderRadius: Math.max(6, Math.floor(cellSize * 0.34)),
+          borderWidth: 1,
+          borderColor: withAlpha(theme.colors.accentAmber, 0.9),
+          backgroundColor: withAlpha(theme.colors.accentAmber, 0.14),
+        },
+        animatedStyle,
+      ]}
+    />
+  );
 }
 
 function cellColors(state: PixelCellState, palette: BoardPalette) {
@@ -44,7 +85,7 @@ function cellColors(state: PixelCellState, palette: BoardPalette) {
   }
 }
 
-export function PixelGrid({ cells, palette, mode, highlightToday, onCellPress, readOnly = false }: PixelGridProps) {
+export function PixelGrid({ cells, palette, mode, highlightToday, pendingPulse = null, onCellPress, readOnly = false }: PixelGridProps) {
   const { width } = useWindowDimensions();
   const gap = mode === "preview" ? 2 : 3;
   const availableWidth = Math.min(width - 64, 360);
@@ -79,6 +120,7 @@ export function PixelGrid({ cells, palette, mode, highlightToday, onCellPress, r
               };
 
               const showHighlight = mode === "edit" && isToday;
+              const showPendingPulse = pendingPulse?.row === rowIndex && pendingPulse?.col === colIndex;
               const highlight = showHighlight ? (
                 <View
                   style={{
@@ -97,6 +139,7 @@ export function PixelGrid({ cells, palette, mode, highlightToday, onCellPress, r
               if (disabled) {
                 return (
                   <View key={`cell-${rowIndex}-${colIndex}`} style={cellStyle}>
+                    {showPendingPulse ? <PendingPulse cellSize={cellSize} /> : null}
                     {highlight}
                   </View>
                 );
@@ -104,6 +147,7 @@ export function PixelGrid({ cells, palette, mode, highlightToday, onCellPress, r
 
               return (
                 <Pressable key={`cell-${rowIndex}-${colIndex}`} onPress={() => onCellPress?.(rowIndex, colIndex)} style={cellStyle}>
+                  {showPendingPulse ? <PendingPulse cellSize={cellSize} /> : null}
                   {highlight}
                 </Pressable>
               );

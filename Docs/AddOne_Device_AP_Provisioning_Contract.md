@@ -10,6 +10,7 @@ This document covers only the local AP handoff. For cloud claim and steady-state
 
 ## Scope
 - v1 provisioning transport is `temporary AP mode`, not LAN discovery.
+- Wi-Fi is required for first-user v1 setup.
 - The printed customer QR stays generic and points to `addone.studio/start`.
 - The app creates a cloud onboarding session first, then hands local Wi-Fi credentials and the one-time claim token to the device over AP.
 - The AP handoff should collect only what is needed to get the device online.
@@ -47,6 +48,39 @@ Example response:
 Rules:
 - `provisioning_state` values are `ready | busy | provisioned`.
 - `hardware_profile` and `firmware_version` are optional but strongly preferred.
+
+## Endpoint: `GET /api/v1/provisioning/networks`
+
+Purpose:
+- scan nearby Wi-Fi networks from the device itself
+- let the app present a pick-list instead of forcing manual SSID entry every time
+
+Example response:
+
+```json
+{
+  "schema_version": 1,
+  "networks": [
+    {
+      "ssid": "Home WiFi",
+      "rssi": -54,
+      "secure": true
+    },
+    {
+      "ssid": "Guest",
+      "rssi": -71,
+      "secure": false
+    }
+  ]
+}
+```
+
+Rules:
+- response includes only visible SSIDs
+- duplicate SSIDs should be collapsed
+- `rssi` may be `null` if the device cannot provide it
+- `secure` indicates whether a password is required
+- the app must still offer a hidden/manual SSID fallback
 
 ## Endpoint: `POST /api/v1/provisioning/session`
 
@@ -112,10 +146,11 @@ Suggested failure categories:
 1. User signs in first.
 2. App creates a cloud onboarding session and gets the raw `claim_token`.
 3. User joins the AddOne AP.
-4. App optionally verifies `GET /info`.
-5. App sends `POST /session`.
-6. Only after the local AP request is accepted should the app mark the cloud onboarding session as `awaiting_cloud`.
-7. App then waits for the device to redeem the claim in cloud.
+4. App verifies `GET /info`.
+5. App requests `GET /networks` and shows the SSID list with manual hidden-network fallback.
+6. App sends `POST /session`.
+7. Only after the local AP request is accepted should the app mark the cloud onboarding session as `awaiting_cloud`.
+8. App then waits for the device to redeem the claim in cloud.
 
 ## Firmware Responsibilities
 1. Start AP automatically on first boot with no saved Wi-Fi.
@@ -129,10 +164,12 @@ Suggested failure categories:
 ## Current Implementation Status
 - The app now builds and validates the exact `POST /session` payload locally.
 - The app now attempts the real `GET /info` and `POST /session` calls against the configured AddOne AP base URL.
+- The app now requests a real device-side Wi-Fi scan list from `GET /api/v1/provisioning/networks`.
 - The app stores Wi-Fi details only in local UI state during staging.
 - The app UI now reflects the real AP handoff flow.
 - Firmware v2 now includes the real AP endpoint layer for:
   - `GET /api/v1/provisioning/info`
+  - `GET /api/v1/provisioning/networks`
   - `POST /api/v1/provisioning/session`
 - Firmware v2 now persists pending claim context locally and starts STA connection from the submitted Wi-Fi payload.
 - Firmware v2 now hands off from AP provisioning into cloud claim redemption and first heartbeat plumbing.

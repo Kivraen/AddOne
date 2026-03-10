@@ -7,16 +7,14 @@ import {
   claimDevice,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
-  fetchSharedBoards,
   requestRuntimeSnapshotFromApp,
   setDayStateFromApp,
-  updateMembershipReminder,
 } from "@/lib/supabase/addone-repository";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, RewardTrigger, RewardType, SharedBoard } from "@/types/addone";
+import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate } from "@/types/addone";
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -47,7 +45,6 @@ function sleep(ms: number) {
 }
 
 const DEVICE_SNAPSHOT_SELF_HEAL_MS = 30_000;
-const SHARED_BOARD_SELF_HEAL_MS = 30_000;
 const LIVE_WAIT_CACHE_POLL_MS = 100;
 const LIVE_WAIT_REFRESH_MS = 1_500;
 
@@ -78,19 +75,7 @@ function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsP
   if (patch.day_reset_time !== undefined && device.resetTime !== patch.day_reset_time.slice(0, 5)) {
     return false;
   }
-  if (patch.name !== undefined && device.name !== patch.name) {
-    return false;
-  }
   if (patch.palette_preset !== undefined && device.paletteId !== patch.palette_preset) {
-    return false;
-  }
-  if (patch.reward_enabled !== undefined && device.rewardEnabled !== patch.reward_enabled) {
-    return false;
-  }
-  if (patch.reward_trigger !== undefined && device.rewardTrigger !== patch.reward_trigger) {
-    return false;
-  }
-  if (patch.reward_type !== undefined && device.rewardType !== patch.reward_type) {
     return false;
   }
   if (patch.timezone !== undefined && device.timezone !== patch.timezone) {
@@ -153,24 +138,6 @@ export function useDevices() {
   };
 }
 
-export function useSharedBoardsData() {
-  const { mode, status, user } = useAuth();
-  const demoSharedBoards = useAddOneStore((state) => state.sharedBoards);
-
-  const sharedBoardsQuery = useQuery({
-    enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
-    queryFn: () => fetchSharedBoards(user!.id),
-    queryKey: addOneQueryKeys.sharedBoards(user?.id),
-    refetchInterval: mode === "cloud" && status === "signedIn" ? SHARED_BOARD_SELF_HEAL_MS : false,
-    refetchIntervalInBackground: true,
-  });
-
-  return {
-    isLoading: mode === "cloud" ? sharedBoardsQuery.isLoading : false,
-    sharedBoards: (mode === "demo" ? demoSharedBoards : sharedBoardsQuery.data ?? []) as SharedBoard[],
-  };
-}
-
 export function useDeviceActions() {
   const { activeDevice, devices } = useDevices();
   const { mode, user, userEmail } = useAuth();
@@ -180,16 +147,11 @@ export function useDeviceActions() {
 
   const demoActions = {
     setAutoBrightness: useAddOneStore((state) => state.setAutoBrightness),
-    setHabitName: useAddOneStore((state) => state.setHabitName),
     setPalette: useAddOneStore((state) => state.setPalette),
     setResetTime: useAddOneStore((state) => state.setResetTime),
-    setReminderEnabled: useAddOneStore((state) => state.setReminderEnabled),
-    setRewardTrigger: useAddOneStore((state) => state.setRewardTrigger),
-    setRewardType: useAddOneStore((state) => state.setRewardType),
     setTimezone: useAddOneStore((state) => state.setTimezone),
     setWeeklyTarget: useAddOneStore((state) => state.setWeeklyTarget),
     toggleHistoryCell: useAddOneStore((state) => state.toggleHistoryCell),
-    toggleReward: useAddOneStore((state) => state.toggleReward),
     toggleToday: useAddOneStore((state) => state.toggleToday),
   };
 
@@ -218,7 +180,6 @@ export function useDeviceActions() {
     }
 
     await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user.id) });
-    await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.sharedBoards(user.id) });
   };
 
   const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
@@ -333,18 +294,12 @@ export function useDeviceActions() {
       applyDeviceSettingsFromApp(deviceId, patch),
   });
 
-  const updateMembershipMutation = useMutation({
-    mutationFn: updateMembershipReminder,
-    onSuccess: invalidateCloudDevices,
-  });
-
   const isBusy =
     claimMutation.isPending ||
     refreshRuntimeMutation.isPending ||
     setDayStateMutation.isPending ||
     historyDraftMutation.isPending ||
-    applySettingsMutation.isPending ||
-    updateMembershipMutation.isPending;
+    applySettingsMutation.isPending;
 
   const refreshRuntimeSnapshot = async (deviceId?: string) => {
     const targetDevice = await resolveFreshLiveDevice(deviceId);
@@ -386,8 +341,40 @@ export function useDeviceActions() {
     void invalidateCloudDevices();
   };
 
+  const applySettingsDraft = async (patch: DeviceSettingsPatch, deviceId?: string) => {
+    const normalizedPatch = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    ) as DeviceSettingsPatch;
+
+    if (Object.keys(normalizedPatch).length === 0) {
+      return;
+    }
+
+    if (mode === "demo") {
+      if (normalizedPatch.weekly_target !== undefined) {
+        demoActions.setWeeklyTarget(normalizedPatch.weekly_target);
+      }
+      if (normalizedPatch.timezone !== undefined) {
+        demoActions.setTimezone(normalizedPatch.timezone);
+      }
+      if (normalizedPatch.day_reset_time !== undefined) {
+        demoActions.setResetTime(normalizedPatch.day_reset_time.slice(0, 5));
+      }
+      if (normalizedPatch.palette_preset !== undefined) {
+        demoActions.setPalette(normalizedPatch.palette_preset);
+      }
+      if (normalizedPatch.ambient_auto !== undefined) {
+        demoActions.setAutoBrightness(normalizedPatch.ambient_auto);
+      }
+      return;
+    }
+
+    await applySettingsPatch(normalizedPatch, deviceId);
+  };
+
   if (mode === "demo") {
     return {
+      applySettingsDraft,
       claimDevice: claimMutation.mutateAsync,
       commitHistoryDraft: async () => undefined,
       isApplyingToday: false,
@@ -396,17 +383,7 @@ export function useDeviceActions() {
       isSavingHistoryDraft: false,
       isSavingSettings: false,
       refreshRuntimeSnapshot: async () => undefined,
-      setAutoBrightness: demoActions.setAutoBrightness,
-      setHabitName: demoActions.setHabitName,
-      setPalette: demoActions.setPalette,
-      setReminderEnabled: demoActions.setReminderEnabled,
-      setResetTime: demoActions.setResetTime,
-      setRewardTrigger: demoActions.setRewardTrigger,
-      setRewardType: demoActions.setRewardType,
-      setTimezone: demoActions.setTimezone,
-      setWeeklyTarget: demoActions.setWeeklyTarget,
       toggleHistoryCell: demoActions.toggleHistoryCell,
-      toggleReward: demoActions.toggleReward,
       toggleToday: async (_deviceId?: string) => {
         demoActions.toggleToday();
       },
@@ -414,6 +391,7 @@ export function useDeviceActions() {
   }
 
   return {
+    applySettingsDraft,
     claimDevice: claimMutation.mutateAsync,
     commitHistoryDraft: async (
       updates: HistoryDraftUpdate[],
@@ -449,44 +427,7 @@ export function useDeviceActions() {
     isSavingHistoryDraft: historyDraftMutation.isPending,
     isSavingSettings: applySettingsMutation.isPending,
     refreshRuntimeSnapshot,
-    setAutoBrightness: async (value: boolean) => {
-      await applySettingsPatch({ ambient_auto: value });
-    },
-    setHabitName: async (value: string) => {
-      const targetDevice = requireLiveDevice(activeDevice);
-      await applySettingsPatch({ name: value.trim() || targetDevice.name });
-    },
-    setPalette: async (paletteId: string) => {
-      await applySettingsPatch({ palette_preset: paletteId });
-    },
-    setReminderEnabled: async (value: boolean) => {
-      if (!activeDevice || !user?.id) {
-        return;
-      }
-      await updateMembershipMutation.mutateAsync({ deviceId: activeDevice.id, patch: { reminder_enabled: value }, userId: user.id });
-    },
-    setResetTime: async (value: string) => {
-      const normalized = /^\d{2}:\d{2}$/.test(value) ? `${value}:00` : value;
-      await applySettingsPatch({ day_reset_time: normalized });
-    },
-    setRewardTrigger: async (value: RewardTrigger) => {
-      await applySettingsPatch({ reward_trigger: value });
-    },
-    setRewardType: async (value: RewardType) => {
-      await applySettingsPatch({ reward_type: value });
-    },
-    setTimezone: async (value: string) => {
-      const targetDevice = requireLiveDevice(activeDevice);
-      await applySettingsPatch({ timezone: value.trim() || targetDevice.timezone });
-    },
-    setWeeklyTarget: async (value: number) => {
-      await applySettingsPatch({ weekly_target: value });
-    },
     toggleHistoryCell: async () => undefined,
-    toggleReward: async () => {
-      const targetDevice = requireLiveDevice(activeDevice);
-      await applySettingsPatch({ reward_enabled: !targetDevice.rewardEnabled });
-    },
     toggleToday: async (deviceId?: string) => {
       const issueToggle = async (allowRetry: boolean) => {
         const targetDevice = await resolveFreshLiveDevice(deviceId);

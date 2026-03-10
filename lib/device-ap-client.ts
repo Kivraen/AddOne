@@ -1,9 +1,11 @@
 import {
   ApProvisioningRequest,
+  DeviceApNetworkScanResponse,
   DeviceApProvisioningInfo,
   DeviceApProvisioningResponse,
+  DeviceApScannedNetwork,
 } from "@/types/addone";
-import { buildDeviceApInfoUrl } from "@/lib/ap-provisioning";
+import { buildDeviceApInfoUrl, buildDeviceApNetworksUrl } from "@/lib/ap-provisioning";
 import { runtimeConfig } from "@/lib/env";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,12 +105,43 @@ function mapProvisioningResponse(data: unknown): DeviceApProvisioningResponse {
   };
 }
 
+function mapScannedNetwork(data: unknown): DeviceApScannedNetwork {
+  if (!isRecord(data) || typeof data.ssid !== "string" || data.ssid.trim().length === 0) {
+    throw new Error("The AddOne AP returned an invalid Wi-Fi network entry.");
+  }
+
+  return {
+    rssi: typeof data.rssi === "number" ? data.rssi : null,
+    secure: typeof data.secure === "boolean" ? data.secure : true,
+    ssid: data.ssid,
+  };
+}
+
+function mapNetworkScanResponse(data: unknown): DeviceApNetworkScanResponse {
+  if (!isRecord(data) || data.schema_version !== 1 || !Array.isArray(data.networks)) {
+    throw new Error("The AddOne AP returned an invalid Wi-Fi scan response.");
+  }
+
+  return {
+    networks: data.networks.map(mapScannedNetwork),
+    schema_version: 1,
+  };
+}
+
 export async function fetchDeviceApProvisioningInfo() {
   const data = await fetchDeviceJson<unknown>(buildDeviceApInfoUrl(), {
     method: "GET",
   });
 
   return mapProvisioningInfo(data);
+}
+
+export async function fetchDeviceApNetworks() {
+  const data = await fetchDeviceJson<unknown>(buildDeviceApNetworksUrl(), {
+    method: "GET",
+  });
+
+  return mapNetworkScanResponse(data);
 }
 
 export async function submitDeviceApProvisioning(request: ApProvisioningRequest) {

@@ -8,6 +8,12 @@ export type DeviceOnboardingStatus = "awaiting_ap" | "awaiting_cloud" | "claimed
 export type DeviceApProvisioningState = "ready" | "busy" | "provisioned";
 export type DeviceApProvisioningNextStep = "connect_to_cloud" | "retry";
 
+export interface DeviceApScannedNetwork {
+  rssi: number | null;
+  secure: boolean;
+  ssid: string;
+}
+
 export interface BoardPalette {
   id: string;
   name: string;
@@ -48,7 +54,6 @@ export interface AddOneDevice {
   reminderEnabled: boolean;
   reminderTime: string;
   firmwareVersion: string;
-  sharedViewers: number;
   days: boolean[][];
   dateGrid?: string[][];
   today: TodayPointer;
@@ -153,6 +158,11 @@ export interface DeviceApProvisioningResponse {
   message?: string | null;
   next_step: DeviceApProvisioningNextStep;
   reboot_required: boolean;
+  schema_version: 1;
+}
+
+export interface DeviceApNetworkScanResponse {
+  networks: DeviceApScannedNetwork[];
   schema_version: 1;
 }
 

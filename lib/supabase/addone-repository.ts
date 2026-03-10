@@ -258,9 +258,8 @@ function mapDeviceRowToAppDevice(input: {
   device: DeviceRow;
   membership: MembershipWithDevice;
   snapshot?: RuntimeSnapshotRow | null;
-  sharedViewers: number;
 }): AddOneDevice {
-  const { currentUserName, device, membership, sharedViewers, snapshot } = input;
+  const { currentUserName, device, membership, snapshot } = input;
   const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
   const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
   const fallbackFrame = buildBoardFrame(device);
@@ -291,7 +290,6 @@ function mapDeviceRowToAppDevice(input: {
     reminderEnabled: membership.reminder_enabled,
     reminderTime: stripSeconds(membership.reminder_time, "19:30"),
     firmwareVersion: device.firmware_version,
-    sharedViewers,
     days,
     dateGrid,
     today: {
@@ -438,28 +436,9 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     return [] as AddOneDevice[];
   }
 
-  const [snapshots, viewerRows] = await Promise.all([
-    fetchLatestRuntimeSnapshots(deviceIds),
-    supabase
-      .from("device_memberships")
-      .select("device_id, user_id")
-      .in("device_id", deviceIds)
-      .eq("role", "viewer")
-      .eq("status", "approved"),
-  ]);
-
-  const viewerData = assertData(
-    viewerRows.error,
-    (viewerRows.data ?? []) as Array<Pick<MembershipRow, "device_id" | "user_id">>,
-    "Failed to load viewer counts.",
-  );
+  const snapshots = await fetchLatestRuntimeSnapshots(deviceIds);
   const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
     accumulator[row.device_id] ??= row;
-    return accumulator;
-  }, {});
-
-  const viewerCountByDevice = viewerData.reduce<Record<string, number>>((accumulator, row) => {
-    accumulator[row.device_id] = (accumulator[row.device_id] ?? 0) + 1;
     return accumulator;
   }, {});
 
@@ -469,7 +448,6 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
       device: membership.device as DeviceRow,
       membership,
       snapshot: snapshotByDevice[membership.device_id] ?? null,
-      sharedViewers: viewerCountByDevice[membership.device_id] ?? 0,
     }),
   );
 }

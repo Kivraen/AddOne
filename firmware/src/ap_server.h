@@ -17,7 +17,9 @@ public:
   void stop();
 
 private:
+  String buildNetworksJson_();
   void handleInfo_();
+  void handleNetworks_();
   void handleRoot_();
   void handleSession_();
   void resetProvisioningAttempt_();

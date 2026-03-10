@@ -1,28 +1,22 @@
 import { create } from "zustand";
 
 import { boardPalettes } from "@/constants/palettes";
-import { initialDevices, initialSharedBoards } from "@/lib/mock-data";
+import { initialDevices } from "@/lib/mock-data";
 import { toggleHistoryCell, toggleToday } from "@/lib/board";
-import { AddOneDevice, BoardPalette, RewardTrigger, RewardType, SharedBoard } from "@/types/addone";
+import { AddOneDevice, BoardPalette } from "@/types/addone";
 
 interface AddOneState {
   activeDeviceId: string;
   devices: AddOneDevice[];
-  sharedBoards: SharedBoard[];
   activeDevice: () => AddOneDevice;
   activePalette: () => BoardPalette;
   setActiveDevice: (deviceId: string) => void;
   toggleToday: () => void;
   toggleHistoryCell: (row: number, col: number) => void;
-  toggleReward: () => void;
-  setRewardType: (value: RewardType) => void;
-  setRewardTrigger: (value: RewardTrigger) => void;
-  setHabitName: (value: string) => void;
   setPalette: (paletteId: string) => void;
   setResetTime: (value: string) => void;
   setTimezone: (value: string) => void;
   setWeeklyTarget: (value: number) => void;
-  setReminderEnabled: (value: boolean) => void;
   setAutoBrightness: (value: boolean) => void;
 }
 
@@ -37,7 +31,6 @@ function nextResetLabel(resetTime: string) {
 export const useAddOneStore = create<AddOneState>((set, get) => ({
   activeDeviceId: initialDevices[0].id,
   devices: initialDevices,
-  sharedBoards: initialSharedBoards,
   activeDevice: () => get().devices.find((device) => device.id === get().activeDeviceId) ?? get().devices[0],
   activePalette: () => {
     const device = get().activeDevice();
@@ -58,34 +51,6 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
   toggleHistoryCell: (row, col) =>
     set((state) => ({
       devices: updateDevice(state.devices, state.activeDeviceId, (device) => toggleHistoryCell(device, row, col)),
-    })),
-  toggleReward: () =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
-        ...device,
-        rewardEnabled: !device.rewardEnabled,
-      })),
-    })),
-  setRewardType: (value) =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
-        ...device,
-        rewardType: value,
-      })),
-    })),
-  setRewardTrigger: (value) =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
-        ...device,
-        rewardTrigger: value,
-      })),
-    })),
-  setHabitName: (value) =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
-        ...device,
-        name: value.trim() || device.name,
-      })),
     })),
   setPalette: (paletteId) =>
     set((state) => ({
@@ -114,13 +79,6 @@ export const useAddOneStore = create<AddOneState>((set, get) => ({
       devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
         ...device,
         weeklyTarget: value,
-      })),
-    })),
-  setReminderEnabled: (value) =>
-    set((state) => ({
-      devices: updateDevice(state.devices, state.activeDeviceId, (device) => ({
-        ...device,
-        reminderEnabled: value,
       })),
     })),
   setAutoBrightness: (value) =>
