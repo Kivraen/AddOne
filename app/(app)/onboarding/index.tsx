@@ -6,14 +6,13 @@ import { ScreenFrame } from "@/components/layout/screen-frame";
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { GlassCard } from "@/components/ui/glass-card";
 import { IconButton } from "@/components/ui/icon-button";
+import { WifiNetworkPicker } from "@/components/ui/wifi-network-picker";
 import { theme } from "@/constants/theme";
 import { useApProvisioning } from "@/hooks/use-ap-provisioning";
-import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { useDeviceAp } from "@/hooks/use-device-ap";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { withAlpha } from "@/lib/color";
-import { DeviceOnboardingSession } from "@/types/addone";
 
 function currentPhoneTimezone() {
   try {
@@ -28,63 +27,10 @@ function formatExpirationLabel(expiresAt: string) {
   const diffMinutes = Math.max(0, Math.ceil(diffMs / 60000));
 
   if (diffMinutes <= 1) {
-    return "Expires in under a minute";
+    return "Session expires in under a minute";
   }
 
-  return `Expires in ${diffMinutes} minutes`;
-}
-
-function statusLabel(session: DeviceOnboardingSession | null) {
-  if (!session) {
-    return "Not started";
-  }
-
-  if (session.isExpired || session.status === "expired") {
-    return "Expired";
-  }
-
-  switch (session.status) {
-    case "awaiting_ap":
-      return "Ready for Wi-Fi";
-    case "awaiting_cloud":
-      return "Connecting";
-    case "claimed":
-      return "Connected";
-    case "cancelled":
-      return "Cancelled";
-    case "failed":
-      return "Failed";
-    default:
-      return session.status;
-  }
-}
-
-function statusTone(session: DeviceOnboardingSession | null) {
-  if (!session) {
-    return {
-      bg: withAlpha(theme.colors.textPrimary, 0.08),
-      fg: theme.colors.textSecondary,
-    };
-  }
-
-  if (session.isExpired || session.status === "expired" || session.status === "failed") {
-    return {
-      bg: withAlpha(theme.colors.statusErrorMuted, 0.18),
-      fg: theme.colors.statusErrorMuted,
-    };
-  }
-
-  if (session.status === "claimed") {
-    return {
-      bg: withAlpha(theme.colors.accentAmber, 0.18),
-      fg: theme.colors.textPrimary,
-    };
-  }
-
-  return {
-    bg: withAlpha(theme.colors.textPrimary, 0.08),
-    fg: theme.colors.textPrimary,
-  };
+  return `Session expires in ${diffMinutes} minutes`;
 }
 
 function ActionButton({
@@ -143,9 +89,83 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
+function StepHeader({
+  step,
+  title,
+}: {
+  step: number;
+  title: string;
+}) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textTransform: "uppercase",
+        }}
+      >
+        Step {step} of 4
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.title.fontFamily,
+          fontSize: theme.typography.title.fontSize,
+          lineHeight: theme.typography.title.lineHeight,
+        }}
+      >
+        {title}
+      </Text>
+    </View>
+  );
+}
+
+function TextField({
+  disabled = false,
+  onChangeText,
+  placeholder,
+  secureTextEntry = false,
+  value,
+}: {
+  disabled?: boolean;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  secureTextEntry?: boolean;
+  value: string;
+}) {
+  return (
+    <TextInput
+      autoCapitalize="none"
+      autoCorrect={false}
+      editable={!disabled}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={theme.colors.textTertiary}
+      secureTextEntry={secureTextEntry}
+      style={{
+        borderRadius: theme.radius.sheet,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+        color: theme.colors.textPrimary,
+        fontFamily: theme.typography.body.fontFamily,
+        fontSize: theme.typography.body.fontSize,
+        lineHeight: theme.typography.body.lineHeight,
+        opacity: disabled ? 0.6 : 1,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+      }}
+      value={value}
+    />
+  );
+}
+
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { mode } = useAuth();
   const { activeDevice } = useDevices();
   const { applySettingsDraft, isSavingSettings } = useDeviceActions();
   const {
@@ -153,7 +173,6 @@ export default function OnboardingScreen() {
     createSession,
     hasClaimToken,
     isBusy,
-    isLoading,
     isPolling,
     markWaiting,
     refreshSession,
@@ -186,6 +205,7 @@ export default function OnboardingScreen() {
     submitProvisioning,
   } = useDeviceAp();
 
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [weeklyTarget, setWeeklyTarget] = useState(activeDevice?.weeklyTarget ?? 5);
@@ -202,15 +222,23 @@ export default function OnboardingScreen() {
     setPaletteId(activeDevice.paletteId);
   }, [activeDevice, session?.status]);
 
-  const currentStatusTone = useMemo(() => statusTone(session), [session]);
   const sessionReadyForAp = session?.status === "awaiting_ap" && !session.isExpired && hasClaimToken;
   const claimedDeviceReady = session?.status === "claimed" && !!activeDevice && activeDevice.id === session.deviceId;
+  const sortedNetworks = useMemo(
+    () =>
+      [...networks].sort((left, right) => {
+        const leftRssi = left.rssi ?? -999;
+        const rightRssi = right.rssi ?? -999;
+        return rightRssi - leftRssi;
+      }),
+    [networks],
+  );
   const onboardingPatch =
     claimedDeviceReady && activeDevice
       ? {
-          palette_preset: paletteId !== activeDevice.paletteId ? paletteId : undefined,
-          timezone: timezoneInput.trim() !== activeDevice.timezone ? timezoneInput.trim() : undefined,
-          weekly_target: weeklyTarget !== activeDevice.weeklyTarget ? weeklyTarget : undefined,
+          ...(paletteId !== activeDevice.paletteId ? { palette_preset: paletteId } : {}),
+          ...(timezoneInput.trim() !== activeDevice.timezone ? { timezone: timezoneInput.trim() } : {}),
+          ...(weeklyTarget !== activeDevice.weeklyTarget ? { weekly_target: weeklyTarget } : {}),
         }
       : null;
 
@@ -230,10 +258,11 @@ export default function OnboardingScreen() {
       setSetupError(null);
       setSetupMessage(null);
       const info = await checkAp();
-      await scanNetworks();
-      setSetupMessage(
-        `Connected to ${info.device_ap_ssid}. Choose your Wi-Fi network, then send the password to the device.`,
-      );
+      const response = await scanNetworks();
+      if (response.networks.length > 0) {
+        setPickerVisible(true);
+      }
+      setSetupMessage(`Connected to ${info.device_ap_ssid}. Choose your Wi‑Fi and continue.`);
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Failed to reach the AddOne AP.");
     }
@@ -242,7 +271,7 @@ export default function OnboardingScreen() {
   async function handleProvisionDeviceAp() {
     if (!session || !preparedRequest) {
       const firstError = Object.values(validation.errors)[0];
-      setSetupError(firstError ?? "The Wi-Fi handoff is incomplete.");
+      setSetupError(firstError ?? "The Wi‑Fi details are incomplete.");
       return;
     }
 
@@ -251,14 +280,14 @@ export default function OnboardingScreen() {
       setSetupMessage(null);
       const response = await submitProvisioning(preparedRequest);
       if (!response.accepted) {
-        setSetupError(response.message ?? "The AddOne AP rejected the Wi-Fi payload.");
+        setSetupError(response.message ?? "The device rejected the Wi‑Fi payload.");
         return;
       }
 
       await markWaiting(session.id);
-      setSetupMessage("Wi-Fi accepted. Waiting for the device to connect and publish its first live snapshot.");
+      setSetupMessage("Connecting the device to your Wi‑Fi…");
     } catch (error) {
-      setSetupError(error instanceof Error ? error.message : "Failed to continue onboarding.");
+      setSetupError(error instanceof Error ? error.message : "Failed to continue setup.");
     }
   }
 
@@ -270,19 +299,28 @@ export default function OnboardingScreen() {
     try {
       setSetupError(null);
       setSetupMessage(null);
-      await applySettingsDraft(onboardingPatch ?? {}, activeDevice.id);
+      if (onboardingPatch && Object.keys(onboardingPatch).length > 0) {
+        await applySettingsDraft(onboardingPatch, activeDevice.id);
+      }
       router.replace("/");
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Failed to finish setup.");
     }
   }
 
-  const networkListVisible = sessionReadyForAp && (isScanningNetworks || networks.length > 0 || !!networksError);
+  let step = 1;
+  if (sessionReadyForAp) {
+    step = 2;
+  } else if (session?.status === "awaiting_cloud") {
+    step = 3;
+  } else if (session?.status === "claimed") {
+    step = 4;
+  }
 
   return (
     <ScreenFrame
       header={
-        <View style={{ alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12, paddingBottom: 20 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 20 }}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text
               style={{
@@ -294,7 +332,7 @@ export default function OnboardingScreen() {
                 textTransform: "uppercase",
               }}
             >
-              Nearby setup
+              Setup
             </Text>
             <Text
               style={{
@@ -304,7 +342,7 @@ export default function OnboardingScreen() {
                 lineHeight: theme.typography.display.lineHeight,
               }}
             >
-              First boot
+              AddOne
             </Text>
           </View>
           <IconButton icon="close-outline" onPress={() => router.back()} />
@@ -312,62 +350,278 @@ export default function OnboardingScreen() {
       }
       scroll
     >
-      <View style={{ gap: 14 }}>
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-            }}
-          >
-            Setup session
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            Join the device Wi-Fi, choose your network, let the device connect, then finish the few settings that matter.
-          </Text>
+      <WifiNetworkPicker
+        isScanning={isScanningNetworks}
+        networks={sortedNetworks}
+        onClose={() => setPickerVisible(false)}
+        onSelect={(network) => {
+          setWifiSsid(network.ssid);
+          setSetupError(null);
+          setSetupMessage(null);
+          setPickerVisible(false);
+        }}
+        selectedSsid={draft.wifiSsid}
+        visible={pickerVisible}
+      />
 
-          <View
-            style={{
-              alignSelf: "flex-start",
-              borderRadius: theme.radius.pill,
-              backgroundColor: currentStatusTone.bg,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-            }}
-          >
-            <Text
-              style={{
-                color: currentStatusTone.fg,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              {statusLabel(session)}
-            </Text>
-          </View>
+      <View style={{ gap: 16 }}>
+        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
+          <StepHeader
+            step={step}
+            title={
+              step === 1
+                ? "Start setup"
+                : step === 2
+                  ? "Join AddOne Wi‑Fi"
+                  : step === 3
+                    ? "Connect the device"
+                    : "Finish setup"
+            }
+          />
+
+          {step === 1 ? (
+            <>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Start a local setup session, join the device Wi‑Fi, then connect AddOne to your home network.
+              </Text>
+              <ActionButton disabled={isBusy} label={isBusy ? "Starting…" : "Start setup"} onPress={() => void handleStartSession()} />
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                In system Wi‑Fi settings, join `AddOne-XXXX`. Then return here, pick your home network, and enter the password.
+              </Text>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <ActionButton
+                  disabled={isCheckingAp || isScanningNetworks}
+                  label={isCheckingAp || isScanningNetworks ? "Checking…" : "Check AddOne Wi‑Fi"}
+                  onPress={() => void handleCheckDeviceAp()}
+                  secondary
+                />
+                <ActionButton
+                  disabled={isSubmittingProvisioning || !preparedRequest}
+                  label={isSubmittingProvisioning ? "Sending…" : "Continue"}
+                  onPress={() => void handleProvisionDeviceAp()}
+                />
+              </View>
+
+              <View style={{ gap: 10 }}>
+                <FieldLabel>Wi‑Fi network</FieldLabel>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <TextField
+                      disabled={isSubmittingProvisioning}
+                      onChangeText={(value) => {
+                        setWifiSsid(value);
+                        setSetupError(null);
+                        setSetupMessage(null);
+                      }}
+                      placeholder="Choose or type the network"
+                      value={draft.wifiSsid}
+                    />
+                  </View>
+                  <ActionButton
+                    disabled={isSubmittingProvisioning || isCheckingAp || isScanningNetworks}
+                    label={isScanningNetworks ? "Scanning…" : "Choose"}
+                    onPress={() => {
+                      if (sortedNetworks.length > 0) {
+                        setPickerVisible(true);
+                        return;
+                      }
+
+                      void handleCheckDeviceAp();
+                    }}
+                    secondary
+                  />
+                </View>
+                {validation.errors.wifiSsid ? (
+                  <Text
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    {validation.errors.wifiSsid}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={{ gap: 10 }}>
+                <FieldLabel>Password</FieldLabel>
+                <TextField
+                  disabled={isSubmittingProvisioning}
+                  onChangeText={(value) => {
+                    setWifiPassword(value);
+                    setSetupError(null);
+                    setSetupMessage(null);
+                  }}
+                  placeholder="Enter the Wi‑Fi password"
+                  secureTextEntry
+                  value={draft.wifiPassword}
+                />
+                {validation.errors.wifiPassword ? (
+                  <Text
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    {validation.errors.wifiPassword}
+                  </Text>
+                ) : null}
+              </View>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                The device is joining Wi‑Fi, claiming itself in cloud, and publishing its first live snapshot.
+              </Text>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                <ActivityIndicator color={theme.colors.textPrimary} />
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  Waiting for the device…
+                </Text>
+              </View>
+              <ActionButton
+                disabled={isPolling}
+                label={isPolling ? "Refreshing…" : "Refresh"}
+                onPress={() => void refreshSession()}
+                secondary
+              />
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <>
+              {!claimedDeviceReady || !activeDevice ? (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  Waiting for the first live device snapshot…
+                </Text>
+              ) : (
+                <>
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    Set the few things that matter now. Reset time stays at midnight and brightness stays on auto-adjust.
+                  </Text>
+
+                  <View style={{ gap: 10 }}>
+                    <FieldLabel>Weekly target</FieldLabel>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
+                        <ChoicePill
+                          key={`weekly-target-${target}`}
+                          disabled={isSavingSettings}
+                          label={String(target)}
+                          onPress={() => setWeeklyTarget(target)}
+                          selected={weeklyTarget === target}
+                        />
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={{ gap: 10 }}>
+                    <FieldLabel>Timezone</FieldLabel>
+                    <TextField onChangeText={setTimezoneInput} placeholder="America/Los_Angeles" value={timezoneInput} />
+                    <View style={{ alignItems: "flex-start" }}>
+                      <ActionButton
+                        disabled={timezoneInput === currentPhoneTimezone()}
+                        label="Use phone timezone"
+                        onPress={() => setTimezoneInput(currentPhoneTimezone())}
+                        secondary
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ gap: 10 }}>
+                    <FieldLabel>Palette</FieldLabel>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {[
+                        { id: "classic", label: "Classic" },
+                        { id: "amber", label: "Amber" },
+                        { id: "ice", label: "Ice" },
+                        { id: "rose", label: "Rose" },
+                      ].map((palette) => (
+                        <ChoicePill
+                          key={palette.id}
+                          disabled={isSavingSettings}
+                          label={palette.label}
+                          onPress={() => setPaletteId(palette.id)}
+                          selected={paletteId === palette.id}
+                        />
+                      ))}
+                    </View>
+                  </View>
+
+                  <ActionButton
+                    disabled={isSavingSettings}
+                    label={isSavingSettings ? "Finishing…" : "Open my board"}
+                    onPress={() => void handleFinishSetup()}
+                  />
+                </>
+              )}
+            </>
+          ) : null}
 
           {session ? (
             <Text
               style={{
-                color: theme.colors.textSecondary,
+                color: theme.colors.textTertiary,
                 fontFamily: theme.typography.body.fontFamily,
                 fontSize: theme.typography.body.fontSize,
                 lineHeight: theme.typography.body.lineHeight,
               }}
             >
-              Session prefix: {session.claimTokenPrefix} · {formatExpirationLabel(session.expiresAt)}
+              {formatExpirationLabel(session.expiresAt)}
             </Text>
           ) : null}
 
@@ -384,7 +638,20 @@ export default function OnboardingScreen() {
             </Text>
           ) : null}
 
-          {setupError ? (
+          {apInfo ? (
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              Device AP: {apInfo.device_ap_ssid}
+            </Text>
+          ) : null}
+
+          {setupError || apInfoError || networksError || provisioningError || provisioningResponse?.message ? (
             <Text
               style={{
                 color: theme.colors.statusErrorMuted,
@@ -393,383 +660,10 @@ export default function OnboardingScreen() {
                 lineHeight: theme.typography.body.lineHeight,
               }}
             >
-              {setupError}
+              {setupError ?? apInfoError ?? networksError ?? provisioningError ?? provisioningResponse?.message}
             </Text>
-          ) : null}
-
-          {!session || session.isExpired || session.status === "cancelled" || session.status === "failed" || (session.status === "awaiting_ap" && !hasClaimToken) ? (
-            <ActionButton
-              disabled={isBusy}
-              label={isBusy ? "Starting…" : "Start setup"}
-              onPress={() => {
-                void handleStartSession();
-              }}
-            />
           ) : null}
         </GlassCard>
-
-        {sessionReadyForAp ? (
-          <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.title.fontFamily,
-                fontSize: theme.typography.title.fontSize,
-                lineHeight: theme.typography.title.lineHeight,
-              }}
-            >
-              Connect Wi-Fi
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Join the device network in system Wi-Fi settings first, then return here to scan and choose your home network.
-            </Text>
-
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <ActionButton
-                disabled={isCheckingAp || isScanningNetworks}
-                label={isCheckingAp || isScanningNetworks ? "Scanning…" : "Check device AP"}
-                onPress={() => {
-                  void handleCheckDeviceAp();
-                }}
-                secondary
-              />
-              <ActionButton
-                disabled={isSubmittingProvisioning || !preparedRequest}
-                label={isSubmittingProvisioning ? "Sending…" : "Send Wi-Fi"}
-                onPress={() => {
-                  void handleProvisionDeviceAp();
-                }}
-              />
-            </View>
-
-            {apInfo ? (
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Device AP: {apInfo.device_ap_ssid}
-                {apInfo.firmware_version ? ` · firmware ${apInfo.firmware_version}` : ""}
-              </Text>
-            ) : null}
-
-            {apInfoError ? (
-              <Text
-                style={{
-                  color: theme.colors.statusErrorMuted,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                {apInfoError}
-              </Text>
-            ) : null}
-
-            {networkListVisible ? (
-              <View style={{ gap: 10 }}>
-                <FieldLabel>Nearby Wi-Fi</FieldLabel>
-                {networksError ? (
-                  <Text
-                    style={{
-                      color: theme.colors.statusErrorMuted,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    {networksError}
-                  </Text>
-                ) : null}
-                {isScanningNetworks ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {networks.map((network) => (
-                    <ChoicePill
-                      key={network.ssid}
-                      disabled={isSubmittingProvisioning}
-                      label={network.secure ? network.ssid : `${network.ssid} (open)`}
-                      onPress={() => {
-                        setWifiSsid(network.ssid);
-                        setSetupError(null);
-                        setSetupMessage(null);
-                      }}
-                      selected={draft.wifiSsid === network.ssid}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            <View style={{ gap: 10 }}>
-              <FieldLabel>Network name</FieldLabel>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isSubmittingProvisioning}
-                onChangeText={(value) => {
-                  setWifiSsid(value);
-                  setSetupError(null);
-                  setSetupMessage(null);
-                }}
-                placeholder="Choose from the list or enter a hidden network"
-                placeholderTextColor={theme.colors.textTertiary}
-                style={{
-                  borderRadius: theme.radius.sheet,
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                  backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                }}
-                value={draft.wifiSsid}
-              />
-              {validation.errors.wifiSsid ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {validation.errors.wifiSsid}
-                </Text>
-              ) : null}
-            </View>
-
-            <View style={{ gap: 10 }}>
-              <FieldLabel>Password</FieldLabel>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isSubmittingProvisioning}
-                onChangeText={(value) => {
-                  setWifiPassword(value);
-                  setSetupError(null);
-                  setSetupMessage(null);
-                }}
-                placeholder="Enter the Wi-Fi password"
-                placeholderTextColor={theme.colors.textTertiary}
-                secureTextEntry
-                style={{
-                  borderRadius: theme.radius.sheet,
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                  backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                }}
-                value={draft.wifiPassword}
-              />
-              {validation.errors.wifiPassword ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {validation.errors.wifiPassword}
-                </Text>
-              ) : null}
-              {provisioningError ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {provisioningError}
-                </Text>
-              ) : null}
-              {provisioningResponse?.message ? (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {provisioningResponse.message}
-                </Text>
-              ) : null}
-            </View>
-          </GlassCard>
-        ) : null}
-
-        {session?.status === "awaiting_cloud" ? (
-          <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.title.fontFamily,
-                fontSize: theme.typography.title.fontSize,
-                lineHeight: theme.typography.title.lineHeight,
-              }}
-            >
-              Waiting for the device
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              The device is joining Wi-Fi, claiming itself in cloud, and publishing its first live snapshot.
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <ActionButton
-                disabled={isPolling}
-                label={isPolling ? "Refreshing…" : "Refresh"}
-                onPress={() => {
-                  void refreshSession();
-                }}
-                secondary
-              />
-            </View>
-          </GlassCard>
-        ) : null}
-
-        {session?.status === "claimed" ? (
-          <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.title.fontFamily,
-                fontSize: theme.typography.title.fontSize,
-                lineHeight: theme.typography.title.lineHeight,
-              }}
-            >
-              Finish setup
-            </Text>
-            {!claimedDeviceReady || !activeDevice ? (
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Waiting for the first live device snapshot…
-              </Text>
-            ) : (
-              <>
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  Set the few things that matter now. Reset time stays at midnight and brightness stays on auto-adjust by default.
-                </Text>
-
-                <View style={{ gap: 10 }}>
-                  <FieldLabel>Weekly target</FieldLabel>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
-                      <ChoicePill
-                        key={`weekly-target-${target}`}
-                        disabled={isSavingSettings}
-                        label={String(target)}
-                        onPress={() => setWeeklyTarget(target)}
-                        selected={weeklyTarget === target}
-                      />
-                    ))}
-                  </View>
-                </View>
-
-                <View style={{ gap: 10 }}>
-                  <FieldLabel>Timezone</FieldLabel>
-                  <TextInput
-                    autoCapitalize="none"
-                    editable={!isSavingSettings}
-                    onChangeText={setTimezoneInput}
-                    placeholder="America/Los_Angeles"
-                    placeholderTextColor={theme.colors.textTertiary}
-                    style={{
-                      borderRadius: theme.radius.sheet,
-                      borderWidth: 1,
-                      borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                      backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                      paddingHorizontal: 16,
-                      paddingVertical: 16,
-                    }}
-                    value={timezoneInput}
-                  />
-                </View>
-
-                <View style={{ gap: 10 }}>
-                  <FieldLabel>Board palette</FieldLabel>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {["classic", "amber", "ice", "rose"].map((option) => (
-                      <ChoicePill
-                        key={option}
-                        disabled={isSavingSettings}
-                        label={option.charAt(0).toUpperCase() + option.slice(1)}
-                        onPress={() => setPaletteId(option)}
-                        selected={paletteId === option}
-                      />
-                    ))}
-                  </View>
-                </View>
-
-                <ActionButton
-                  disabled={isSavingSettings}
-                  label={isSavingSettings ? "Applying…" : "Finish setup"}
-                  onPress={() => {
-                    void handleFinishSetup();
-                  }}
-                />
-              </>
-            )}
-          </GlassCard>
-        ) : null}
-
-        {mode === "demo" ? (
-          <GlassCard style={{ gap: 8, paddingHorizontal: 16, paddingVertical: 14 }}>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Demo mode skips real cloud/device ownership. Use cloud mode for the first-user build.
-            </Text>
-          </GlassCard>
-        ) : null}
       </View>
     </ScreenFrame>
   );

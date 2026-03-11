@@ -5,7 +5,6 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { theme } from "@/constants/theme";
-import { withAlpha } from "@/lib/color";
 
 interface ScreenFrameProps extends PropsWithChildren {
   header?: ReactNode;
@@ -31,7 +30,7 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
       <StatusBar style="light" />
       <View className="absolute inset-0">
         <LinearGradient
-          colors={[theme.colors.bgBase, theme.colors.bgSurface]}
+          colors={[theme.colors.bgBase, "#0B0B0B", theme.colors.bgSurface]}
           end={{ x: 0.5, y: 1 }}
           start={{ x: 0.5, y: 0 }}
           style={{ flex: 1 }}
@@ -40,24 +39,11 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
           pointerEvents="none"
           style={{
             position: "absolute",
-            right: -40,
-            top: 36,
-            height: 240,
-            width: 240,
-            borderRadius: 240,
-            backgroundColor: withAlpha(theme.colors.accentAmber, 0.09),
-          }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: -80,
-            bottom: 120,
-            height: 220,
-            width: 220,
-            borderRadius: 220,
-            backgroundColor: withAlpha(theme.colors.textPrimary, 0.035),
+            top: 0,
+            right: 0,
+            left: 0,
+            height: 180,
+            backgroundColor: "rgba(255,255,255,0.015)",
           }}
         />
       </View>

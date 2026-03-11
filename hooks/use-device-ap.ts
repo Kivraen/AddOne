@@ -27,6 +27,9 @@ export function useDeviceAp() {
     networksError: scanNetworksMutation.error instanceof Error ? scanNetworksMutation.error.message : null,
     provisioningError: provisioningMutation.error instanceof Error ? provisioningMutation.error.message : null,
     provisioningResponse: provisioningMutation.data ?? null,
+    resetApInfo: infoMutation.reset,
+    resetNetworks: scanNetworksMutation.reset,
+    resetProvisioning: provisioningMutation.reset,
     scanNetworks: scanNetworksMutation.mutateAsync,
     submitProvisioning: provisioningMutation.mutateAsync,
   };

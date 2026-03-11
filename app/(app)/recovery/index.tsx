@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 
 import { ScreenFrame } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { IconButton } from "@/components/ui/icon-button";
+import { WifiNetworkPicker, authModeLabel } from "@/components/ui/wifi-network-picker";
 import { theme } from "@/constants/theme";
 import { useApProvisioning } from "@/hooks/use-ap-provisioning";
 import { useDeviceAp } from "@/hooks/use-device-ap";
@@ -13,7 +14,7 @@ import { useDevices } from "@/hooks/use-devices";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { describeProvisioningAttemptDebug } from "@/lib/ap-provisioning";
 import { withAlpha } from "@/lib/color";
-import { DeviceApScannedNetwork, DeviceOnboardingSession } from "@/types/addone";
+import { DeviceOnboardingSession } from "@/types/addone";
 
 function currentPhoneTimezone() {
   try {
@@ -30,19 +31,23 @@ function formatExpirationLabel(expiresAt: string) {
   const diffMinutes = Math.max(0, Math.ceil(diffMs / 60000));
 
   if (diffMinutes <= 1) {
-    return "Expires in under a minute";
+    return "Session expires in under a minute";
   }
 
-  return `Expires in ${diffMinutes} minutes`;
+  return `Session expires in ${diffMinutes} minutes`;
 }
 
-function statusLabel(session: DeviceOnboardingSession | null) {
+function statusLabel(session: DeviceOnboardingSession | null, apReady: boolean) {
   if (!session) {
     return "Not started";
   }
 
   if (session.isExpired || session.status === "expired") {
     return "Expired";
+  }
+
+  if (session.status === "awaiting_cloud" && apReady) {
+    return "Ready for Wi‑Fi";
   }
 
   switch (session.status) {
@@ -145,116 +150,38 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
-function signalLabel(rssi: number | null) {
-  if (rssi === null || !Number.isFinite(rssi)) {
-    return "Unknown signal";
-  }
-
-  if (rssi >= -55) {
-    return "Strong";
-  }
-
-  if (rssi >= -67) {
-    return "Good";
-  }
-
-  if (rssi >= -75) {
-    return "Fair";
-  }
-
-  return "Weak";
-}
-
-function authModeLabel(authMode: string | null | undefined, secure: boolean) {
-  if (!secure) {
-    return "Open network";
-  }
-
-  switch (authMode) {
-    case "wpa":
-      return "WPA";
-    case "wpa2":
-      return "WPA2";
-    case "wpa_wpa2":
-      return "WPA/WPA2";
-    case "wpa3":
-      return "WPA3";
-    case "wpa2_wpa3":
-      return "WPA2/WPA3";
-    case "enterprise":
-      return "Enterprise";
-    case "wep":
-      return "WEP";
-    default:
-      return "Password required";
-  }
-}
-
-function NetworkRow({
-  disabled = false,
-  network,
-  onPress,
-  selected,
+function StepHeader({
+  step,
+  title,
 }: {
-  disabled?: boolean;
-  network: DeviceApScannedNetwork;
-  onPress: () => void;
-  selected: boolean;
+  step: number;
+  title: string;
 }) {
   return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        borderRadius: theme.radius.card,
-        borderWidth: 1,
-        borderColor: selected ? withAlpha(theme.colors.accentAmber, 0.5) : withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: selected ? withAlpha(theme.colors.accentAmber, 0.14) : withAlpha(theme.colors.bgBase, 0.76),
-        opacity: disabled ? 0.5 : 1,
-        paddingHorizontal: 14,
-        paddingVertical: 14,
-      }}
-    >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.label.fontFamily,
-              fontSize: theme.typography.label.fontSize,
-              lineHeight: theme.typography.label.lineHeight,
-            }}
-          >
-            {network.ssid}
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            {authModeLabel(network.authMode, network.secure)} · {signalLabel(network.rssi)}
-          </Text>
-        </View>
-        {selected ? (
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.micro.fontFamily,
-              fontSize: theme.typography.micro.fontSize,
-              lineHeight: theme.typography.micro.lineHeight,
-              letterSpacing: theme.typography.micro.letterSpacing,
-              textTransform: "uppercase",
-            }}
-          >
-            Selected
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+    <View style={{ gap: 8 }}>
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textTransform: "uppercase",
+        }}
+      >
+        Step {step} of 3
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.title.fontFamily,
+          fontSize: theme.typography.title.fontSize,
+          lineHeight: theme.typography.title.lineHeight,
+        }}
+      >
+        {title}
+      </Text>
+    </View>
   );
 }
 
@@ -294,16 +221,22 @@ export default function RecoveryScreen() {
     networksError,
     provisioningError,
     provisioningResponse,
+    resetApInfo,
+    resetNetworks,
+    resetProvisioning,
     scanNetworks,
     submitProvisioning,
   } = useDeviceAp();
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [manualWifiEntry, setManualWifiEntry] = useState(false);
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [waitingSinceMs, setWaitingSinceMs] = useState<number | null>(null);
   const [waitingWarning, setWaitingWarning] = useState<string | null>(null);
   const [hasRedirectedAfterRecovery, setHasRedirectedAfterRecovery] = useState(false);
+  const [hasValidatedAp, setHasValidatedAp] = useState(false);
+  const [isAwaitingReconnectLocally, setIsAwaitingReconnectLocally] = useState(false);
 
   const liveSession = session;
   const recoveryCompleted = session?.status === "claimed";
@@ -335,11 +268,39 @@ export default function RecoveryScreen() {
     [networks],
   );
   const selectedNetwork = sortedNetworks.find((network) => network.ssid === draft.wifiSsid) ?? null;
-  const isAwaitingReconnect = liveSession?.status === "awaiting_cloud" && !waitingWarning;
-  const displayStatusLabel =
-    liveSession?.status === "awaiting_cloud" && apInfo?.provisioning_state === "ready"
-      ? "Ready for Wi‑Fi"
-      : statusLabel(liveSession);
+  const isAwaitingReconnect =
+    (liveSession?.status === "awaiting_cloud" || isAwaitingReconnectLocally) && !waitingWarning && !recoveryCompleted;
+  const apReady = apInfo?.provisioning_state === "ready";
+  const deviceApSsid = apInfo?.device_ap_ssid ?? "AddOne-XXXX";
+  const showWifiForm = showDraftForm && hasValidatedAp;
+  const visibleRecoveryError =
+    waitingWarning ||
+    apInfo?.last_failure_reason ||
+    statusError ||
+    (showWifiForm || isAwaitingReconnect ? null : apInfoError) ||
+    networksError ||
+    provisioningError ||
+    (provisioningResponse && !provisioningResponse.accepted ? provisioningResponse.message : null);
+
+  useEffect(() => {
+    if (!showDraftForm) {
+      setHasValidatedAp(false);
+      setManualWifiEntry(false);
+      setIsAwaitingReconnectLocally(false);
+    }
+  }, [showDraftForm]);
+
+  useEffect(() => {
+    if (showWifiForm || isAwaitingReconnect) {
+      resetApInfo();
+    }
+  }, [isAwaitingReconnect, resetApInfo, showWifiForm]);
+
+  useEffect(() => {
+    if (liveSession?.status === "claimed" || liveSession?.status === "awaiting_ap") {
+      setIsAwaitingReconnectLocally(false);
+    }
+  }, [liveSession?.status]);
 
   useEffect(() => {
     if (!recoveryCompleted || hasRedirectedAfterRecovery) {
@@ -347,7 +308,6 @@ export default function RecoveryScreen() {
     }
 
     setHasRedirectedAfterRecovery(true);
-    setStatusMessage("Reconnected. Returning to your board…");
     router.replace("/");
 
     const timeoutId = setTimeout(() => {
@@ -358,7 +318,7 @@ export default function RecoveryScreen() {
   }, [clearLocalOnboardingSession, hasRedirectedAfterRecovery, recoveryCompleted, router]);
 
   useEffect(() => {
-    if (liveSession?.status !== "awaiting_cloud") {
+    if (!isAwaitingReconnect) {
       setWaitingSinceMs(null);
       setWaitingWarning(null);
       return;
@@ -374,16 +334,18 @@ export default function RecoveryScreen() {
     }, Math.max(0, WIFI_RECONNECT_WARNING_MS - (Date.now() - startedAt)));
 
     return () => clearTimeout(timeoutId);
-  }, [liveSession?.status, waitingSinceMs]);
+  }, [isAwaitingReconnect, waitingSinceMs]);
 
   useEffect(() => {
-    if (liveSession?.status !== "awaiting_cloud" || waitingWarning) {
+    if (!isAwaitingReconnect || waitingWarning) {
       return;
     }
 
     let active = true;
     const intervalId = setInterval(() => {
       void (async () => {
+        void refreshSession();
+
         try {
           const info = await checkAp();
           if (!active) {
@@ -402,12 +364,8 @@ export default function RecoveryScreen() {
             return;
           }
 
-          if (info.provisioning_state === "provisioned") {
-            void refreshSession();
-          }
         } catch {
-          // If the phone leaves AddOne-XXXX during a good reconnect, local AP checks can fail.
-          // Keep waiting on the cloud session in that case.
+          // During a good reconnect the phone can leave AddOne-XXXX.
         }
       })();
     }, 2000);
@@ -416,7 +374,7 @@ export default function RecoveryScreen() {
       active = false;
       clearInterval(intervalId);
     };
-  }, [checkAp, liveSession?.status, refreshSession, waitingWarning]);
+  }, [checkAp, isAwaitingReconnect, refreshSession, waitingWarning]);
 
   async function handleStartRecovery() {
     setStatusError(null);
@@ -424,7 +382,12 @@ export default function RecoveryScreen() {
     setWaitingSinceMs(null);
     setWaitingWarning(null);
     setHasRedirectedAfterRecovery(false);
+    setHasValidatedAp(false);
+    setManualWifiEntry(false);
     clearDraft();
+    resetApInfo();
+    resetProvisioning();
+    resetNetworks();
     await createSession({
       bootstrapDayResetTime: activeDevice?.resetTime ? `${activeDevice.resetTime}:00` : "00:00:00",
       bootstrapTimezone: activeDevice?.timezone ?? currentPhoneTimezone(),
@@ -436,14 +399,35 @@ export default function RecoveryScreen() {
     try {
       setStatusError(null);
       setStatusMessage(null);
+      setWaitingWarning(null);
+      resetApInfo();
       const info = await checkAp();
-      const response = await scanNetworks();
-      if (response.networks.length > 0) {
-        setPickerVisible(true);
-      }
+      await scanNetworks();
+      setHasValidatedAp(true);
       setStatusMessage(`Connected to ${info.device_ap_ssid}. Choose your Wi‑Fi and reconnect.`);
     } catch (error) {
-      setStatusError(error instanceof Error ? error.message : "Failed to reach the AddOne AP.");
+      const message = error instanceof Error ? error.message : "Failed to reach the AddOne AP.";
+
+      try {
+        await scanNetworks();
+        setHasValidatedAp(true);
+        resetApInfo();
+        setStatusMessage(`Connected to ${deviceApSsid}. Choose your Wi‑Fi and reconnect.`);
+        return;
+      } catch {
+        // If the phone is already on AddOne-XXXX but local probing is flaky, don't dead-end
+        // the flow. Let the user continue with manual Wi-Fi entry instead.
+      }
+
+      if (message.includes("Timed out waiting for the AddOne AP")) {
+        setHasValidatedAp(true);
+        setManualWifiEntry(true);
+        resetApInfo();
+        setStatusMessage(`If you're already on ${deviceApSsid}, type the Wi‑Fi name manually and continue.`);
+        return;
+      }
+
+      setStatusError(message);
     }
   }
 
@@ -458,50 +442,35 @@ export default function RecoveryScreen() {
       setStatusError(null);
       setStatusMessage(null);
       setWaitingWarning(null);
-      const attemptDebug = describeProvisioningAttemptDebug(draft);
-      console.log("[recovery] provisioning attempt", attemptDebug);
+      resetApInfo();
+      resetProvisioning();
+      console.log("[recovery] provisioning attempt", describeProvisioningAttemptDebug(draft));
       const response = await submitProvisioning(preparedRequest);
       if (!response.accepted) {
         setStatusError(response.message ?? "The AddOne AP rejected the Wi‑Fi payload.");
         return;
       }
 
-      await markWaiting(liveSession.id);
+      setIsAwaitingReconnectLocally(true);
       setWaitingSinceMs(Date.now());
-      setStatusMessage("Trying to join this Wi‑Fi…");
+      setStatusMessage("Connecting device to Wi‑Fi…");
+      void markWaiting(liveSession.id).catch(() => {
+        // The device can accept provisioning while the phone is still on AddOne-XXXX.
+        // If the cloud update races with that handoff, keep waiting locally instead of
+        // surfacing a false failure.
+      });
     } catch (error) {
+      setIsAwaitingReconnectLocally(false);
       setStatusError(error instanceof Error ? error.message : "Failed to continue the recovery session.");
     }
   }
 
-  async function handleCheckWaitingState() {
-    try {
-      const info = await checkAp();
-      if (info.provisioning_state === "ready") {
-        setWaitingWarning(info.last_failure_reason ?? "The device is still in setup mode. Check the password and try again.");
-        setStatusMessage(`Connected to ${info.device_ap_ssid}. Update the Wi‑Fi details and retry.`);
-        return;
-      }
-
-      if (info.provisioning_state === "busy") {
-        setWaitingWarning(info.last_failure_reason ?? "The device is still trying the previous Wi‑Fi. You can replace it now.");
-        setStatusMessage(`Connected to ${info.device_ap_ssid}. Update the Wi‑Fi details and reconnect.`);
-        return;
-      }
-
-      if (info.provisioning_state === "provisioned") {
-        setWaitingWarning("The device joined Wi‑Fi. Waiting for cloud confirmation.");
-        void refreshSession();
-      }
-    } catch {
-      setWaitingWarning("Still waiting for the device. Reconnect to AddOne-XXXX to check it again.");
-    }
-  }
+  const step = canStartFreshSession ? 1 : showWifiForm ? 3 : 2;
 
   return (
     <ScreenFrame
       header={
-        <View style={{ alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12, paddingBottom: 20 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 20 }}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text
               style={{
@@ -531,57 +500,316 @@ export default function RecoveryScreen() {
       }
       scroll
     >
-      <View style={{ gap: 14 }}>
-        <Modal animationType="fade" transparent visible={pickerVisible} onRequestClose={() => setPickerVisible(false)}>
-          <View
-            style={{
-              alignItems: "center",
-              backgroundColor: theme.colors.overlayScrim,
-              flex: 1,
-              justifyContent: "center",
-              paddingHorizontal: 16,
-              paddingVertical: 16,
-            }}
-          >
-            <GlassCard style={{ gap: 14, height: "88%", paddingHorizontal: 16, paddingVertical: 18, width: "100%" }}>
-              <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+      <WifiNetworkPicker
+        isScanning={isScanningNetworks}
+        networks={sortedNetworks}
+        onClose={() => setPickerVisible(false)}
+        onSelect={(network) => {
+          setWifiSsid(network.ssid);
+          setStatusError(null);
+          setStatusMessage(null);
+          setWaitingWarning(null);
+          setPickerVisible(false);
+        }}
+        selectedSsid={draft.wifiSsid}
+        visible={pickerVisible}
+      />
+
+      <View style={{ gap: 16 }}>
+        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
+          <StepHeader step={step} title={step === 1 ? "Start recovery" : step === 2 ? "Join AddOne Wi‑Fi" : "Choose Wi‑Fi"} />
+
+          {step === 1 ? (
+            <>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Use recovery when the router or password changes. Ownership, history, and settings stay intact.
+              </Text>
+              {missingRecoveryClaimContext ? (
                 <Text
                   style={{
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.title.fontFamily,
-                    fontSize: theme.typography.title.fontSize,
-                    lineHeight: theme.typography.title.lineHeight,
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  Choose Wi‑Fi
+                  This phone needs a fresh local session before it can continue.
                 </Text>
-                <IconButton icon="close-outline" onPress={() => setPickerVisible(false)} />
+              ) : null}
+              <ActionButton
+                disabled={isBusy}
+                label={isBusy ? "Starting…" : missingRecoveryClaimContext ? "Restart recovery" : "Start recovery"}
+                onPress={() => void handleStartRecovery()}
+              />
+            </>
+          ) : null}
+
+          {step >= 2 ? (
+            <>
+              <View
+                style={{
+                  alignSelf: "flex-start",
+                  borderRadius: theme.radius.pill,
+                  backgroundColor: currentStatusTone.bg,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: currentStatusTone.fg,
+                    fontFamily: theme.typography.micro.fontFamily,
+                    fontSize: theme.typography.micro.fontSize,
+                    lineHeight: theme.typography.micro.lineHeight,
+                    letterSpacing: theme.typography.micro.letterSpacing,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {statusLabel(liveSession, !!apReady)}
+                </Text>
               </View>
-              {isScanningNetworks ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
-              {sortedNetworks.length > 0 ? (
-                <FlatList
-                  contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
-                  data={sortedNetworks}
-                  keyExtractor={(item) => item.ssid}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  renderItem={({ item }) => (
-                    <NetworkRow
-                      disabled={isSubmittingProvisioning}
-                      network={item}
+
+              {liveSession ? (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  {formatExpirationLabel(liveSession.expiresAt)}
+                </Text>
+              ) : null}
+
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                {showWifiForm
+                  ? "Choose the network, enter the password, then reconnect this device."
+                  : `Join \`${deviceApSsid}\` in Wi‑Fi settings, then come back and continue.`}
+              </Text>
+
+              {!showWifiForm ? (
+                <ActionButton
+                  disabled={isCheckingAp || isScanningNetworks}
+                  label={isCheckingAp || isScanningNetworks ? "Checking…" : `I joined ${deviceApSsid}`}
+                  onPress={() => void handleCheckDeviceAp()}
+                />
+              ) : (
+                <>
+                  <View style={{ gap: 10 }}>
+                    <FieldLabel>Wi‑Fi network</FieldLabel>
+                    {manualWifiEntry ? (
+                      <TextInput
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isSubmittingProvisioning}
+                        onChangeText={(value) => {
+                          setWifiSsid(value);
+                          setStatusError(null);
+                          setStatusMessage(null);
+                          setWaitingWarning(null);
+                        }}
+                        placeholder="Type Wi‑Fi name"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        style={{
+                          borderRadius: theme.radius.sheet,
+                          borderWidth: 1,
+                          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                          backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+                          color: theme.colors.textPrimary,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                          paddingHorizontal: 16,
+                          paddingVertical: 16,
+                        }}
+                        value={draft.wifiSsid}
+                      />
+                    ) : (
+                      <Pressable
+                        disabled={isSubmittingProvisioning}
+                        onPress={() => setPickerVisible(true)}
+                        style={{
+                          alignItems: "center",
+                          backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+                          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                          borderRadius: theme.radius.sheet,
+                          borderWidth: 1,
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          minHeight: 56,
+                          opacity: isSubmittingProvisioning ? 0.6 : 1,
+                          paddingHorizontal: 16,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: draft.wifiSsid ? theme.colors.textPrimary : theme.colors.textTertiary,
+                            flex: 1,
+                            fontFamily: theme.typography.body.fontFamily,
+                            fontSize: theme.typography.body.fontSize,
+                            lineHeight: theme.typography.body.lineHeight,
+                          }}
+                        >
+                          {draft.wifiSsid || "Choose network"}
+                        </Text>
+                        <Ionicons color={theme.colors.textSecondary} name="chevron-down-outline" size={18} />
+                      </Pressable>
+                    )}
+                    <Pressable
                       onPress={() => {
-                        setWifiSsid(item.ssid);
+                        setManualWifiEntry((current) => !current);
                         setStatusError(null);
                         setStatusMessage(null);
                         setWaitingWarning(null);
-                        setPickerVisible(false);
                       }}
-                      selected={draft.wifiSsid === item.ssid}
-                    />
-                  )}
-                  showsVerticalScrollIndicator={false}
-                />
-              ) : (
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontFamily: theme.typography.label.fontFamily,
+                          fontSize: theme.typography.label.fontSize,
+                          lineHeight: theme.typography.label.lineHeight,
+                        }}
+                      >
+                        {manualWifiEntry ? "Choose from scanned networks" : "Hidden network? Type it manually"}
+                      </Text>
+                    </Pressable>
+                    {selectedNetwork ? (
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                        }}
+                      >
+                        {authModeLabel(selectedNetwork.authMode, selectedNetwork.secure)}
+                      </Text>
+                    ) : null}
+                    {validation.errors.wifiSsid ? (
+                      <Text
+                        style={{
+                          color: theme.colors.statusErrorMuted,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                        }}
+                      >
+                        {validation.errors.wifiSsid}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <View style={{ gap: 10 }}>
+                    <FieldLabel>Password</FieldLabel>
+                    <View
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+                        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                        borderRadius: theme.radius.sheet,
+                        borderWidth: 1,
+                        flexDirection: "row",
+                        minHeight: 56,
+                        paddingLeft: 16,
+                      }}
+                    >
+                      <TextInput
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isSubmittingProvisioning}
+                        onChangeText={(value) => {
+                          setWifiPassword(value);
+                          setStatusError(null);
+                          setStatusMessage(null);
+                          setWaitingWarning(null);
+                        }}
+                        placeholder="Enter password"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        secureTextEntry={!showWifiPassword}
+                        style={{
+                          color: theme.colors.textPrimary,
+                          flex: 1,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                          paddingVertical: 16,
+                        }}
+                        value={draft.wifiPassword}
+                      />
+                      <Pressable
+                        disabled={isSubmittingProvisioning}
+                        onPress={() => setShowWifiPassword((current) => !current)}
+                        style={{
+                          alignItems: "center",
+                          height: 48,
+                          justifyContent: "center",
+                          opacity: isSubmittingProvisioning ? 0.45 : 1,
+                          width: 48,
+                        }}
+                      >
+                        <Ionicons
+                          color={theme.colors.textSecondary}
+                          name={showWifiPassword ? "eye-off-outline" : "eye-outline"}
+                          size={18}
+                        />
+                      </Pressable>
+                    </View>
+                    {validation.errors.wifiPassword ? (
+                      <Text
+                        style={{
+                          color: theme.colors.statusErrorMuted,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                        }}
+                      >
+                        {validation.errors.wifiPassword}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <ActionButton
+                    disabled={isSubmittingProvisioning || !preparedRequest || isAwaitingReconnect}
+                    label={isSubmittingProvisioning ? "Sending…" : isAwaitingReconnect ? "Connecting…" : waitingWarning ? "Try again" : "Connect"}
+                    onPress={() => void handleProvisionDeviceAp()}
+                  />
+
+                  {isAwaitingReconnect ? (
+                    <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                      <ActivityIndicator color={theme.colors.textPrimary} />
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
+                        }}
+                      >
+                        Trying to join Wi‑Fi…
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              )}
+
+              {statusMessage ? (
                 <Text
                   style={{
                     color: theme.colors.textSecondary,
@@ -590,485 +818,25 @@ export default function RecoveryScreen() {
                     lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  No networks showed up yet. You can type the Wi‑Fi name manually.
+                  {statusMessage}
                 </Text>
-              )}
-            </GlassCard>
-          </View>
-        </Modal>
+              ) : null}
 
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-            }}
-          >
-            Rejoin this device
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            Use recovery when the router or password changes. Ownership, history, and settings stay intact.
-          </Text>
-
-          <View
-            style={{
-              alignSelf: "flex-start",
-              borderRadius: theme.radius.pill,
-              backgroundColor: currentStatusTone.bg,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-            }}
-          >
-            <Text
-              style={{
-                color: currentStatusTone.fg,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-              >
-              {displayStatusLabel}
-            </Text>
-          </View>
-
-          {liveSession ? (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Temporary setup session · {formatExpirationLabel(liveSession.expiresAt)}
-            </Text>
-          ) : null}
-
-          {missingRecoveryClaimContext ? (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Recovery needs a fresh local session on this phone. Start recovery again to continue.
-            </Text>
-          ) : null}
-
-          {activeDevice ? (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Device: {activeDevice.name}
-            </Text>
-          ) : null}
-
-          {canStartFreshSession && !recoveryCompleted ? (
-            <ActionButton
-              disabled={isBusy}
-              label={isBusy ? "Starting…" : missingRecoveryClaimContext ? "Restart recovery" : "Start recovery"}
-              onPress={() => {
-                void handleStartRecovery();
-              }}
-            />
-          ) : null}
-
-          {statusMessage ? (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              {statusMessage}
-            </Text>
-          ) : null}
-
-          {statusError ? (
-            <Text
-              style={{
-                color: theme.colors.statusErrorMuted,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              {statusError}
-            </Text>
+              {visibleRecoveryError ? (
+                <Text
+                  style={{
+                    color: theme.colors.statusErrorMuted,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  {visibleRecoveryError}
+                </Text>
+              ) : null}
+            </>
           ) : null}
         </GlassCard>
-
-        {showDraftForm ? (
-          <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.title.fontFamily,
-                fontSize: theme.typography.title.fontSize,
-                lineHeight: theme.typography.title.lineHeight,
-              }}
-            >
-              Choose Wi‑Fi
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Join `AddOne-XXXX`, pick your Wi‑Fi, enter the password, then reconnect.
-              </Text>
-
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <ActionButton
-                disabled={isCheckingAp || isScanningNetworks}
-                label={isCheckingAp || isScanningNetworks ? "Checking…" : "Check AddOne Wi‑Fi"}
-                onPress={() => {
-                  void handleCheckDeviceAp();
-                }}
-                secondary
-              />
-              <ActionButton
-                disabled={isSubmittingProvisioning || !preparedRequest || isAwaitingReconnect}
-                label={
-                  isSubmittingProvisioning
-                    ? "Sending…"
-                    : isAwaitingReconnect
-                      ? "Connecting…"
-                      : waitingWarning
-                        ? "Try again"
-                        : "Reconnect device"
-                }
-                onPress={() => {
-                  void handleProvisionDeviceAp();
-                }}
-              />
-            </View>
-
-            {isAwaitingReconnect ? (
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                <ActivityIndicator color={theme.colors.textPrimary} />
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  Trying to join Wi‑Fi and return to the cloud…
-                </Text>
-              </View>
-            ) : null}
-
-            {waitingWarning ? (
-              <Text
-                style={{
-                  color: theme.colors.statusErrorMuted,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                {waitingWarning}
-              </Text>
-            ) : null}
-
-            {liveSession?.status === "awaiting_cloud" ? (
-              <ActionButton
-                disabled={isCheckingAp}
-                label={isCheckingAp ? "Checking…" : "Check AddOne Wi‑Fi"}
-                onPress={() => {
-                  void handleCheckWaitingState();
-                }}
-                secondary
-              />
-            ) : null}
-
-            {apInfo ? (
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Device AP: {apInfo.device_ap_ssid}
-                {apInfo.firmware_version ? ` · firmware ${apInfo.firmware_version}` : ""}
-              </Text>
-            ) : null}
-
-            {apInfo?.last_failure_reason ? (
-              <Text
-                style={{
-                  color: theme.colors.statusErrorMuted,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                {apInfo.last_failure_reason}
-              </Text>
-            ) : null}
-
-            {apInfoError ? (
-              <Text
-                style={{
-                  color: theme.colors.statusErrorMuted,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                {apInfoError}
-              </Text>
-            ) : null}
-
-            <View style={{ gap: 10 }}>
-              <FieldLabel>Wi‑Fi network</FieldLabel>
-              {networksError ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {networksError}
-                </Text>
-              ) : null}
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <TextInput
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isSubmittingProvisioning}
-                    onChangeText={(value) => {
-                      setWifiSsid(value);
-                      setStatusError(null);
-                      setStatusMessage(null);
-                      setWaitingWarning(null);
-                    }}
-                    placeholder="Choose or type network"
-                    placeholderTextColor={theme.colors.textTertiary}
-                    style={{
-                      borderRadius: theme.radius.sheet,
-                      borderWidth: 1,
-                      borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                      backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                      paddingHorizontal: 16,
-                      paddingVertical: 16,
-                    }}
-                    value={draft.wifiSsid}
-                  />
-                </View>
-                <ActionButton
-                  disabled={isSubmittingProvisioning || isCheckingAp || isScanningNetworks}
-                  label={isScanningNetworks ? "Scanning…" : "Choose"}
-                  onPress={() => {
-                    if (sortedNetworks.length > 0) {
-                      setPickerVisible(true);
-                      return;
-                    }
-
-                    void handleCheckDeviceAp();
-                  }}
-                  secondary
-                />
-              </View>
-              {selectedNetwork ? (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {authModeLabel(selectedNetwork.authMode, selectedNetwork.secure)} · {signalLabel(selectedNetwork.rssi)}
-                </Text>
-              ) : null}
-              {validation.errors.wifiSsid ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {validation.errors.wifiSsid}
-                </Text>
-              ) : null}
-            </View>
-
-            <View style={{ gap: 10 }}>
-              <FieldLabel>Password</FieldLabel>
-              <View
-                style={{
-                  borderRadius: theme.radius.sheet,
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                  backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingLeft: 16,
-                }}
-              >
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isSubmittingProvisioning}
-                  onChangeText={(value) => {
-                    setWifiPassword(value);
-                    setStatusError(null);
-                    setStatusMessage(null);
-                    setWaitingWarning(null);
-                  }}
-                  placeholder="Enter the Wi‑Fi password"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  secureTextEntry={!showWifiPassword}
-                  style={{
-                    flex: 1,
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                    paddingVertical: 16,
-                  }}
-                  value={draft.wifiPassword}
-                />
-                <Pressable
-                  disabled={isSubmittingProvisioning}
-                  onPress={() => setShowWifiPassword((current) => !current)}
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: 48,
-                    width: 48,
-                    opacity: isSubmittingProvisioning ? 0.45 : 1,
-                  }}
-                >
-                  <Ionicons
-                    color={theme.colors.textSecondary}
-                    name={showWifiPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                  />
-                </Pressable>
-              </View>
-              {validation.errors.wifiPassword ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {validation.errors.wifiPassword}
-                </Text>
-              ) : null}
-              {provisioningError ? (
-                <Text
-                  style={{
-                    color: theme.colors.statusErrorMuted,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {provisioningError}
-                </Text>
-              ) : null}
-              {provisioningResponse?.message && !isAwaitingReconnect && !waitingWarning ? (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {provisioningResponse.message}
-                </Text>
-              ) : null}
-              {isAwaitingReconnect && !waitingWarning ? (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  If the password is correct, the device should come back in a few seconds.
-                </Text>
-              ) : null}
-            </View>
-
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Hidden network? Type the Wi‑Fi name manually.
-            </Text>
-
-            <GlassCard style={{ gap: 6, paddingHorizontal: 14, paddingVertical: 12 }}>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.label.fontFamily,
-                  fontSize: theme.typography.label.fontSize,
-                  lineHeight: theme.typography.label.lineHeight,
-                }}
-              >
-                Physical fallback
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Hold the main button while reconnecting power for about 5 seconds.
-              </Text>
-            </GlassCard>
-          </GlassCard>
-        ) : null}
       </View>
     </ScreenFrame>
   );

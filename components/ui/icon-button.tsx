@@ -5,13 +5,15 @@ import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
 
 interface IconButtonProps {
+  disabled?: boolean;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 }
 
-export function IconButton({ icon, onPress }: IconButtonProps) {
+export function IconButton({ disabled = false, icon, onPress }: IconButtonProps) {
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={{
         alignItems: "center",
@@ -22,6 +24,7 @@ export function IconButton({ icon, onPress }: IconButtonProps) {
         borderWidth: 1,
         borderColor: withAlpha(theme.colors.textPrimary, 0.08),
         backgroundColor: withAlpha(theme.colors.bgElevated, 0.9),
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       <Ionicons color={theme.colors.textPrimary} name={icon} size={18} />

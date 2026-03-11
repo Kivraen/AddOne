@@ -17,19 +17,19 @@ const stateStyle: Record<PrimaryActionState, { background: string; text: string;
     background: "#F2EEE6",
     text: "#070707",
     border: withAlpha("#F2EEE6", 0.25),
-    label: "Marked for today",
+    label: "Remove one",
   },
   notDone: {
-    background: withAlpha("#F2EEE6", 0.06),
+    background: withAlpha("#F2EEE6", 0.08),
     text: "#F2EEE6",
-    border: withAlpha("#F2EEE6", 0.12),
-    label: "Add today",
+    border: withAlpha("#F2EEE6", 0.16),
+    label: "Add one",
   },
   pendingSync: {
     background: withAlpha("#C7904A", 0.15),
     text: "#F2EEE6",
     border: withAlpha("#C7904A", 0.24),
-    label: "Waiting for device",
+    label: "Applying…",
   },
   syncing: {
     background: withAlpha("#C7904A", 0.15),
@@ -66,14 +66,14 @@ export function PrimaryActionButton({ state, onPress }: PrimaryActionButtonProps
         }}
         style={{
           alignItems: "center",
-          borderRadius: theme.radius.sheet,
-          borderWidth: 1,
-          borderColor: config.border,
-          backgroundColor: config.background,
-          paddingHorizontal: 20,
-          paddingVertical: 18,
-        }}
-      >
+        borderRadius: theme.radius.sheet,
+        borderWidth: 1,
+        borderColor: config.border,
+        backgroundColor: config.background,
+        paddingHorizontal: 22,
+        paddingVertical: 19,
+      }}
+    >
         <Text
           style={{
             color: config.text,

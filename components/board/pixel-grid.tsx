@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useWindowDimensions, Pressable, Text, View } from "react-native";
 import Animated, {
   FadeIn,
@@ -13,21 +14,27 @@ import { withAlpha } from "@/lib/color";
 import { BoardPalette, HighlightTarget, PixelCellState, PixelGridMode } from "@/types/addone";
 
 interface PixelGridProps {
+  availableWidth?: number;
+  availableHeight?: number;
   cells: PixelCellState[][];
   palette: BoardPalette;
   mode: PixelGridMode;
   highlightToday?: HighlightTarget;
+  maxWidth?: number;
   pendingPulse?: HighlightTarget | null;
   onCellPress?: (row: number, col: number) => void;
   readOnly?: boolean;
+  showFooterHint?: boolean;
 }
 
 function PendingPulse({ cellSize }: { cellSize: number }) {
   const opacity = useSharedValue(0.24);
   const scale = useSharedValue(1);
 
-  opacity.value = withRepeat(withSequence(withTiming(0.5, { duration: 320 }), withTiming(0.18, { duration: 320 })), -1, true);
-  scale.value = withRepeat(withSequence(withTiming(1.08, { duration: 320 }), withTiming(1, { duration: 320 })), -1, true);
+  useEffect(() => {
+    opacity.value = withRepeat(withSequence(withTiming(0.5, { duration: 320 }), withTiming(0.18, { duration: 320 })), -1, true);
+    scale.value = withRepeat(withSequence(withTiming(1.08, { duration: 320 }), withTiming(1, { duration: 320 })), -1, true);
+  }, [opacity, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -85,11 +92,26 @@ function cellColors(state: PixelCellState, palette: BoardPalette) {
   }
 }
 
-export function PixelGrid({ cells, palette, mode, highlightToday, pendingPulse = null, onCellPress, readOnly = false }: PixelGridProps) {
+export function PixelGrid({
+  availableWidth,
+  availableHeight,
+  cells,
+  palette,
+  mode,
+  highlightToday,
+  maxWidth,
+  pendingPulse = null,
+  onCellPress,
+  readOnly = false,
+  showFooterHint = true,
+}: PixelGridProps) {
   const { width } = useWindowDimensions();
-  const gap = mode === "preview" ? 2 : 3;
-  const availableWidth = Math.min(width - 64, 360);
-  const cellSize = Math.max(10, Math.floor((availableWidth - gap * 20) / 21));
+  const gap = mode === "display" || mode === "preview" ? 2 : 3;
+  const resolvedWidth = Math.min(availableWidth ?? width - 48, maxWidth ?? 360);
+  const widthBoundCellSize = Math.floor((resolvedWidth - gap * 20) / 21);
+  const heightBoundCellSize =
+    availableHeight !== undefined ? Math.floor((availableHeight - gap * 7) / 8) : Number.POSITIVE_INFINITY;
+  const cellSize = Math.max(10, Math.min(widthBoundCellSize, heightBoundCellSize));
   const boardWidth = cellSize * 21 + gap * 20;
   const boardHeight = cellSize * 8 + gap * 7;
 
@@ -155,7 +177,7 @@ export function PixelGrid({ cells, palette, mode, highlightToday, pendingPulse =
           </View>
         ))}
       </View>
-      {mode === "edit" ? (
+      {mode === "edit" && showFooterHint ? (
         <Text
           style={{
             marginTop: 12,

@@ -119,11 +119,19 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Main screen is the active device board.
 - Main screen is `board-first`, with one primary action button below the board.
 - Header contains:
-  - device name
-  - sync status
-  - settings entry
-- `History edit` belongs to the main habit surface and opens as a full-height sheet/modal.
-- Settings use layered sheets and focused flows.
+  - `AddOne` wordmark
+  - app/account settings entry
+- The device `name` is treated as the visible habit name in first-user v1 and appears above the board.
+- Sync status is shown quietly as a small board-corner status indicator, not as a large header badge.
+- `History edit` belongs to the main habit surface and opens as a full-page landscape editor with normal back navigation.
+- Device-specific actions such as history and device settings belong near the board for the current device.
+- The top-right gear opens app/account-level settings, not the current device editor.
+- Account/session info lives in a separate account screen, not mixed into the device settings list.
+- Settings use focused `Draft + Apply` sections:
+  - Habit
+  - Time
+  - Display
+  - Device
 - Advanced/dev tools are hidden behind a deliberate gesture.
 
 ## UI Direction
@@ -133,6 +141,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Typography is `Space Grotesk`.
 - App shell remains visually fixed.
 - Only the board/reward pixels are user-customizable.
+- Floating decorative background circles are out; the shell should stay restrained and let the board carry the visual emphasis.
 
 ## App Shell Tokens
 - `bg.base`: `#070707`
@@ -185,10 +194,14 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 ## Current Implementation Status
 - Expo app scaffold exists in this repo.
 - Board-first home screen exists.
+- The active device `name` is now the visible habit name above the board.
+- Device settings are separated from account/session info.
+- History is now a dedicated landscape route rather than a sheet.
 - Onboarding exists as a real AP + claim flow, and recovery reuses that contract as a real `Rejoin Wi-Fi` flow.
+- Onboarding and Wi-Fi recovery now present as guided step flows rather than long conditional pages.
 - Onboarding now has a real cloud-side claim-session flow.
 - The app now builds the exact AP provisioning payload, probes the configured local AP endpoints, and can send the provisioning payload to firmware.
-- History and settings modals exist.
+- Settings are now grouped around the current device and use `Draft + Apply`.
 - Real Supabase auth now exists with `demo mode` fallback.
 - Initial Supabase schema and migration foundation now exist locally under [supabase/migrations/20260308113000_init_addone_schema.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260308113000_init_addone_schema.sql).
 - Real device/account data reads and onboarding-session queries now exist against staging.
@@ -211,7 +224,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - The runtime cleanup pass removed the old user-facing `queued` state, command-row polling waits, and `device_day_states` live invalidation from the app runtime path.
 
 ## Known Gaps
-- AP onboarding currently uses direct SSID/password entry; device-side scan-list flow is now the intended v1 UX and must be treated as required.
+- Onboarding and recovery now use the device-side Wi-Fi scan list with hidden-network manual fallback, but they still need continued polish against real devices and real routers.
 - Nearby AP maintenance currently covers setup and Wi-Fi recovery only, which is the intended first-user v1 scope.
 - Auth is still staging-grade `email OTP`; branded mail, production redirect configuration, and optional Google/password login remain future work.
 - Production broker hardening and release deployment shape are not finished; the current broker/gateway path is still staging/development oriented.
@@ -225,8 +238,11 @@ If another doc conflicts with this one, this file wins until an explicit new dec
    - history `Draft + Save`
    - settings `Draft + Apply`
    - offline/reconnect snapshot healing
-2. Finish the MVP onboarding flow with device-side Wi-Fi scan list plus manual hidden-network fallback.
-3. Remove or hide all out-of-scope first-user v1 surfaces:
+2. Polish the MVP onboarding and recovery flows:
+   - calmer copy
+   - stronger pending/error states
+   - full real-device validation across different routers and passwords
+3. Keep all out-of-scope first-user v1 surfaces hidden:
    - rewards
    - reminders
    - sharing

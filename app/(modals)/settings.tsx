@@ -5,13 +5,12 @@ import { Alert, Pressable, Switch, Text, TextInput, View } from "react-native";
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlassSheet } from "@/components/ui/glass-sheet";
-import { SettingRow } from "@/components/ui/setting-row";
 import { boardPalettes } from "@/constants/palettes";
 import { theme } from "@/constants/theme";
 import { useActiveDevice } from "@/hooks/use-active-device";
-import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions } from "@/hooks/use-devices";
 import { withAlpha } from "@/lib/color";
+import { useAppUiStore } from "@/store/app-ui-store";
 import { DeviceSettingsPatch } from "@/types/addone";
 
 function SectionTitle({ children }: { children: string }) {
@@ -24,6 +23,21 @@ function SectionTitle({ children }: { children: string }) {
         lineHeight: theme.typography.micro.lineHeight,
         letterSpacing: theme.typography.micro.letterSpacing,
         textTransform: "uppercase",
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textPrimary,
+        fontFamily: theme.typography.label.fontFamily,
+        fontSize: theme.typography.label.fontSize,
+        lineHeight: theme.typography.label.lineHeight,
       }}
     >
       {children}
@@ -49,7 +63,7 @@ function ActionButton({
       style={{
         alignItems: "center",
         justifyContent: "center",
-        minHeight: 46,
+        minHeight: 48,
         borderRadius: theme.radius.pill,
         borderWidth: 1,
         borderColor: secondary ? withAlpha(theme.colors.textPrimary, 0.12) : withAlpha(theme.colors.accentAmber, 0.22),
@@ -69,21 +83,6 @@ function ActionButton({
         {label}
       </Text>
     </Pressable>
-  );
-}
-
-function FieldLabel({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        color: theme.colors.textPrimary,
-        fontFamily: theme.typography.label.fontFamily,
-        fontSize: theme.typography.label.fontSize,
-        lineHeight: theme.typography.label.lineHeight,
-      }}
-    >
-      {children}
-    </Text>
   );
 }
 
@@ -109,6 +108,7 @@ function buildSettingsPatch(params: {
   autoBrightness: boolean;
   brightnessInput: string;
   device: ReturnType<typeof useActiveDevice>;
+  habitName: string;
   paletteId: string;
   resetTimeInput: string;
   timezoneInput: string;
@@ -117,6 +117,11 @@ function buildSettingsPatch(params: {
   const patch: DeviceSettingsPatch = {};
   const normalizedBrightness = parseBrightness(params.brightnessInput);
   const normalizedTimezone = params.timezoneInput.trim();
+  const normalizedHabitName = params.habitName.trim();
+
+  if (normalizedHabitName && normalizedHabitName !== params.device.name) {
+    patch.name = normalizedHabitName;
+  }
 
   if (params.weeklyTarget !== params.device.weeklyTarget) {
     patch.weekly_target = params.weeklyTarget;
@@ -145,11 +150,48 @@ function buildSettingsPatch(params: {
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
+function TextField({
+  disabled = false,
+  onChangeText,
+  placeholder,
+  value,
+}: {
+  disabled?: boolean;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <TextInput
+      autoCapitalize="none"
+      editable={!disabled}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={theme.colors.textTertiary}
+      style={{
+        borderRadius: theme.radius.sheet,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+        color: theme.colors.textPrimary,
+        fontFamily: theme.typography.body.fontFamily,
+        fontSize: theme.typography.body.fontSize,
+        lineHeight: theme.typography.body.lineHeight,
+        opacity: disabled ? 0.6 : 1,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+      }}
+      value={value}
+    />
+  );
+}
+
 export default function SettingsModal() {
   const router = useRouter();
-  const { mode, signOut, userEmail } = useAuth();
   const device = useActiveDevice();
   const { applySettingsDraft, isSavingSettings, isStartingWifiRecovery, requestWifiRecovery } = useDeviceActions();
+  const clearOnboardingSession = useAppUiStore((state) => state.clearOnboardingSession);
+  const [habitName, setHabitName] = useState(device.name);
   const [weeklyTarget, setWeeklyTarget] = useState(device.weeklyTarget);
   const [timezoneInput, setTimezoneInput] = useState(device.timezone);
   const [resetTimeInput, setResetTimeInput] = useState(device.resetTime);
@@ -160,6 +202,7 @@ export default function SettingsModal() {
   const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
+    setHabitName(device.name);
     setWeeklyTarget(device.weeklyTarget);
     setTimezoneInput(device.timezone);
     setResetTimeInput(device.resetTime);
@@ -172,6 +215,7 @@ export default function SettingsModal() {
     device.autoBrightness,
     device.brightness,
     device.id,
+    device.name,
     device.paletteId,
     device.resetTime,
     device.timezone,
@@ -179,7 +223,7 @@ export default function SettingsModal() {
   ]);
 
   const phoneTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const liveDeviceSession = mode === "demo" || device.isLive;
+  const liveDeviceSession = device.isLive;
   const normalizedBrightness = parseBrightness(brightnessInput);
   const draftPatch = useMemo(
     () =>
@@ -187,17 +231,19 @@ export default function SettingsModal() {
         autoBrightness,
         brightnessInput,
         device,
+        habitName,
         paletteId,
         resetTimeInput,
         timezoneInput,
         weeklyTarget,
       }),
-    [autoBrightness, brightnessInput, device, paletteId, resetTimeInput, timezoneInput, weeklyTarget],
+    [autoBrightness, brightnessInput, device, habitName, paletteId, resetTimeInput, timezoneInput, weeklyTarget],
   );
   const canApply =
     liveDeviceSession &&
     !isSavingSettings &&
     !!draftPatch &&
+    habitName.trim().length > 0 &&
     isValidResetTime(resetTimeInput) &&
     normalizedBrightness !== null &&
     timezoneInput.trim().length > 0;
@@ -211,13 +257,14 @@ export default function SettingsModal() {
       setStatusError(null);
       setStatusMessage(null);
       await applySettingsDraft(draftPatch, device.id);
-      setStatusMessage("Settings applied on the device.");
+      setStatusMessage("Applied on the device.");
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : "Failed to apply settings.");
     }
   }
 
   function handleResetDraft() {
+    setHabitName(device.name);
     setWeeklyTarget(device.weeklyTarget);
     setTimezoneInput(device.timezone);
     setResetTimeInput(device.resetTime);
@@ -225,18 +272,15 @@ export default function SettingsModal() {
     setBrightnessInput(String(device.brightness));
     setPaletteId(device.paletteId);
     setStatusError(null);
-    setStatusMessage("Draft reset to the latest device-confirmed settings.");
+    setStatusMessage("Draft reset to the latest device settings.");
   }
 
   function confirmWifiRecovery() {
     Alert.alert(
       "Enter Wi‑Fi recovery?",
-      "The device will leave normal cloud control and start its AddOne setup Wi‑Fi. Ownership, history, and settings stay intact.",
+      "The device will start its AddOne setup Wi‑Fi so you can reconnect it without losing ownership or history.",
       [
-        {
-          style: "cancel",
-          text: "Cancel",
-        },
+        { style: "cancel", text: "Cancel" },
         {
           text: "Enter recovery",
           onPress: () => {
@@ -244,8 +288,8 @@ export default function SettingsModal() {
               try {
                 setStatusError(null);
                 setStatusMessage(null);
+                clearOnboardingSession();
                 await requestWifiRecovery(device.id);
-                setStatusMessage("Asked the device to enter Wi‑Fi recovery. Wait for AddOne-XXXX, then continue the recovery flow.");
                 router.push("/recovery");
               } catch (error) {
                 setStatusError(error instanceof Error ? error.message : "Failed to start Wi‑Fi recovery.");
@@ -258,9 +302,9 @@ export default function SettingsModal() {
   }
 
   return (
-    <GlassSheet subtitle="Core settings stay local in this draft until you tap Apply." title="Settings" variant="full">
+    <GlassSheet subtitle="These settings belong to this device and save only after the device confirms them." title="Device settings" variant="full">
       {!liveDeviceSession ? (
-        <GlassCard style={{ gap: 8, paddingHorizontal: 16, paddingVertical: 14 }}>
+        <GlassCard style={{ gap: 10, paddingHorizontal: 16, paddingVertical: 16 }}>
           <Text
             style={{
               color: theme.colors.textPrimary,
@@ -279,12 +323,13 @@ export default function SettingsModal() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Core settings are live-only. Rejoin Wi-Fi before changing them.
+            Edit settings only while the device is live. Use Wi‑Fi recovery if the router or password changed.
           </Text>
-          <View style={{ alignItems: "flex-start", marginTop: 8 }}>
+          <View style={{ alignItems: "flex-start" }}>
             <ActionButton
-              label="Open Wi-Fi recovery"
+              label="Rejoin Wi‑Fi"
               onPress={() => {
+                clearOnboardingSession();
                 router.push("/recovery");
               }}
             />
@@ -294,114 +339,124 @@ export default function SettingsModal() {
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Habit</SectionTitle>
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-          <FieldLabel>Weekly target</FieldLabel>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
-              <ChoicePill
-                key={`target-${target}`}
-                disabled={!liveDeviceSession || isSavingSettings}
-                label={String(target)}
-                onPress={() => {
-                  setWeeklyTarget(target);
-                  setStatusError(null);
-                  setStatusMessage(null);
-                }}
-                selected={weeklyTarget === target}
-              />
-            ))}
+        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ gap: 10 }}>
+            <FieldLabel>Habit name</FieldLabel>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              This is the name shown above the board.
+            </Text>
+            <TextField
+              disabled={!liveDeviceSession || isSavingSettings}
+              onChangeText={(value) => {
+                setHabitName(value);
+                setStatusError(null);
+                setStatusMessage(null);
+              }}
+              placeholder="Daily habit"
+              value={habitName}
+            />
+          </View>
+
+          <View style={{ gap: 10 }}>
+            <FieldLabel>Weekly target</FieldLabel>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
+                <ChoicePill
+                  key={`target-${target}`}
+                  disabled={!liveDeviceSession || isSavingSettings}
+                  label={String(target)}
+                  onPress={() => {
+                    setWeeklyTarget(target);
+                    setStatusError(null);
+                    setStatusMessage(null);
+                  }}
+                  selected={weeklyTarget === target}
+                />
+              ))}
+            </View>
           </View>
         </GlassCard>
       </View>
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Time</SectionTitle>
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-          <FieldLabel>Timezone</FieldLabel>
-          <TextInput
-            autoCapitalize="none"
-            editable={liveDeviceSession && !isSavingSettings}
-            onChangeText={(value) => {
-              setTimezoneInput(value);
-              setStatusError(null);
-              setStatusMessage(null);
-            }}
-            placeholder="America/Los_Angeles"
-            placeholderTextColor={theme.colors.textTertiary}
-            style={{
-              borderRadius: theme.radius.sheet,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-              opacity: liveDeviceSession ? 1 : 0.6,
-              paddingHorizontal: 16,
-              paddingVertical: 16,
-            }}
-            value={timezoneInput}
-          />
-          <View style={{ alignItems: "flex-start" }}>
-            <ActionButton
-              disabled={!liveDeviceSession || isSavingSettings || timezoneInput === phoneTimezone}
-              label="Use phone timezone"
-              onPress={() => {
-                setTimezoneInput(phoneTimezone);
+        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ gap: 10 }}>
+            <FieldLabel>Timezone</FieldLabel>
+            <TextField
+              disabled={!liveDeviceSession || isSavingSettings}
+              onChangeText={(value) => {
+                setTimezoneInput(value);
                 setStatusError(null);
                 setStatusMessage(null);
               }}
-              secondary
+              placeholder="America/Los_Angeles"
+              value={timezoneInput}
             />
+            <View style={{ alignItems: "flex-start" }}>
+              <ActionButton
+                disabled={!liveDeviceSession || isSavingSettings || timezoneInput === phoneTimezone}
+                label="Use phone timezone"
+                onPress={() => {
+                  setTimezoneInput(phoneTimezone);
+                  setStatusError(null);
+                  setStatusMessage(null);
+                }}
+                secondary
+              />
+            </View>
           </View>
-        </GlassCard>
 
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-          <FieldLabel>Reset time</FieldLabel>
-          <TextInput
-            editable={liveDeviceSession && !isSavingSettings}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={(value) => {
-              setResetTimeInput(value);
-              setStatusError(null);
-              setStatusMessage(null);
-            }}
-            placeholder="00:00"
-            placeholderTextColor={theme.colors.textTertiary}
-            style={{
-              borderRadius: theme.radius.sheet,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-              opacity: liveDeviceSession ? 1 : 0.6,
-              paddingHorizontal: 16,
-              paddingVertical: 16,
-            }}
-            value={resetTimeInput}
-          />
-          <Text
-            style={{
-              color: isValidResetTime(resetTimeInput) ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            Use 24-hour format like 00:00 or 03:30.
-          </Text>
+          <View style={{ gap: 10 }}>
+            <FieldLabel>Reset time</FieldLabel>
+            <TextField
+              disabled={!liveDeviceSession || isSavingSettings}
+              onChangeText={(value) => {
+                setResetTimeInput(value);
+                setStatusError(null);
+                setStatusMessage(null);
+              }}
+              placeholder="00:00"
+              value={resetTimeInput}
+            />
+            <Text
+              style={{
+                color: isValidResetTime(resetTimeInput) ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              Use 24-hour format like 00:00.
+            </Text>
+          </View>
         </GlassCard>
       </View>
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Display</SectionTitle>
-        <SettingRow
-          label="Auto brightness"
-          trailing={
+        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <FieldLabel>Auto brightness</FieldLabel>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Let the device adapt itself to the room.
+              </Text>
+            </View>
             <Switch
               disabled={!liveDeviceSession || isSavingSettings}
               onValueChange={(value) => {
@@ -413,125 +468,116 @@ export default function SettingsModal() {
               trackColor={{ false: withAlpha(theme.colors.textPrimary, 0.12), true: withAlpha(theme.colors.accentAmber, 0.34) }}
               value={autoBrightness}
             />
-          }
-        />
+          </View>
 
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-          <FieldLabel>Manual brightness</FieldLabel>
-          <TextInput
-            editable={liveDeviceSession && !isSavingSettings && !autoBrightness}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={(value) => {
-              setBrightnessInput(value);
-              setStatusError(null);
-              setStatusMessage(null);
-            }}
-            placeholder="0-100"
-            placeholderTextColor={theme.colors.textTertiary}
-            style={{
-              borderRadius: theme.radius.sheet,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-              opacity: liveDeviceSession && !autoBrightness ? 1 : 0.6,
-              paddingHorizontal: 16,
-              paddingVertical: 16,
-            }}
-            value={brightnessInput}
-          />
-          <Text
-            style={{
-              color: normalizedBrightness !== null ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            {autoBrightness ? "Auto-adjust is enabled. Manual brightness is saved but inactive." : "Choose a level from 0 to 100."}
-          </Text>
-        </GlassCard>
+          <View style={{ gap: 10 }}>
+            <FieldLabel>Manual brightness</FieldLabel>
+            <TextField
+              disabled={!liveDeviceSession || isSavingSettings || autoBrightness}
+              onChangeText={(value) => {
+                setBrightnessInput(value);
+                setStatusError(null);
+                setStatusMessage(null);
+              }}
+              placeholder="0-100"
+              value={brightnessInput}
+            />
+            <Text
+              style={{
+                color: normalizedBrightness !== null ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              {autoBrightness ? "Auto brightness is enabled." : "Choose a level from 0 to 100."}
+            </Text>
+          </View>
 
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-          <FieldLabel>Board palette</FieldLabel>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {boardPalettes.map((palette) => (
-              <ChoicePill
-                key={palette.id}
-                disabled={!liveDeviceSession || isSavingSettings}
-                label={palette.name}
-                onPress={() => {
-                  setPaletteId(palette.id);
-                  setStatusError(null);
-                  setStatusMessage(null);
-                }}
-                selected={palette.id === paletteId}
-              />
-            ))}
+          <View style={{ gap: 10 }}>
+            <FieldLabel>Palette</FieldLabel>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {boardPalettes.map((palette) => (
+                <ChoicePill
+                  key={palette.id}
+                  disabled={!liveDeviceSession || isSavingSettings}
+                  label={palette.name}
+                  onPress={() => {
+                    setPaletteId(palette.id);
+                    setStatusError(null);
+                    setStatusMessage(null);
+                  }}
+                  selected={palette.id === paletteId}
+                />
+              ))}
+            </View>
           </View>
         </GlassCard>
       </View>
 
       <View style={{ gap: 10 }}>
         <SectionTitle>Device</SectionTitle>
-        <SettingRow label="Firmware" value={device.firmwareVersion} />
-        <SettingRow
-          label="Recovery"
-          value="Use Rejoin Wi‑Fi if the router or password changes. As a fallback, hold the main button while reconnecting power."
-        />
-        <View style={{ alignItems: "flex-start" }}>
-          <ActionButton
-            disabled={!liveDeviceSession || isStartingWifiRecovery || isSavingSettings}
-            label={isStartingWifiRecovery ? "Starting recovery…" : "Enter Wi‑Fi recovery"}
-            onPress={confirmWifiRecovery}
-          />
-        </View>
-      </View>
-
-      <View style={{ gap: 10 }}>
-        <SectionTitle>Account</SectionTitle>
-        <SettingRow label="Session" value={mode === "demo" ? "Demo preview" : userEmail ?? "Email OTP session"} />
-        {mode === "cloud" ? (
+        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
           <Pressable
-            onPress={async () => {
-              await signOut();
-              router.replace("/sign-in");
-            }}
+            onPress={() => router.push("/account")}
             style={{
               alignItems: "center",
-              justifyContent: "center",
-              borderRadius: theme.radius.card,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.statusErrorMuted, 0.24),
-              backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
-              minHeight: 52,
-              paddingHorizontal: 16,
+              flexDirection: "row",
+              justifyContent: "space-between",
             }}
           >
+            <View style={{ flex: 1, gap: 4 }}>
+              <FieldLabel>Account</FieldLabel>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Session details and sign out
+              </Text>
+            </View>
             <Text
               style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: theme.typography.label.fontSize,
-                lineHeight: theme.typography.label.lineHeight,
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.title.fontFamily,
+                fontSize: theme.typography.title.fontSize,
+                lineHeight: theme.typography.title.lineHeight,
               }}
             >
-              Sign out
+              ›
             </Text>
           </Pressable>
-        ) : null}
+
+          <View style={{ height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.08) }} />
+
+          <View style={{ gap: 6 }}>
+            <FieldLabel>Wi‑Fi recovery</FieldLabel>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              Rejoin Wi‑Fi if the router or password changes. Ownership and history stay intact.
+            </Text>
+            <View style={{ alignItems: "flex-start", marginTop: 6 }}>
+              <ActionButton
+                disabled={!liveDeviceSession || isStartingWifiRecovery || isSavingSettings}
+                label={isStartingWifiRecovery ? "Starting recovery…" : "Enter Wi‑Fi recovery"}
+                onPress={confirmWifiRecovery}
+              />
+            </View>
+          </View>
+        </GlassCard>
       </View>
 
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <ActionButton
-          disabled={isSavingSettings || !draftPatch}
-          label="Reset draft"
-          onPress={handleResetDraft}
-          secondary
-        />
+        <ActionButton disabled={isSavingSettings || !draftPatch} label="Reset" onPress={handleResetDraft} secondary />
         <View style={{ flex: 1 }} />
         <ActionButton
           disabled={!canApply}

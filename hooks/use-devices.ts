@@ -76,6 +76,9 @@ function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsP
   if (patch.day_reset_time !== undefined && device.resetTime !== patch.day_reset_time.slice(0, 5)) {
     return false;
   }
+  if (patch.name !== undefined && device.name !== patch.name) {
+    return false;
+  }
   if (patch.palette_preset !== undefined && device.paletteId !== patch.palette_preset) {
     return false;
   }
