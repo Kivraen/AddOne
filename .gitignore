@@ -18,3 +18,5 @@ node_modules
 firmware/.pio
 firmware/include/cloud_config.local.h
 firmware/include/cloud_config.beta.h
+deploy/beta-vps/mosquitto/passwords.txt
+deploy/beta-vps/certs/
