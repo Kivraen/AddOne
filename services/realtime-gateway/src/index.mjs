@@ -2,10 +2,15 @@ import "dotenv/config";
 
 import http from "node:http";
 import mqtt from "mqtt";
+import WebSocket from "ws";
 
 import { config } from "./config.mjs";
 import { createSupabaseAdmin, fetchQueuedCommandEnvelope, listQueuedCommandEnvelopes } from "./supabase-admin.mjs";
 import { ackWildcard, commandTopic, dayStateEventWildcard, parseTopic, presenceWildcard, runtimeSnapshotWildcard } from "./topics.mjs";
+
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = WebSocket;
+}
 
 const supabase = createSupabaseAdmin(config.supabase);
 
