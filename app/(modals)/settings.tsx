@@ -192,6 +192,7 @@ export default function SettingsModal() {
   const device = useActiveDevice();
   const { applySettingsDraft, isSavingSettings, isStartingWifiRecovery, requestWifiRecovery } = useDeviceActions();
   const clearOnboardingSession = useAppUiStore((state) => state.clearOnboardingSession);
+  const requestBoardEditorOpen = useAppUiStore((state) => state.requestBoardEditorOpen);
   const [habitName, setHabitName] = useState(device.name);
   const [weeklyTarget, setWeeklyTarget] = useState(device.weeklyTarget);
   const [timezoneInput, setTimezoneInput] = useState(device.timezone);
@@ -304,15 +305,48 @@ export default function SettingsModal() {
 
   return (
     <ScreenFrame
-      header={
-        <PageHeader
-          subtitle="These settings belong to this device and save only after the device confirms them."
-          title="Device settings"
-        />
-      }
+      header={<PageHeader title="Device settings" />}
       scroll
     >
-      <View style={{ gap: 16 }}>
+      <View style={{ gap: 14 }}>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <ActionButton disabled={isSavingSettings || !draftPatch} label="Reset" onPress={handleResetDraft} secondary />
+        <View style={{ flex: 1 }} />
+        <ActionButton
+          disabled={!canApply}
+          label={isSavingSettings ? "Applying…" : "Apply"}
+          onPress={() => {
+            void handleApply();
+          }}
+        />
+      </View>
+
+      {statusMessage ? (
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 13,
+            lineHeight: 18,
+          }}
+        >
+          {statusMessage}
+        </Text>
+      ) : null}
+
+      {statusError ? (
+        <Text
+          style={{
+            color: theme.colors.statusErrorMuted,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 13,
+            lineHeight: 18,
+          }}
+        >
+          {statusError}
+        </Text>
+      ) : null}
+
       {!liveDeviceSession ? (
         <GlassCard style={{ gap: 10, paddingHorizontal: 16, paddingVertical: 16 }}>
           <Text
@@ -347,21 +381,11 @@ export default function SettingsModal() {
         </GlassCard>
       ) : null}
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 8 }}>
         <SectionTitle>Habit</SectionTitle>
-        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
-          <View style={{ gap: 10 }}>
+        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ gap: 8 }}>
             <FieldLabel>Habit name</FieldLabel>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              This is the name shown above the board.
-            </Text>
             <TextField
               disabled={!liveDeviceSession || isSavingSettings}
               onChangeText={(value) => {
@@ -374,7 +398,7 @@ export default function SettingsModal() {
             />
           </View>
 
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 8 }}>
             <FieldLabel>Weekly target</FieldLabel>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
@@ -395,10 +419,10 @@ export default function SettingsModal() {
         </GlassCard>
       </View>
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 8 }}>
         <SectionTitle>Time</SectionTitle>
-        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
-          <View style={{ gap: 10 }}>
+        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ gap: 8 }}>
             <FieldLabel>Timezone</FieldLabel>
             <TextField
               disabled={!liveDeviceSession || isSavingSettings}
@@ -424,7 +448,7 @@ export default function SettingsModal() {
             </View>
           </View>
 
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 8 }}>
             <FieldLabel>Reset time</FieldLabel>
             <TextField
               disabled={!liveDeviceSession || isSavingSettings}
@@ -436,36 +460,28 @@ export default function SettingsModal() {
               placeholder="00:00"
               value={resetTimeInput}
             />
-            <Text
-              style={{
-                color: isValidResetTime(resetTimeInput) ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Use 24-hour format like 00:00.
-            </Text>
+            {!isValidResetTime(resetTimeInput) ? (
+              <Text
+                style={{
+                  color: theme.colors.statusErrorMuted,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                Use 24-hour format like 00:00.
+              </Text>
+            ) : null}
           </View>
         </GlassCard>
       </View>
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 8 }}>
         <SectionTitle>Display</SectionTitle>
-        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <View style={{ flex: 1, gap: 4 }}>
               <FieldLabel>Auto brightness</FieldLabel>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Let the device adapt itself to the room.
-              </Text>
             </View>
             <Switch
               disabled={!liveDeviceSession || isSavingSettings}
@@ -480,7 +496,7 @@ export default function SettingsModal() {
             />
           </View>
 
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 8 }}>
             <FieldLabel>Manual brightness</FieldLabel>
             <TextField
               disabled={!liveDeviceSession || isSavingSettings || autoBrightness}
@@ -492,19 +508,21 @@ export default function SettingsModal() {
               placeholder="0-100"
               value={brightnessInput}
             />
-            <Text
-              style={{
-                color: normalizedBrightness !== null ? theme.colors.textSecondary : theme.colors.statusErrorMuted,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              {autoBrightness ? "Auto brightness is enabled." : "Choose a level from 0 to 100."}
-            </Text>
+            {!autoBrightness && normalizedBrightness === null ? (
+              <Text
+                style={{
+                  color: theme.colors.statusErrorMuted,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                Choose a level from 0 to 100.
+              </Text>
+            ) : null}
           </View>
 
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 8 }}>
             <FieldLabel>Palette</FieldLabel>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {boardPalettes.map((palette) => (
@@ -525,9 +543,26 @@ export default function SettingsModal() {
         </GlassCard>
       </View>
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 8 }}>
         <SectionTitle>Device</SectionTitle>
         <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ gap: 6 }}>
+            <FieldLabel>Edit board</FieldLabel>
+            <View style={{ alignItems: "flex-start", marginTop: 2 }}>
+              <ActionButton
+                disabled={!liveDeviceSession || isSavingSettings}
+                label="Open board editor"
+                onPress={() => {
+                  requestBoardEditorOpen();
+                  router.back();
+                }}
+                secondary
+              />
+            </View>
+          </View>
+
+          <View style={{ height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.08) }} />
+
           <Pressable
             onPress={() => router.push("/account")}
             style={{
@@ -542,8 +577,8 @@ export default function SettingsModal() {
                 style={{
                   color: theme.colors.textSecondary,
                   fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
+                  fontSize: 13,
+                  lineHeight: 18,
                 }}
               >
                 Session details and sign out
@@ -565,16 +600,6 @@ export default function SettingsModal() {
 
           <View style={{ gap: 6 }}>
             <FieldLabel>Wi‑Fi recovery</FieldLabel>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Rejoin Wi‑Fi if the router or password changes. Ownership and history stay intact.
-            </Text>
             <View style={{ alignItems: "flex-start", marginTop: 6 }}>
               <ActionButton
                 disabled={!liveDeviceSession || isStartingWifiRecovery || isSavingSettings}
@@ -585,44 +610,6 @@ export default function SettingsModal() {
           </View>
         </GlassCard>
       </View>
-
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <ActionButton disabled={isSavingSettings || !draftPatch} label="Reset" onPress={handleResetDraft} secondary />
-        <View style={{ flex: 1 }} />
-        <ActionButton
-          disabled={!canApply}
-          label={isSavingSettings ? "Applying…" : "Apply"}
-          onPress={() => {
-            void handleApply();
-          }}
-        />
-      </View>
-
-      {statusMessage ? (
-        <Text
-          style={{
-            color: theme.colors.textSecondary,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: theme.typography.body.fontSize,
-            lineHeight: theme.typography.body.lineHeight,
-          }}
-        >
-          {statusMessage}
-        </Text>
-      ) : null}
-
-      {statusError ? (
-        <Text
-          style={{
-            color: theme.colors.statusErrorMuted,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: theme.typography.body.fontSize,
-            lineHeight: theme.typography.body.lineHeight,
-          }}
-        >
-          {statusError}
-        </Text>
-      ) : null}
       </View>
     </ScreenFrame>
   );

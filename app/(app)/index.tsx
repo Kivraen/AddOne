@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, LayoutChangeEvent, Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
 import { ScreenFrame } from "@/components/layout/screen-frame";
@@ -90,6 +90,23 @@ function boardStatus(device: AddOneDevice, isApplying: boolean) {
   };
 }
 
+function StatusDot({ color }: { color: string }) {
+  return (
+    <View
+      style={{
+        height: 10,
+        width: 10,
+        borderRadius: 10,
+        backgroundColor: color,
+        shadowColor: color,
+        shadowOpacity: 0.5,
+        shadowRadius: 6,
+        shadowOffset: { height: 0, width: 0 },
+      }}
+    />
+  );
+}
+
 function InlineStat({ label, value }: { label: string; value: string }) {
   return (
     <View
@@ -122,100 +139,6 @@ function InlineStat({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </View>
-  );
-}
-
-function StatusBadge({ color, label }: { color: string; label: string }) {
-  return (
-    <View
-      style={{
-        alignItems: "center",
-        flexDirection: "row",
-        gap: 8,
-        borderRadius: theme.radius.pill,
-        borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-      }}
-    >
-      <View
-        style={{
-          height: 8,
-          width: 8,
-          borderRadius: 8,
-          backgroundColor: color,
-          shadowColor: color,
-          shadowOpacity: 0.5,
-          shadowRadius: 6,
-          shadowOffset: { height: 0, width: 0 },
-        }}
-      />
-      <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.label.fontFamily,
-          fontSize: 12,
-          lineHeight: 16,
-        }}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function QuickAction({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        minHeight: 58,
-        borderRadius: theme.radius.card,
-        borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-      }}
-    >
-      <View
-        style={{
-          alignItems: "center",
-          justifyContent: "center",
-          height: 34,
-          width: 34,
-          borderRadius: 12,
-          backgroundColor: withAlpha(theme.colors.accentAmber, 0.12),
-        }}
-      >
-        <Ionicons color={theme.colors.textPrimary} name={icon} size={16} />
-      </View>
-      <Text
-        style={{
-          flex: 1,
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.label.fontFamily,
-          fontSize: 15,
-          lineHeight: 20,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -287,7 +210,7 @@ function visibleBoardStats(device: AddOneDevice) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
   const {
     commitHistoryDraft,
@@ -298,6 +221,8 @@ export default function HomeScreen() {
     toggleToday,
   } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
+  const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
+  const clearBoardEditorOpen = useAppUiStore((state) => state.clearBoardEditorOpen);
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
   const [isEditingHistory, setIsEditingHistory] = useState(false);
   const [historyBaseDevice, setHistoryBaseDevice] = useState<AddOneDevice | null>(activeDevice);
@@ -305,6 +230,7 @@ export default function HomeScreen() {
   const [historyIsDirty, setHistoryIsDirty] = useState(false);
   const [historyStatusError, setHistoryStatusError] = useState<string | null>(null);
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
+  const [boardStageWidth, setBoardStageWidth] = useState(0);
   const deviceSyncKey = `${activeDevice?.id ?? "none"}:${activeDevice?.runtimeRevision ?? 0}:${activeDevice?.lastSnapshotAt ?? ""}`;
 
   useEffect(() => {
@@ -321,6 +247,15 @@ export default function HomeScreen() {
       setHistoryDraftDevice(activeDevice);
     }
   }, [activeDevice, deviceSyncKey, historyIsDirty]);
+
+  useEffect(() => {
+    if (!pendingBoardEditorOpen || !activeDevice?.isLive || isEditingHistory) {
+      return;
+    }
+
+    clearBoardEditorOpen();
+    void openInlineHistoryEditor();
+  }, [activeDevice?.isLive, clearBoardEditorOpen, isEditingHistory, pendingBoardEditorOpen]);
 
   const effectiveDevice = useMemo(() => {
     if (!activeDevice) {
@@ -356,7 +291,14 @@ export default function HomeScreen() {
           row: effectiveDevice.today.dayIndex,
         }
       : null;
-  const homeBoardAvailableWidth = Math.max(260, Math.min(width - 74, 680));
+  const boardFrameInsetX = 14;
+  const boardFrameInsetY = 10;
+  const boardFrameRadius = 16;
+  const homeBoardAvailableWidth = Math.max(
+    0,
+    Math.min((boardStageWidth || width - 32) - boardFrameInsetX * 2, 760),
+  );
+  const buttonStageHeight = Math.max(260, Math.min(420, height - 420));
 
   const header = (
     <View
@@ -367,33 +309,26 @@ export default function HomeScreen() {
         paddingBottom: 18,
       }}
     >
-      <View style={{ gap: 4 }}>
-        <Text
-          style={{
-            color: theme.colors.textTertiary,
-            fontFamily: theme.typography.micro.fontFamily,
-            fontSize: theme.typography.micro.fontSize,
-            lineHeight: theme.typography.micro.lineHeight,
-            letterSpacing: theme.typography.micro.letterSpacing,
-            textTransform: "uppercase",
-          }}
-        >
-          AddOne
-        </Text>
-        <Text
-          style={{
-            color: theme.colors.textPrimary,
-            fontFamily: theme.typography.display.fontFamily,
-            fontSize: 30,
-            lineHeight: 34,
-          }}
-        >
-          {todayLabel}
-        </Text>
-      </View>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.display.fontFamily,
+          fontSize: 30,
+          lineHeight: 34,
+        }}
+      >
+        AddOne
+      </Text>
       {effectiveDevice ? <IconButton icon="person-circle-outline" onPress={() => router.push("/account")} /> : null}
     </View>
   );
+
+  function handleBoardStageLayout(event: LayoutChangeEvent) {
+    const nextWidth = event.nativeEvent.layout.width;
+    if (Math.abs(nextWidth - boardStageWidth) > 1) {
+      setBoardStageWidth(nextWidth);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -523,9 +458,9 @@ export default function HomeScreen() {
 
   return (
     <ScreenFrame header={header} scroll>
-      <View style={{ gap: 12, paddingBottom: 24 }}>
-        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
-          <View style={{ gap: 12 }}>
+      <View style={{ gap: 12, paddingTop: 18, paddingBottom: 24 }}>
+        <View style={{ gap: 18 }}>
+          <View style={{ gap: 14 }}>
             <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text
@@ -550,59 +485,69 @@ export default function HomeScreen() {
                   Today is {todayLabel}
                 </Text>
               </View>
-              <StatusBadge color={status.color} label={status.label} />
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                <StatusDot color={status.color} />
+                <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
+              </View>
             </View>
+          </View>
 
+          <View
+            onLayout={handleBoardStageLayout}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: 8,
+              width: "100%",
+            }}
+          >
             <View
               style={{
-                flexDirection: "row",
-                gap: 18,
-                borderTopWidth: 1,
-                borderTopColor: withAlpha(theme.colors.textPrimary, 0.06),
-                paddingTop: 10,
+                alignItems: "center",
+                width: "100%",
+                borderRadius: boardFrameRadius,
+                borderWidth: 1,
+                borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                backgroundColor: withAlpha(theme.colors.textPrimary, 0.018),
+                paddingHorizontal: boardFrameInsetX,
+                paddingVertical: boardFrameInsetY,
               }}
             >
-              <InlineStat label="This week" value={targetStatusLabel(device)} />
-              <InlineStat label="Recorded" value={`${stats.completed} total`} />
+              <PixelGrid
+                availableWidth={homeBoardAvailableWidth}
+                cells={cells}
+                mode={isEditingHistory ? "edit" : "display"}
+                onCellPress={
+                  isEditingHistory
+                    ? (row, col) => {
+                        if (!historyDraftDevice || isSavingHistoryDraft) {
+                          return;
+                        }
+
+                        setHistoryStatusError(null);
+                        setHistoryStatusMessage(null);
+                        setHistoryDraftDevice((current) => (current ? toggleHistoryCellLocal(current, row, col) : current));
+                        setHistoryIsDirty(true);
+                      }
+                    : undefined
+                }
+                palette={palette}
+                pendingPulse={pendingPulse}
+                readOnly={!isEditingHistory}
+                showFooterHint={false}
+              />
             </View>
           </View>
 
           <View
             style={{
-              alignItems: "center",
-              borderRadius: theme.radius.card,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.05),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.35),
-              justifyContent: "center",
-              paddingHorizontal: 10,
-              paddingVertical: 12,
-              width: "100%",
+              flexDirection: "row",
+              gap: 24,
+              paddingTop: 4,
             }}
           >
-            <PixelGrid
-              availableWidth={homeBoardAvailableWidth}
-              cells={cells}
-              mode={isEditingHistory ? "edit" : "display"}
-              onCellPress={
-                isEditingHistory
-                  ? (row, col) => {
-                      if (!historyDraftDevice || isSavingHistoryDraft) {
-                        return;
-                      }
-
-                      setHistoryStatusError(null);
-                      setHistoryStatusMessage(null);
-                      setHistoryDraftDevice((current) => (current ? toggleHistoryCellLocal(current, row, col) : current));
-                      setHistoryIsDirty(true);
-                    }
-                  : undefined
-              }
-              palette={palette}
-              pendingPulse={pendingPulse}
-              readOnly={!isEditingHistory}
-              showFooterHint={false}
-            />
+            <InlineStat label="This week" value={targetStatusLabel(device)} />
+            <InlineStat label="Recorded" value={`${stats.completed} total`} />
           </View>
 
           {isEditingHistory ? (
@@ -679,34 +624,29 @@ export default function HomeScreen() {
                 />
               </View>
             </View>
-          ) : (
+          ) : null}
+        </View>
+
+        {!isEditingHistory ? (
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              height: buttonStageHeight,
+              width: "100%",
+            }}
+          >
             <PrimaryActionButton
               onPress={() => {
                 void toggleToday(device.id).catch((error) => {
                   console.warn("Failed to toggle today from app", error);
                 });
               }}
+              size={156}
               state={boardButtonState(device, buttonIsApplying)}
-              style={{ width: "100%" }}
+              style={{ alignSelf: "center" }}
             />
-          )}
-        </GlassCard>
-
-        {!isEditingHistory ? (
-          <GlassCard style={{ gap: 10, paddingHorizontal: 16, paddingVertical: 14 }}>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <QuickAction
-                icon="create-outline"
-                label="Edit board"
-                onPress={() => void openInlineHistoryEditor()}
-              />
-              <QuickAction
-                icon="options-outline"
-                label="Device settings"
-                onPress={() => router.push("/settings")}
-              />
-            </View>
-          </GlassCard>
+          </View>
         ) : null}
       </View>
     </ScreenFrame>

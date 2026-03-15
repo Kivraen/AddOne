@@ -15,10 +15,13 @@ interface AppUiState {
   activeOnboardingClaimToken: string | null;
   activeOnboardingSessionId: string | null;
   hasHydrated: boolean;
+  pendingBoardEditorOpen: boolean;
   pendingTodayStateByDevice: Record<string, boolean | undefined>;
   clearApProvisioningDraft: () => void;
+  clearBoardEditorOpen: () => void;
   clearOnboardingSession: () => void;
   clearPendingTodayState: (deviceId: string) => void;
+  requestBoardEditorOpen: () => void;
   setActiveApProvisioningDraft: (patch: Partial<ApProvisioningDraft>) => void;
   setActiveOnboardingSession: (params: { claimToken?: string | null; sessionId: string | null }) => void;
   setActiveDeviceId: (deviceId: string | null) => void;
@@ -37,10 +40,15 @@ export const useAppUiStore = create<AppUiState>()(
     (set) => ({
       ...PERSISTED_APP_UI_STATE,
       hasHydrated: false,
+      pendingBoardEditorOpen: false,
       pendingTodayStateByDevice: {},
       clearApProvisioningDraft: () =>
         set({
           activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
+        }),
+      clearBoardEditorOpen: () =>
+        set({
+          pendingBoardEditorOpen: false,
         }),
       clearOnboardingSession: () =>
         set({
@@ -53,6 +61,10 @@ export const useAppUiStore = create<AppUiState>()(
           const next = { ...state.pendingTodayStateByDevice };
           delete next[deviceId];
           return { pendingTodayStateByDevice: next };
+        }),
+      requestBoardEditorOpen: () =>
+        set({
+          pendingBoardEditorOpen: true,
         }),
       setActiveApProvisioningDraft: (patch) =>
         set((state) => ({
@@ -95,6 +107,7 @@ export async function resetPersistedAppUiState() {
   useAppUiStore.setState({
     ...PERSISTED_APP_UI_STATE,
     hasHydrated: true,
+    pendingBoardEditorOpen: false,
     pendingTodayStateByDevice: {},
   });
   await useAppUiStore.persist.clearStorage();

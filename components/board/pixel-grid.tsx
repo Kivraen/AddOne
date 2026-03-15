@@ -67,29 +67,91 @@ function cellColors(state: PixelCellState, palette: BoardPalette) {
     case "done":
       return {
         fill: palette.dayOn,
-        border: withAlpha(palette.dayOn, 0.18),
       };
     case "weekSuccess":
       return {
         fill: palette.weekSuccess,
-        border: withAlpha(palette.weekSuccess, 0.18),
       };
     case "weekFail":
       return {
         fill: palette.weekFail,
-        border: withAlpha(palette.weekFail, 0.18),
       };
     case "socket":
       return {
         fill: palette.socket,
-        border: withAlpha(palette.socketEdge, 0.72),
       };
     default:
       return {
         fill: withAlpha(palette.socket, 0.24),
-        border: withAlpha(palette.socketEdge, 0.32),
       };
   }
+}
+
+function isLitCell(state: PixelCellState) {
+  return state === "done" || state === "weekSuccess" || state === "weekFail";
+}
+
+function shadeHex(hex: string, factor: number) {
+  const normalized = hex.replace("#", "");
+  const value =
+    normalized.length === 3 ? normalized.split("").map((char) => char + char).join("") : normalized;
+
+  const red = Math.max(0, Math.min(255, Math.round(Number.parseInt(value.slice(0, 2), 16) * factor)));
+  const green = Math.max(0, Math.min(255, Math.round(Number.parseInt(value.slice(2, 4), 16) * factor)));
+  const blue = Math.max(0, Math.min(255, Math.round(Number.parseInt(value.slice(4, 6), 16) * factor)));
+
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+function litPixelTreatment(fill: string) {
+  return {
+    edgeFill: shadeHex(fill, 0.72),
+    centerFill: fill,
+    outerGlowOpacity: 0.18,
+  };
+}
+
+function LitPixelDiffuser({ cellSize, fill }: { cellSize: number; fill: string }) {
+  const fullRadius = Math.max(4, Math.floor(cellSize * 0.28));
+  const layers = [
+    { size: 0.98, alpha: 0.14 },
+    { size: 0.8, alpha: 0.24 },
+    { size: 0.6, alpha: 0.34 },
+    { size: 0.38, alpha: 0.5 },
+  ];
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: fullRadius,
+        overflow: "hidden",
+      }}
+    >
+      {layers.map((layer, index) => {
+        const size = Math.max(4, Math.floor(cellSize * layer.size));
+        return (
+          <View
+            key={`diffuser-${index}`}
+            style={{
+              position: "absolute",
+              width: size,
+              height: size,
+              borderRadius: Math.max(3, Math.floor(size * 0.28)),
+              backgroundColor: withAlpha(fill, layer.alpha),
+            }}
+          />
+        );
+      })}
+    </View>
+  );
 }
 
 export function PixelGrid({
@@ -106,8 +168,9 @@ export function PixelGrid({
   showFooterHint = true,
 }: PixelGridProps) {
   const { width } = useWindowDimensions();
-  const gap = mode === "display" || mode === "preview" ? 2 : 3;
-  const resolvedWidth = Math.min(availableWidth ?? width - 48, maxWidth ?? 360);
+  const gap = mode === "display" || mode === "preview" ? 4 : 5;
+  const unclampedWidth = availableWidth ?? width - 48;
+  const resolvedWidth = maxWidth ? Math.min(unclampedWidth, maxWidth) : unclampedWidth;
   const widthBoundCellSize = Math.floor((resolvedWidth - gap * 20) / 21);
   const heightBoundCellSize =
     availableHeight !== undefined ? Math.floor((availableHeight - gap * 7) / 8) : Number.POSITIVE_INFINITY;
@@ -122,8 +185,9 @@ export function PixelGrid({
           <View key={`row-${rowIndex}`} style={{ flexDirection: "row", gap }}>
             {row.map((cell, colIndex) => {
               const colors = cellColors(cell, palette);
-              const activeGlow =
-                cell === "done" || cell === "weekSuccess" || cell === "weekFail" ? withAlpha(colors.fill, 0.18) : "transparent";
+              const lit = isLitCell(cell);
+              const treatment = lit ? litPixelTreatment(colors.fill) : undefined;
+              const outerGlow = lit && treatment ? withAlpha(colors.fill, treatment.outerGlowOpacity) : "transparent";
               const isToday = highlightToday?.row === rowIndex && highlightToday?.col === colIndex;
               const disabled = readOnly || mode === "display" || mode === "shared" || rowIndex === 7;
               const cellStyle = {
@@ -132,14 +196,14 @@ export function PixelGrid({
                 height: cellSize,
                 width: cellSize,
                 borderRadius: Math.max(4, Math.floor(cellSize * 0.28)),
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.fill,
-                shadowColor: activeGlow,
-                shadowOpacity: activeGlow === "transparent" ? 0 : 1,
-                shadowRadius: activeGlow === "transparent" ? 0 : 10,
+                backgroundColor: lit && treatment ? treatment.edgeFill : colors.fill,
+                overflow: "hidden" as const,
+                shadowColor: outerGlow,
+                shadowOpacity: lit ? 0.18 : 0,
+                shadowRadius: lit ? Math.max(4, Math.floor(cellSize * 0.28)) : 0,
                 shadowOffset: { width: 0, height: 0 },
               };
+              const ledGlow = lit && treatment ? <LitPixelDiffuser cellSize={cellSize} fill={treatment.centerFill} /> : null;
 
               const showHighlight = mode === "edit" && isToday;
               const showPendingPulse = pendingPulse?.row === rowIndex && pendingPulse?.col === colIndex;
@@ -161,6 +225,7 @@ export function PixelGrid({
               if (disabled) {
                 return (
                   <View key={`cell-${rowIndex}-${colIndex}`} style={cellStyle}>
+                    {ledGlow}
                     {showPendingPulse ? <PendingPulse cellSize={cellSize} /> : null}
                     {highlight}
                   </View>
@@ -169,6 +234,7 @@ export function PixelGrid({
 
               return (
                 <Pressable key={`cell-${rowIndex}-${colIndex}`} onPress={() => onCellPress?.(rowIndex, colIndex)} style={cellStyle}>
+                  {ledGlow}
                   {showPendingPulse ? <PendingPulse cellSize={cellSize} /> : null}
                   {highlight}
                 </Pressable>

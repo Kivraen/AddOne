@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { PropsWithChildren } from "react";
-import { Pressable, StyleProp, Text, ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, StyleProp, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { theme } from "@/constants/theme";
@@ -10,43 +11,61 @@ export type PrimaryActionState = "done" | "notDone" | "pendingSync" | "syncing" 
 interface PrimaryActionButtonProps extends PropsWithChildren {
   state: PrimaryActionState;
   onPress?: () => void;
+  size?: number;
   style?: StyleProp<ViewStyle>;
 }
 
-const stateStyle: Record<PrimaryActionState, { background: string; text: string; border: string; label: string }> = {
+const stateStyle: Record<
+  PrimaryActionState,
+  {
+    background: string;
+    border: string;
+    icon: keyof typeof Ionicons.glyphMap | null;
+    iconColor: string;
+    indicatorColor?: string;
+    shadow: string;
+  }
+> = {
   done: {
-    background: withAlpha("#F2EEE6", 0.08),
-    text: "#F2EEE6",
-    border: withAlpha("#F2EEE6", 0.14),
-    label: "Remove one",
+    background: withAlpha(theme.colors.bgElevated, 0.98),
+    border: withAlpha(theme.colors.textPrimary, 0.12),
+    icon: "checkmark",
+    iconColor: theme.colors.textTertiary,
+    shadow: withAlpha(theme.colors.textPrimary, 0.06),
   },
   notDone: {
-    background: "#C7904A",
-    text: "#070707",
-    border: withAlpha("#C7904A", 0.34),
-    label: "Add one",
+    background: withAlpha(theme.colors.bgElevated, 0.98),
+    border: withAlpha(theme.colors.textPrimary, 0.16),
+    icon: "checkmark",
+    iconColor: theme.colors.accentAmber,
+    shadow: withAlpha(theme.colors.accentAmber, 0.28),
   },
   pendingSync: {
-    background: withAlpha("#C7904A", 0.15),
-    text: "#F2EEE6",
-    border: withAlpha("#C7904A", 0.24),
-    label: "Applying…",
+    background: withAlpha(theme.colors.bgElevated, 0.98),
+    border: withAlpha(theme.colors.accentAmber, 0.24),
+    icon: null,
+    iconColor: theme.colors.textPrimary,
+    indicatorColor: theme.colors.accentAmber,
+    shadow: withAlpha(theme.colors.accentAmber, 0.22),
   },
   syncing: {
-    background: withAlpha("#C7904A", 0.15),
-    text: "#F2EEE6",
-    border: withAlpha("#C7904A", 0.24),
-    label: "Applying…",
+    background: withAlpha(theme.colors.bgElevated, 0.98),
+    border: withAlpha(theme.colors.accentAmber, 0.24),
+    icon: null,
+    iconColor: theme.colors.textPrimary,
+    indicatorColor: theme.colors.accentAmber,
+    shadow: withAlpha(theme.colors.accentAmber, 0.22),
   },
   disabled: {
-    background: withAlpha("#F2EEE6", 0.04),
-    text: "#7B766E",
-    border: withAlpha("#F2EEE6", 0.08),
-    label: "Unavailable",
+    background: withAlpha(theme.colors.bgElevated, 0.92),
+    border: withAlpha(theme.colors.textPrimary, 0.08),
+    icon: "checkmark",
+    iconColor: withAlpha(theme.colors.textTertiary, 0.78),
+    shadow: "transparent",
   },
 };
 
-export function PrimaryActionButton({ state, onPress, style }: PrimaryActionButtonProps) {
+export function PrimaryActionButton({ state, onPress, size = 94, style }: PrimaryActionButtonProps) {
   const pressed = useSharedValue(0);
   const config = stateStyle[state];
 
@@ -67,25 +86,24 @@ export function PrimaryActionButton({ state, onPress, style }: PrimaryActionButt
         }}
         style={{
           alignItems: "center",
-          width: "100%",
-          borderRadius: theme.radius.sheet,
+          justifyContent: "center",
+          width: size,
+          height: size,
+          borderRadius: size / 2,
           borderWidth: 1,
           borderColor: config.border,
           backgroundColor: config.background,
-          paddingHorizontal: 22,
-          paddingVertical: 19,
+          shadowColor: config.shadow,
+          shadowOpacity: config.shadow === "transparent" ? 0 : 0.7,
+          shadowRadius: config.shadow === "transparent" ? 0 : 16,
+          shadowOffset: { width: 0, height: 8 },
         }}
       >
-        <Text
-          style={{
-            color: config.text,
-            fontFamily: theme.typography.title.fontFamily,
-            fontSize: theme.typography.title.fontSize,
-            lineHeight: theme.typography.title.lineHeight,
-          }}
-        >
-          {config.label}
-        </Text>
+        {config.icon ? (
+          <Ionicons color={config.iconColor} name={config.icon} size={34} />
+        ) : (
+          <ActivityIndicator color={config.indicatorColor ?? config.iconColor} size="small" />
+        )}
       </Pressable>
     </Animated.View>
   );
