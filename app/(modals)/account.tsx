@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
+import { PageHeader } from "@/components/app/page-header";
+import { ScreenFrame } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
-import { GlassSheet } from "@/components/ui/glass-sheet";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { withAlpha } from "@/lib/color";
@@ -12,8 +13,12 @@ export default function AccountModal() {
   const { mode, signOut, userEmail } = useAuth();
 
   return (
-    <GlassSheet subtitle="App-level controls stay separate from the current device." title="App settings" variant="peek">
-      <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
+    <ScreenFrame
+      header={<PageHeader subtitle="App-level controls stay separate from the current device." title="App settings" />}
+      scroll
+    >
+      <View style={{ gap: 16 }}>
+        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
         <Text
           style={{
             color: theme.colors.textTertiary,
@@ -36,37 +41,38 @@ export default function AccountModal() {
         >
           {mode === "demo" ? "Demo preview" : userEmail ?? "Email OTP session"}
         </Text>
-      </GlassCard>
+        </GlassCard>
 
-      {mode === "cloud" ? (
-        <Pressable
-          onPress={async () => {
-            await signOut();
-            router.replace("/sign-in");
-          }}
-          style={{
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: theme.radius.card,
-            borderWidth: 1,
-            borderColor: withAlpha(theme.colors.statusErrorMuted, 0.24),
-            backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
-            minHeight: 52,
-            paddingHorizontal: 16,
-          }}
-        >
-          <Text
+        {mode === "cloud" ? (
+          <Pressable
+            onPress={async () => {
+              await signOut();
+              router.replace("/sign-in");
+            }}
             style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.label.fontFamily,
-              fontSize: theme.typography.label.fontSize,
-              lineHeight: theme.typography.label.lineHeight,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: theme.radius.card,
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.statusErrorMuted, 0.24),
+              backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
+              minHeight: 52,
+              paddingHorizontal: 16,
             }}
           >
-            Sign out
-          </Text>
-        </Pressable>
-      ) : null}
-    </GlassSheet>
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: theme.typography.label.fontSize,
+                lineHeight: theme.typography.label.lineHeight,
+              }}
+            >
+              Sign out
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </ScreenFrame>
   );
 }

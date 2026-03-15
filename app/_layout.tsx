@@ -54,7 +54,7 @@ export default function RootLayout() {
           <AppProviders>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(app)" />
-              <Stack.Screen name="(modals)" options={{ animation: "fade", presentation: "modal" }} />
+              <Stack.Screen name="(modals)" options={{ animation: "default" }} />
               <Stack.Screen name="sign-in" />
               <Stack.Screen name="auth/callback" />
             </Stack>

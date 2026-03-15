@@ -90,29 +90,12 @@ function boardStatus(device: AddOneDevice, isApplying: boolean) {
   };
 }
 
-function MetricCard({
-  caption,
-  highlight = false,
-  label,
-  value,
-}: {
-  caption?: string;
-  highlight?: boolean;
-  label: string;
-  value: string;
-}) {
+function InlineStat({ label, value }: { label: string; value: string }) {
   return (
     <View
       style={{
         flex: 1,
-        gap: 6,
-        minHeight: 86,
-        borderRadius: theme.radius.card,
-        borderWidth: 1,
-        borderColor: highlight ? withAlpha(theme.colors.accentAmber, 0.2) : withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: highlight ? withAlpha(theme.colors.accentAmber, 0.1) : withAlpha(theme.colors.textPrimary, 0.04),
-        paddingHorizontal: 14,
-        paddingVertical: 14,
+        gap: 2,
       }}
     >
       <Text
@@ -130,27 +113,14 @@ function MetricCard({
       <Text
         style={{
           color: theme.colors.textPrimary,
-          fontFamily: theme.typography.title.fontFamily,
-          fontSize: 26,
-          lineHeight: 28,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: 16,
+          lineHeight: 20,
         }}
         numberOfLines={1}
       >
         {value}
       </Text>
-      {caption ? (
-        <Text
-          style={{
-            color: theme.colors.textSecondary,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: 12,
-            lineHeight: 16,
-          }}
-          numberOfLines={1}
-        >
-          {caption}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -196,15 +166,13 @@ function StatusBadge({ color, label }: { color: string; label: string }) {
   );
 }
 
-function UtilityActionCard({
+function QuickAction({
   icon,
-  title,
-  subtitle,
+  label,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle: string;
+  label: string;
   onPress: () => void;
 }) {
   return (
@@ -212,50 +180,41 @@ function UtilityActionCard({
       onPress={onPress}
       style={{
         flex: 1,
-        gap: 14,
-        minHeight: 122,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        minHeight: 58,
         borderRadius: theme.radius.card,
         borderWidth: 1,
         borderColor: withAlpha(theme.colors.textPrimary, 0.08),
         backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-        paddingHorizontal: 16,
-        paddingVertical: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
       }}
     >
       <View
         style={{
           alignItems: "center",
           justifyContent: "center",
-          height: 40,
-          width: 40,
-          borderRadius: 20,
+          height: 34,
+          width: 34,
+          borderRadius: 12,
           backgroundColor: withAlpha(theme.colors.accentAmber, 0.12),
         }}
       >
-        <Ionicons color={theme.colors.textPrimary} name={icon} size={18} />
+        <Ionicons color={theme.colors.textPrimary} name={icon} size={16} />
       </View>
-      <View style={{ gap: 4 }}>
-        <Text
-          style={{
-            color: theme.colors.textPrimary,
-            fontFamily: theme.typography.label.fontFamily,
-            fontSize: 15,
-            lineHeight: 20,
-          }}
-        >
-          {title}
-        </Text>
-        <Text
-          style={{
-            color: theme.colors.textSecondary,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: 12,
-            lineHeight: 18,
-          }}
-        >
-          {subtitle}
-        </Text>
-      </View>
+      <Text
+        style={{
+          flex: 1,
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: 15,
+          lineHeight: 20,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -381,7 +340,7 @@ export default function HomeScreen() {
   const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
   const todayLabel = useMemo(() => {
     const today = new Date();
-    return `Today, ${today.toLocaleString("en-US", { month: "short" })} ${today.getDate()}`;
+    return today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   }, []);
   const historyUpdates = useMemo(() => {
     if (!historyBaseDevice || !historyDraftDevice) {
@@ -397,7 +356,7 @@ export default function HomeScreen() {
           row: effectiveDevice.today.dayIndex,
         }
       : null;
-  const homeBoardAvailableWidth = Math.max(260, Math.min(width - 92, 680));
+  const homeBoardAvailableWidth = Math.max(260, Math.min(width - 74, 680));
 
   const header = (
     <View
@@ -564,29 +523,17 @@ export default function HomeScreen() {
 
   return (
     <ScreenFrame header={header} scroll>
-      <View style={{ gap: 16, paddingBottom: 24 }}>
-        <GlassCard style={{ gap: 18, paddingHorizontal: 18, paddingVertical: 18 }}>
-          <View style={{ gap: 16 }}>
+      <View style={{ gap: 12, paddingBottom: 24 }}>
+        <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+          <View style={{ gap: 12 }}>
             <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flex: 1, gap: 6 }}>
-                <Text
-                  style={{
-                    color: theme.colors.textTertiary,
-                    fontFamily: theme.typography.micro.fontFamily,
-                    fontSize: theme.typography.micro.fontSize,
-                    lineHeight: theme.typography.micro.lineHeight,
-                    letterSpacing: theme.typography.micro.letterSpacing,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Your habit
-                </Text>
+              <View style={{ flex: 1, gap: 4 }}>
                 <Text
                   style={{
                     color: theme.colors.textPrimary,
                     fontFamily: theme.typography.display.fontFamily,
-                    fontSize: 32,
-                    lineHeight: 36,
+                    fontSize: 30,
+                    lineHeight: 34,
                   }}
                   numberOfLines={1}
                 >
@@ -600,16 +547,23 @@ export default function HomeScreen() {
                     lineHeight: 20,
                   }}
                 >
-                  {stats.completed} recorded so far • {stats.fillPercentage}% filled
+                  Today is {todayLabel}
                 </Text>
               </View>
               <StatusBadge color={status.color} label={status.label} />
             </View>
 
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <MetricCard caption="Completed days" label="Recorded" value={String(stats.completed)} />
-              <MetricCard caption="Visible board" highlight label="Filled" value={`${stats.fillPercentage}%`} />
-              <MetricCard caption="Goal this week" label="Target" value={targetStatusLabel(device)} />
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 18,
+                borderTopWidth: 1,
+                borderTopColor: withAlpha(theme.colors.textPrimary, 0.06),
+                paddingTop: 10,
+              }}
+            >
+              <InlineStat label="This week" value={targetStatusLabel(device)} />
+              <InlineStat label="Recorded" value={`${stats.completed} total`} />
             </View>
           </View>
 
@@ -621,8 +575,8 @@ export default function HomeScreen() {
               borderColor: withAlpha(theme.colors.textPrimary, 0.05),
               backgroundColor: withAlpha(theme.colors.bgBase, 0.35),
               justifyContent: "center",
-              paddingHorizontal: 12,
-              paddingVertical: 14,
+              paddingHorizontal: 10,
+              paddingVertical: 12,
               width: "100%",
             }}
           >
@@ -739,77 +693,18 @@ export default function HomeScreen() {
         </GlassCard>
 
         {!isEditingHistory ? (
-          <GlassCard style={{ gap: 16, paddingHorizontal: 18, paddingVertical: 18 }}>
-            <View style={{ gap: 4 }}>
-              <Text
-                style={{
-                  color: theme.colors.textTertiary,
-                  fontFamily: theme.typography.micro.fontFamily,
-                  fontSize: theme.typography.micro.fontSize,
-                  lineHeight: theme.typography.micro.lineHeight,
-                  letterSpacing: theme.typography.micro.letterSpacing,
-                  textTransform: "uppercase",
-                }}
-              >
-                Quick actions
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.title.fontFamily,
-                  fontSize: 22,
-                  lineHeight: 26,
-                }}
-              >
-                Manage this device
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Edit past days directly on the board or adjust this habit’s target, palette, and Wi‑Fi settings.
-              </Text>
-            </View>
-
+          <GlassCard style={{ gap: 10, paddingHorizontal: 16, paddingVertical: 14 }}>
             <View style={{ flexDirection: "row", gap: 12 }}>
-              <UtilityActionCard
+              <QuickAction
                 icon="create-outline"
+                label="Edit board"
                 onPress={() => void openInlineHistoryEditor()}
-                subtitle="Correct past days without leaving the home screen."
-                title="Edit board"
               />
-              <UtilityActionCard
+              <QuickAction
                 icon="options-outline"
+                label="Device settings"
                 onPress={() => router.push("/settings")}
-                subtitle="Target, palette, habit name, and Wi‑Fi recovery."
-                title="Device settings"
               />
-            </View>
-
-            <View
-              style={{
-                borderRadius: theme.radius.card,
-                borderWidth: 1,
-                borderColor: withAlpha(theme.colors.textPrimary, 0.05),
-                backgroundColor: withAlpha(theme.colors.textPrimary, 0.03),
-                paddingHorizontal: 14,
-                paddingVertical: 14,
-              }}
-            >
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: 13,
-                  lineHeight: 18,
-                }}
-              >
-                This card layout is ready to scale into a multi-device stack later without changing how the current single-device beta works.
-              </Text>
             </View>
           </GlassCard>
         ) : null}

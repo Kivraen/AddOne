@@ -20,10 +20,10 @@ export const theme = {
     32: 32,
   },
   radius: {
-    sm: 12,
-    card: 20,
-    sheet: 28,
-    pill: 999,
+    sm: 10,
+    card: 16,
+    sheet: 20,
+    pill: 18,
   },
   typography: {
     display: { fontSize: 28, lineHeight: 32, fontFamily: "SpaceGrotesk_700Bold" as const },

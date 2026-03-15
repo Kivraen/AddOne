@@ -2,9 +2,10 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, Switch, Text, TextInput, View } from "react-native";
 
+import { PageHeader } from "@/components/app/page-header";
+import { ScreenFrame } from "@/components/layout/screen-frame";
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { GlassCard } from "@/components/ui/glass-card";
-import { GlassSheet } from "@/components/ui/glass-sheet";
 import { boardPalettes } from "@/constants/palettes";
 import { theme } from "@/constants/theme";
 import { useActiveDevice } from "@/hooks/use-active-device";
@@ -302,7 +303,16 @@ export default function SettingsModal() {
   }
 
   return (
-    <GlassSheet subtitle="These settings belong to this device and save only after the device confirms them." title="Device settings" variant="full">
+    <ScreenFrame
+      header={
+        <PageHeader
+          subtitle="These settings belong to this device and save only after the device confirms them."
+          title="Device settings"
+        />
+      }
+      scroll
+    >
+      <View style={{ gap: 16 }}>
       {!liveDeviceSession ? (
         <GlassCard style={{ gap: 10, paddingHorizontal: 16, paddingVertical: 16 }}>
           <Text
@@ -613,6 +623,7 @@ export default function SettingsModal() {
           {statusError}
         </Text>
       ) : null}
-    </GlassSheet>
+      </View>
+    </ScreenFrame>
   );
 }
