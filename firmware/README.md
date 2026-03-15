@@ -30,10 +30,19 @@ Current contents:
 - realtime MQTT command client for low-latency online command delivery, with fallback cloud polling still retained
 
 Local flashing:
-- tracked [cloud_config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.h) now supports a local-only `cloud_config.local.h` override
-- create that local header with staging or production Supabase values before flashing real hardware
-- MQTT broker host/port/credentials now also live in `cloud_config.local.h` when realtime delivery is enabled
+- tracked [cloud_config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.h) now supports explicit development and beta config profiles
+- local development uses ignored `cloud_config.local.h`
+- hosted beta uses ignored `cloud_config.beta.h`
+- copy from:
+  - [cloud_config.local.example.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.local.example.h)
+  - [cloud_config.beta.example.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.beta.example.h)
+- MQTT broker host/port/credentials live in those environment-specific headers when realtime delivery is enabled
 - `cloud_config.local.h` is ignored from Git
+- `cloud_config.beta.h` is ignored from Git
+
+PlatformIO environments:
+- `addone-esp32dev`: local development firmware profile
+- `addone-esp32dev-beta`: hosted beta firmware profile
 
 Not implemented yet:
 - real cloud credentials/config for flashed hardware

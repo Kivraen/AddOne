@@ -15,10 +15,15 @@ For low-latency online device delivery, see [AddOne_Device_Realtime_Transport.md
 
 ## Project Strategy
 - Keep the existing prototype Supabase project alive for already-distributed legacy devices.
-- Create a clean `addone-staging` Supabase project for development and testing.
+- Create a clean `addone-development` Supabase project for laptop/local development.
+- Create a clean `addone-beta` Supabase project for pre-launch validation and tester builds.
 - Create a clean `addone-production` Supabase project for launch.
 - Treat legacy migration as optional and selective, not as a requirement for the new backend design.
 - Production-facing domain target is `addone.studio`.
+
+Temporary beta decision:
+- because the current Supabase account is at the free-project limit, the existing hosted `AddOne` project (`sqhzaayqacmgxseiqihs`) is acting as the beta backend for now
+- the separate `addone-beta` project remains the intended later target, not the immediate blocker
 
 ## Core Identity Model
 - `auth.users.id` is the canonical user key.

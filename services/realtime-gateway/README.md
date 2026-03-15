@@ -49,6 +49,27 @@ npm install
 npm run start
 ```
 
+### Local development
+
+- copy `.env.development.example` to `.env`
+- keep `MQTT_BROKER_URL=mqtt://127.0.0.1:1883`
+- run against the local broker and the development Supabase project
+
+### Hosted beta deployment
+
+- copy `.env.beta.example` to your hosted service environment
+- use a TLS-enabled managed broker hostname
+- point `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` at the dedicated beta Supabase project
+- deploy this folder as a small long-running Node service
+- the simplest default is a small hosted service such as Railway or Render
+
+Docker image:
+
+```bash
+docker build -t addone-realtime-gateway .
+docker run --env-file .env.beta -p 8787:8787 addone-realtime-gateway
+```
+
 ## Notes
 
 - Use TLS-enabled broker URLs in any real deployment.

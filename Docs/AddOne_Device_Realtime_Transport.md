@@ -202,6 +202,8 @@ For v1, the broker and gateway are separate from Supabase:
 - MQTT handles online runtime delivery
 - the gateway bridges the two
 
+For the hosted beta split and required repo config, see [AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md).
+
 This keeps the system scalable without turning Postgres polling into the realtime layer.
 
 ## Development Setup Notes

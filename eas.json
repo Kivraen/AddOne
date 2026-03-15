@@ -1,0 +1,22 @@
+{
+  "cli": {
+    "version": ">= 16.16.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development"
+      }
+    },
+    "beta": {
+      "distribution": "internal",
+      "channel": "beta",
+      "env": {
+        "APP_VARIANT": "beta"
+      }
+    }
+  }
+}

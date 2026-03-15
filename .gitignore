@@ -8,8 +8,13 @@ expo-env.d.ts
 .DS_Store
 node_modules
 .env
+.env.beta
+.env.development
 .env.local
 .env.*.local
 !.env.example
+!.env.beta.example
+!.env.development.example
 firmware/.pio
 firmware/include/cloud_config.local.h
+firmware/include/cloud_config.beta.h

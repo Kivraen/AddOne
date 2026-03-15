@@ -4,8 +4,13 @@ This folder holds the AddOne cloud schema for the new product backend.
 
 Project strategy:
 - `legacy-prototype`: keep the existing distributed prototype devices on their current backend
-- `addone-staging`: test new auth, schema, firmware sync, and app flows
+- `addone-development`: local/dev app and firmware validation backend
+- `addone-beta`: clean pre-launch validation backend
 - `addone-production`: real AddOne launch backend
+
+Current temporary decision:
+- the hosted Supabase project `AddOne` is the active beta backend for now
+- a distinct `addone-beta` project is deferred until there is another project slot or an upgraded Supabase plan
 
 Rules:
 - Do not point new AddOne app code at the legacy prototype project.
@@ -26,8 +31,8 @@ What this migration sets up:
 - core RPC helpers for claiming devices, sharing, day-event writes, and command queueing
 - row-level security policies for app access
 
-How to apply once staging exists:
-1. Create the `addone-staging` Supabase project.
+How to apply once a target environment exists:
+1. Create the `addone-development`, `addone-beta`, or `addone-production` Supabase project.
 2. Apply the SQL in the Supabase SQL editor or via the Supabase CLI migration flow.
 3. Set the app env vars from that staging project:
    - `EXPO_PUBLIC_SUPABASE_URL`
