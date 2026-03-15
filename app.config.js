@@ -17,6 +17,7 @@ module.exports = {
     ios: {
       bundleIdentifier: isBeta ? "studio.addone.beta" : "studio.addone.dev",
       infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
         NSLocalNetworkUsageDescription:
           "AddOne uses your local network during first-boot and recovery to send Wi-Fi credentials to your device.",
       },
@@ -26,6 +27,9 @@ module.exports = {
     },
     extra: {
       appVariant: variant,
+      eas: {
+        projectId: "fe435038-1f31-49e0-9317-9a9a48b1fa04",
+      },
     },
   },
 };

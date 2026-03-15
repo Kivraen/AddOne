@@ -13,9 +13,10 @@
     },
     "beta": {
       "distribution": "internal",
-      "channel": "beta",
       "env": {
-        "APP_VARIANT": "beta"
+        "APP_VARIANT": "beta",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://sqhzaayqacmgxseiqihs.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_5PON5oiJ_TVWRQm6vm2Zpw__dfoWNzV"
       }
     }
   }
