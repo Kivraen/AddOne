@@ -11,6 +11,7 @@ import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, targetStatusLabel, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
+import { withAlpha } from "@/lib/color";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
 
@@ -118,6 +119,56 @@ function CompactStat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MetricCard({
+  label,
+  tone = "default",
+  value,
+}: {
+  label: string;
+  tone?: "accent" | "default";
+  value: string;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        gap: 4,
+        minHeight: 74,
+        borderRadius: theme.radius.card,
+        borderWidth: 1,
+        borderColor: tone === "accent" ? withAlpha(theme.colors.accentAmber, 0.18) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: tone === "accent" ? withAlpha(theme.colors.accentAmber, 0.08) : withAlpha(theme.colors.textPrimary, 0.04),
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.title.fontFamily,
+          fontSize: 28,
+          lineHeight: 30,
+        }}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 function InlineAction({
   icon,
   label,
@@ -155,6 +206,27 @@ function InlineAction({
       </Text>
     </Pressable>
   );
+}
+
+function visibleBoardStats(device: AddOneDevice) {
+  let completed = 0;
+  let visibleDays = 0;
+
+  for (let col = 0; col < device.days.length; col += 1) {
+    const isPastWeek = col > device.today.weekIndex;
+    const isCurrentWeek = col === device.today.weekIndex;
+    const visibleRows = isPastWeek ? 7 : isCurrentWeek ? device.today.dayIndex + 1 : 0;
+
+    visibleDays += visibleRows;
+    completed += device.days[col].slice(0, visibleRows).filter(Boolean).length;
+  }
+
+  const fillPercentage = visibleDays === 0 ? 0 : Math.round((completed / visibleDays) * 100);
+
+  return {
+    completed,
+    fillPercentage,
+  };
 }
 
 export default function HomeScreen() {
@@ -340,6 +412,7 @@ export default function HomeScreen() {
   const device = effectiveDevice;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
   const status = boardStatus(device, buttonIsApplying || activePendingTodayState !== undefined);
+  const stats = visibleBoardStats(device);
 
   async function openInlineHistoryEditor() {
     if (!activeDevice?.isLive) {
@@ -375,37 +448,63 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScreenFrame header={header}>
-      <View style={{ flex: 1, justifyContent: "space-between", gap: 24 }}>
-        <View style={{ gap: 16 }}>
-          <View style={{ gap: 8, paddingHorizontal: 2 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-              <Text
+    <ScreenFrame header={header} scroll>
+      <View style={{ gap: 18, paddingBottom: 24 }}>
+        <GlassCard style={{ gap: 18, paddingHorizontal: 18, paddingVertical: 18 }}>
+          <View style={{ gap: 14 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text
+                  style={{
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.typography.display.fontFamily,
+                    fontSize: 34,
+                    lineHeight: 38,
+                  }}
+                  numberOfLines={1}
+                >
+                  {device.name}
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: 14,
+                    lineHeight: 20,
+                  }}
+                >
+                  {targetStatusLabel(device)} • {device.resetTime === "00:00" ? "Midnight reset" : `Reset at ${device.resetTime}`}
+                </Text>
+              </View>
+              <View
                 style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.display.fontFamily,
-                  fontSize: 34,
-                  lineHeight: 38,
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  flexDirection: "row",
+                  gap: 8,
+                  borderRadius: theme.radius.pill,
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                  backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
                 }}
               >
-                {device.name}
-              </Text>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
                 <View
                   style={{
-                    height: 7,
-                    width: 7,
-                    borderRadius: 7,
+                    height: 8,
+                    width: 8,
+                    borderRadius: 8,
                     backgroundColor: status.color,
                     shadowColor: status.color,
-                    shadowOpacity: 0.55,
+                    shadowOpacity: 0.5,
                     shadowRadius: 6,
                     shadowOffset: { height: 0, width: 0 },
                   }}
                 />
                 <Text
                   style={{
-                    color: theme.colors.textSecondary,
+                    color: theme.colors.textPrimary,
                     fontFamily: theme.typography.label.fontFamily,
                     fontSize: 12,
                     lineHeight: 16,
@@ -415,46 +514,50 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </View>
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <MetricCard label="Recorded" tone="accent" value={String(stats.completed)} />
+              <MetricCard label="Filled" value={`${stats.fillPercentage}%`} />
+              <MetricCard label="Target" value={targetStatusLabel(device)} />
+            </View>
           </View>
 
-          <GlassCard style={{ alignItems: "center", paddingHorizontal: 8, paddingVertical: 10 }}>
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                paddingVertical: 4,
-                width: "100%",
-              }}
-            >
-              <PixelGrid
-                availableWidth={boardAvailableWidth}
-                cells={cells}
-                maxWidth={Math.min(width - 48, 760)}
-                mode={isEditingHistory ? "edit" : "display"}
-                onCellPress={
-                  isEditingHistory
-                    ? (row, col) => {
-                        if (!historyDraftDevice || isSavingHistoryDraft) {
-                          return;
-                        }
-
-                        setHistoryStatusError(null);
-                        setHistoryStatusMessage(null);
-                        setHistoryDraftDevice((current) => (current ? toggleHistoryCellLocal(current, row, col) : current));
-                        setHistoryIsDirty(true);
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              paddingTop: 4,
+              width: "100%",
+            }}
+          >
+            <PixelGrid
+              availableWidth={Math.min(boardAvailableWidth - 20, width - 76)}
+              cells={cells}
+              maxWidth={Math.min(width - 76, 760)}
+              mode={isEditingHistory ? "edit" : "display"}
+              onCellPress={
+                isEditingHistory
+                  ? (row, col) => {
+                      if (!historyDraftDevice || isSavingHistoryDraft) {
+                        return;
                       }
-                    : undefined
-                }
-                palette={palette}
-                pendingPulse={pendingPulse}
-                readOnly={!isEditingHistory}
-                showFooterHint={isEditingHistory}
-              />
-            </View>
-          </GlassCard>
+
+                      setHistoryStatusError(null);
+                      setHistoryStatusMessage(null);
+                      setHistoryDraftDevice((current) => (current ? toggleHistoryCellLocal(current, row, col) : current));
+                      setHistoryIsDirty(true);
+                    }
+                  : undefined
+              }
+              palette={palette}
+              pendingPulse={pendingPulse}
+              readOnly={!isEditingHistory}
+              showFooterHint={false}
+            />
+          </View>
 
           {isEditingHistory ? (
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 12 }}>
               <Text
                 style={{
                   color: theme.colors.textSecondary,
@@ -463,7 +566,7 @@ export default function HomeScreen() {
                   lineHeight: 18,
                 }}
               >
-                Tap day cells to correct the board, then save once.
+                Edit the board directly here, then save once.
               </Text>
 
               {isRefreshingRuntimeSnapshot || historyStatusError || historyStatusMessage ? (
@@ -507,59 +610,41 @@ export default function HomeScreen() {
                 </View>
               ) : null}
 
-              <View
-                style={{
-                  alignItems: "center",
-                  flexDirection: "row",
-                  gap: 10,
-                  justifyContent: "space-between",
-                }}
-              >
-                <CompactStat label="Target" value={targetStatusLabel(device)} />
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  <InlineAction
-                    icon="close-outline"
-                    label="Cancel"
-                    onPress={() => {
-                      setHistoryDraftDevice(historyBaseDevice);
-                      setHistoryIsDirty(false);
-                      setHistoryStatusError(null);
-                      setHistoryStatusMessage(null);
-                      setIsEditingHistory(false);
-                    }}
-                  />
-                  <InlineAction icon="checkmark-outline" label={isSavingHistoryDraft ? "Saving…" : "Save"} onPress={() => void handleSaveHistory()} />
-                </View>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                <InlineAction
+                  icon="close-outline"
+                  label="Cancel"
+                  onPress={() => {
+                    setHistoryDraftDevice(historyBaseDevice);
+                    setHistoryIsDirty(false);
+                    setHistoryStatusError(null);
+                    setHistoryStatusMessage(null);
+                    setIsEditingHistory(false);
+                  }}
+                />
+                <InlineAction
+                  icon="checkmark-outline"
+                  label={isSavingHistoryDraft ? "Saving…" : "Save"}
+                  onPress={() => void handleSaveHistory()}
+                />
               </View>
             </View>
           ) : (
-            <View
-              style={{
-                alignItems: "center",
-                flexDirection: "row",
-                gap: 12,
-                justifyContent: "space-between",
-              }}
-            >
-              <CompactStat label="Target" value={targetStatusLabel(device)} />
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <InlineAction icon="create-outline" label="Edit" onPress={() => void openInlineHistoryEditor()} />
-                <InlineAction icon="options-outline" label="Device" onPress={() => router.push("/settings")} />
-              </View>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+              <PrimaryActionButton
+                onPress={() => {
+                  void toggleToday(device.id).catch((error) => {
+                    console.warn("Failed to toggle today from app", error);
+                  });
+                }}
+                state={boardButtonState(device, buttonIsApplying)}
+                style={{ flex: 1 }}
+              />
+              <IconButton icon="create-outline" onPress={() => void openInlineHistoryEditor()} />
+              <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
             </View>
           )}
-        </View>
-
-        {!isEditingHistory ? (
-          <PrimaryActionButton
-            onPress={() => {
-              void toggleToday(device.id).catch((error) => {
-                console.warn("Failed to toggle today from app", error);
-              });
-            }}
-            state={boardButtonState(device, buttonIsApplying)}
-          />
-        ) : null}
+        </GlassCard>
       </View>
     </ScreenFrame>
   );

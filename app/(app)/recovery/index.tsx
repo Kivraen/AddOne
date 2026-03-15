@@ -281,6 +281,11 @@ export default function RecoveryScreen() {
     networksError ||
     provisioningError ||
     (provisioningResponse && !provisioningResponse.accepted ? provisioningResponse.message : null);
+  const shouldHideStaleApTimeout =
+    !!visibleRecoveryError &&
+    visibleRecoveryError.includes("Timed out waiting for the AddOne AP") &&
+    (showWifiForm || isAwaitingReconnect);
+  const renderedRecoveryError = shouldHideStaleApTimeout ? null : visibleRecoveryError;
 
   useEffect(() => {
     if (!showDraftForm) {
@@ -289,6 +294,16 @@ export default function RecoveryScreen() {
       setIsAwaitingReconnectLocally(false);
     }
   }, [showDraftForm]);
+
+  useEffect(() => {
+    if (!showWifiForm) {
+      return;
+    }
+
+    setStatusError((current) =>
+      current?.includes("Timed out waiting for the AddOne AP") ? null : current,
+    );
+  }, [showWifiForm]);
 
   useEffect(() => {
     if (showWifiForm || isAwaitingReconnect) {
@@ -822,7 +837,7 @@ export default function RecoveryScreen() {
                 </Text>
               ) : null}
 
-              {visibleRecoveryError ? (
+              {renderedRecoveryError ? (
                 <Text
                   style={{
                     color: theme.colors.statusErrorMuted,
@@ -831,7 +846,7 @@ export default function RecoveryScreen() {
                     lineHeight: theme.typography.body.lineHeight,
                   }}
                 >
-                  {visibleRecoveryError}
+                  {renderedRecoveryError}
                 </Text>
               ) : null}
             </>

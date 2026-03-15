@@ -1,5 +1,5 @@
 import { PropsWithChildren } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, StyleProp, Text, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { theme } from "@/constants/theme";
@@ -10,6 +10,7 @@ export type PrimaryActionState = "done" | "notDone" | "pendingSync" | "syncing" 
 interface PrimaryActionButtonProps extends PropsWithChildren {
   state: PrimaryActionState;
   onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 const stateStyle: Record<PrimaryActionState, { background: string; text: string; border: string; label: string }> = {
@@ -45,7 +46,7 @@ const stateStyle: Record<PrimaryActionState, { background: string; text: string;
   },
 };
 
-export function PrimaryActionButton({ state, onPress }: PrimaryActionButtonProps) {
+export function PrimaryActionButton({ state, onPress, style }: PrimaryActionButtonProps) {
   const pressed = useSharedValue(0);
   const config = stateStyle[state];
 
@@ -54,7 +55,7 @@ export function PrimaryActionButton({ state, onPress }: PrimaryActionButtonProps
   }));
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View style={[animatedStyle, style]}>
       <Pressable
         disabled={state === "disabled"}
         onPress={onPress}
@@ -66,14 +67,15 @@ export function PrimaryActionButton({ state, onPress }: PrimaryActionButtonProps
         }}
         style={{
           alignItems: "center",
-        borderRadius: theme.radius.sheet,
-        borderWidth: 1,
-        borderColor: config.border,
-        backgroundColor: config.background,
-        paddingHorizontal: 22,
-        paddingVertical: 19,
-      }}
-    >
+          width: "100%",
+          borderRadius: theme.radius.sheet,
+          borderWidth: 1,
+          borderColor: config.border,
+          backgroundColor: config.background,
+          paddingHorizontal: 22,
+          paddingVertical: 19,
+        }}
+      >
         <Text
           style={{
             color: config.text,
