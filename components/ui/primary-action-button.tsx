@@ -15,15 +15,15 @@ interface PrimaryActionButtonProps extends PropsWithChildren {
 
 const stateStyle: Record<PrimaryActionState, { background: string; text: string; border: string; label: string }> = {
   done: {
-    background: "#F2EEE6",
-    text: "#070707",
-    border: withAlpha("#F2EEE6", 0.25),
+    background: withAlpha("#F2EEE6", 0.08),
+    text: "#F2EEE6",
+    border: withAlpha("#F2EEE6", 0.14),
     label: "Remove one",
   },
   notDone: {
-    background: withAlpha("#F2EEE6", 0.08),
-    text: "#F2EEE6",
-    border: withAlpha("#F2EEE6", 0.16),
+    background: "#C7904A",
+    text: "#070707",
+    border: withAlpha("#C7904A", 0.34),
     label: "Add one",
   },
   pendingSync: {

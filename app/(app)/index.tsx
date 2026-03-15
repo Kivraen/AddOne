@@ -90,54 +90,27 @@ function boardStatus(device: AddOneDevice, isApplying: boolean) {
   };
 }
 
-function CompactStat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={{ flex: 1, gap: 4 }}>
-      <Text
-        style={{
-          color: theme.colors.textTertiary,
-          fontFamily: theme.typography.micro.fontFamily,
-          fontSize: theme.typography.micro.fontSize,
-          lineHeight: theme.typography.micro.lineHeight,
-          letterSpacing: theme.typography.micro.letterSpacing,
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </Text>
-      <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.label.fontFamily,
-          fontSize: theme.typography.label.fontSize,
-          lineHeight: theme.typography.label.lineHeight,
-        }}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
 function MetricCard({
+  caption,
+  highlight = false,
   label,
-  tone = "default",
   value,
 }: {
+  caption?: string;
+  highlight?: boolean;
   label: string;
-  tone?: "accent" | "default";
   value: string;
 }) {
   return (
     <View
       style={{
         flex: 1,
-        gap: 4,
-        minHeight: 74,
+        gap: 6,
+        minHeight: 86,
         borderRadius: theme.radius.card,
         borderWidth: 1,
-        borderColor: tone === "accent" ? withAlpha(theme.colors.accentAmber, 0.18) : withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: tone === "accent" ? withAlpha(theme.colors.accentAmber, 0.08) : withAlpha(theme.colors.textPrimary, 0.04),
+        borderColor: highlight ? withAlpha(theme.colors.accentAmber, 0.2) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: highlight ? withAlpha(theme.colors.accentAmber, 0.1) : withAlpha(theme.colors.textPrimary, 0.04),
         paddingHorizontal: 14,
         paddingVertical: 14,
       }}
@@ -158,39 +131,163 @@ function MetricCard({
         style={{
           color: theme.colors.textPrimary,
           fontFamily: theme.typography.title.fontFamily,
-          fontSize: 28,
-          lineHeight: 30,
+          fontSize: 26,
+          lineHeight: 28,
         }}
         numberOfLines={1}
       >
         {value}
       </Text>
+      {caption ? (
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 12,
+            lineHeight: 16,
+          }}
+          numberOfLines={1}
+        >
+          {caption}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-function InlineAction({
+function StatusBadge({ color, label }: { color: string; label: string }) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        flexDirection: "row",
+        gap: 8,
+        borderRadius: theme.radius.pill,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+      }}
+    >
+      <View
+        style={{
+          height: 8,
+          width: 8,
+          borderRadius: 8,
+          backgroundColor: color,
+          shadowColor: color,
+          shadowOpacity: 0.5,
+          shadowRadius: 6,
+          shadowOffset: { height: 0, width: 0 },
+        }}
+      />
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: 12,
+          lineHeight: 16,
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function UtilityActionCard({
   icon,
-  label,
+  title,
+  subtitle,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  title: string;
+  subtitle: string;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
       style={{
+        flex: 1,
+        gap: 14,
+        minHeight: 122,
+        borderRadius: theme.radius.card,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          height: 40,
+          width: 40,
+          borderRadius: 20,
+          backgroundColor: withAlpha(theme.colors.accentAmber, 0.12),
+        }}
+      >
+        <Ionicons color={theme.colors.textPrimary} name={icon} size={18} />
+      </View>
+      <View style={{ gap: 4 }}>
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: 15,
+            lineHeight: 20,
+          }}
+        >
+          {title}
+        </Text>
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 12,
+            lineHeight: 18,
+          }}
+        >
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function ActionPill({
+  icon,
+  label,
+  onPress,
+  tone = "secondary",
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  tone?: "accent" | "secondary";
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
         alignItems: "center",
+        flex: 1,
         flexDirection: "row",
+        justifyContent: "center",
         gap: 8,
-        minHeight: 42,
-        paddingHorizontal: 12,
+        minHeight: 48,
+        paddingHorizontal: 14,
         borderRadius: theme.radius.pill,
         borderWidth: 1,
-        borderColor: "rgba(242,238,230,0.08)",
-        backgroundColor: "rgba(242,238,230,0.04)",
+        borderColor:
+          tone === "accent" ? withAlpha(theme.colors.accentAmber, 0.2) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor:
+          tone === "accent" ? withAlpha(theme.colors.accentAmber, 0.12) : withAlpha(theme.colors.textPrimary, 0.04),
       }}
     >
       <Ionicons color={theme.colors.textPrimary} name={icon} size={16} />
@@ -282,6 +379,10 @@ export default function HomeScreen() {
     [effectiveDevice],
   );
   const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
+  const todayLabel = useMemo(() => {
+    const today = new Date();
+    return `Today, ${today.toLocaleString("en-US", { month: "short" })} ${today.getDate()}`;
+  }, []);
   const historyUpdates = useMemo(() => {
     if (!historyBaseDevice || !historyDraftDevice) {
       return [];
@@ -296,7 +397,7 @@ export default function HomeScreen() {
           row: effectiveDevice.today.dayIndex,
         }
       : null;
-  const boardAvailableWidth = Math.max(300, width - 48);
+  const homeBoardAvailableWidth = Math.max(260, Math.min(width - 92, 680));
 
   const header = (
     <View
@@ -304,19 +405,33 @@ export default function HomeScreen() {
         alignItems: "center",
         flexDirection: "row",
         justifyContent: "space-between",
-        paddingBottom: 16,
+        paddingBottom: 18,
       }}
     >
-      <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.title.fontFamily,
-          fontSize: 26,
-          lineHeight: 30,
-        }}
-      >
-        AddOne
-      </Text>
+      <View style={{ gap: 4 }}>
+        <Text
+          style={{
+            color: theme.colors.textTertiary,
+            fontFamily: theme.typography.micro.fontFamily,
+            fontSize: theme.typography.micro.fontSize,
+            lineHeight: theme.typography.micro.lineHeight,
+            letterSpacing: theme.typography.micro.letterSpacing,
+            textTransform: "uppercase",
+          }}
+        >
+          AddOne
+        </Text>
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.display.fontFamily,
+            fontSize: 30,
+            lineHeight: 34,
+          }}
+        >
+          {todayLabel}
+        </Text>
+      </View>
       {effectiveDevice ? <IconButton icon="person-circle-outline" onPress={() => router.push("/account")} /> : null}
     </View>
   );
@@ -449,17 +564,29 @@ export default function HomeScreen() {
 
   return (
     <ScreenFrame header={header} scroll>
-      <View style={{ gap: 18, paddingBottom: 24 }}>
+      <View style={{ gap: 16, paddingBottom: 24 }}>
         <GlassCard style={{ gap: 18, paddingHorizontal: 18, paddingVertical: 18 }}>
-          <View style={{ gap: 14 }}>
+          <View style={{ gap: 16 }}>
             <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text
+                  style={{
+                    color: theme.colors.textTertiary,
+                    fontFamily: theme.typography.micro.fontFamily,
+                    fontSize: theme.typography.micro.fontSize,
+                    lineHeight: theme.typography.micro.lineHeight,
+                    letterSpacing: theme.typography.micro.letterSpacing,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Your habit
+                </Text>
                 <Text
                   style={{
                     color: theme.colors.textPrimary,
                     fontFamily: theme.typography.display.fontFamily,
-                    fontSize: 34,
-                    lineHeight: 38,
+                    fontSize: 32,
+                    lineHeight: 36,
                   }}
                   numberOfLines={1}
                 >
@@ -473,67 +600,35 @@ export default function HomeScreen() {
                     lineHeight: 20,
                   }}
                 >
-                  {targetStatusLabel(device)} • {device.resetTime === "00:00" ? "Midnight reset" : `Reset at ${device.resetTime}`}
+                  {stats.completed} recorded so far • {stats.fillPercentage}% filled
                 </Text>
               </View>
-              <View
-                style={{
-                  alignItems: "center",
-                  alignSelf: "flex-start",
-                  flexDirection: "row",
-                  gap: 8,
-                  borderRadius: theme.radius.pill,
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                  backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                }}
-              >
-                <View
-                  style={{
-                    height: 8,
-                    width: 8,
-                    borderRadius: 8,
-                    backgroundColor: status.color,
-                    shadowColor: status.color,
-                    shadowOpacity: 0.5,
-                    shadowRadius: 6,
-                    shadowOffset: { height: 0, width: 0 },
-                  }}
-                />
-                <Text
-                  style={{
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.label.fontFamily,
-                    fontSize: 12,
-                    lineHeight: 16,
-                  }}
-                >
-                  {status.label}
-                </Text>
-              </View>
+              <StatusBadge color={status.color} label={status.label} />
             </View>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <MetricCard label="Recorded" tone="accent" value={String(stats.completed)} />
-              <MetricCard label="Filled" value={`${stats.fillPercentage}%`} />
-              <MetricCard label="Target" value={targetStatusLabel(device)} />
+              <MetricCard caption="Completed days" label="Recorded" value={String(stats.completed)} />
+              <MetricCard caption="Visible board" highlight label="Filled" value={`${stats.fillPercentage}%`} />
+              <MetricCard caption="Goal this week" label="Target" value={targetStatusLabel(device)} />
             </View>
           </View>
 
           <View
             style={{
               alignItems: "center",
+              borderRadius: theme.radius.card,
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, 0.05),
+              backgroundColor: withAlpha(theme.colors.bgBase, 0.35),
               justifyContent: "center",
-              paddingTop: 4,
+              paddingHorizontal: 12,
+              paddingVertical: 14,
               width: "100%",
             }}
           >
             <PixelGrid
-              availableWidth={Math.min(boardAvailableWidth - 20, width - 76)}
+              availableWidth={homeBoardAvailableWidth}
               cells={cells}
-              maxWidth={Math.min(width - 76, 760)}
               mode={isEditingHistory ? "edit" : "display"}
               onCellPress={
                 isEditingHistory
@@ -611,7 +706,7 @@ export default function HomeScreen() {
               ) : null}
 
               <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                <InlineAction
+                <ActionPill
                   icon="close-outline"
                   label="Cancel"
                   onPress={() => {
@@ -622,29 +717,102 @@ export default function HomeScreen() {
                     setIsEditingHistory(false);
                   }}
                 />
-                <InlineAction
+                <ActionPill
                   icon="checkmark-outline"
                   label={isSavingHistoryDraft ? "Saving…" : "Save"}
                   onPress={() => void handleSaveHistory()}
+                  tone="accent"
                 />
               </View>
             </View>
           ) : (
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-              <PrimaryActionButton
-                onPress={() => {
-                  void toggleToday(device.id).catch((error) => {
-                    console.warn("Failed to toggle today from app", error);
-                  });
-                }}
-                state={boardButtonState(device, buttonIsApplying)}
-                style={{ flex: 1 }}
-              />
-              <IconButton icon="create-outline" onPress={() => void openInlineHistoryEditor()} />
-              <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
-            </View>
+            <PrimaryActionButton
+              onPress={() => {
+                void toggleToday(device.id).catch((error) => {
+                  console.warn("Failed to toggle today from app", error);
+                });
+              }}
+              state={boardButtonState(device, buttonIsApplying)}
+              style={{ width: "100%" }}
+            />
           )}
         </GlassCard>
+
+        {!isEditingHistory ? (
+          <GlassCard style={{ gap: 16, paddingHorizontal: 18, paddingVertical: 18 }}>
+            <View style={{ gap: 4 }}>
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  fontFamily: theme.typography.micro.fontFamily,
+                  fontSize: theme.typography.micro.fontSize,
+                  lineHeight: theme.typography.micro.lineHeight,
+                  letterSpacing: theme.typography.micro.letterSpacing,
+                  textTransform: "uppercase",
+                }}
+              >
+                Quick actions
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.title.fontFamily,
+                  fontSize: 22,
+                  lineHeight: 26,
+                }}
+              >
+                Manage this device
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Edit past days directly on the board or adjust this habit’s target, palette, and Wi‑Fi settings.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <UtilityActionCard
+                icon="create-outline"
+                onPress={() => void openInlineHistoryEditor()}
+                subtitle="Correct past days without leaving the home screen."
+                title="Edit board"
+              />
+              <UtilityActionCard
+                icon="options-outline"
+                onPress={() => router.push("/settings")}
+                subtitle="Target, palette, habit name, and Wi‑Fi recovery."
+                title="Device settings"
+              />
+            </View>
+
+            <View
+              style={{
+                borderRadius: theme.radius.card,
+                borderWidth: 1,
+                borderColor: withAlpha(theme.colors.textPrimary, 0.05),
+                backgroundColor: withAlpha(theme.colors.textPrimary, 0.03),
+                paddingHorizontal: 14,
+                paddingVertical: 14,
+              }}
+            >
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                This card layout is ready to scale into a multi-device stack later without changing how the current single-device beta works.
+              </Text>
+            </View>
+          </GlassCard>
+        ) : null}
       </View>
     </ScreenFrame>
   );
