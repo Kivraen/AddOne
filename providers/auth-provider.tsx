@@ -58,6 +58,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     let mounted = true;
+    const startupTimeout = setTimeout(() => {
+      if (mounted) {
+        setStatus("signedOut");
+      }
+    }, 4_000);
 
     supabase.auth
       .getSession()
@@ -66,12 +71,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return;
         }
 
+        clearTimeout(startupTimeout);
         setSession(data.session ?? null);
         setPendingEmail(data.session?.user.email ?? null);
         setStatus(data.session ? "signedIn" : "signedOut");
       })
       .catch(() => {
         if (mounted) {
+          clearTimeout(startupTimeout);
           setStatus("signedOut");
         }
       });
@@ -90,6 +97,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => {
       mounted = false;
+      clearTimeout(startupTimeout);
       subscription.unsubscribe();
     };
   }, [supabase]);

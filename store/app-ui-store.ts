@@ -14,6 +14,7 @@ interface AppUiState {
   activeApProvisioningDraft: ApProvisioningDraft;
   activeOnboardingClaimToken: string | null;
   activeOnboardingSessionId: string | null;
+  hasHydrated: boolean;
   pendingTodayStateByDevice: Record<string, boolean | undefined>;
   clearApProvisioningDraft: () => void;
   clearOnboardingSession: () => void;
@@ -24,13 +25,18 @@ interface AppUiState {
   setPendingTodayState: (deviceId: string, isDone: boolean) => void;
 }
 
+const PERSISTED_APP_UI_STATE = {
+  activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
+  activeDeviceId: null,
+  activeOnboardingClaimToken: null,
+  activeOnboardingSessionId: null,
+};
+
 export const useAppUiStore = create<AppUiState>()(
   persist(
     (set) => ({
-      activeDeviceId: null,
-      activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
-      activeOnboardingClaimToken: null,
-      activeOnboardingSessionId: null,
+      ...PERSISTED_APP_UI_STATE,
+      hasHydrated: false,
       pendingTodayStateByDevice: {},
       clearApProvisioningDraft: () =>
         set({
@@ -70,6 +76,9 @@ export const useAppUiStore = create<AppUiState>()(
         })),
     }),
     {
+      onRehydrateStorage: () => () => {
+        useAppUiStore.setState({ hasHydrated: true });
+      },
       name: "addone-app-ui",
       partialize: (state) => ({
         activeApProvisioningDraft: state.activeApProvisioningDraft,
@@ -81,3 +90,12 @@ export const useAppUiStore = create<AppUiState>()(
     },
   ),
 );
+
+export async function resetPersistedAppUiState() {
+  useAppUiStore.setState({
+    ...PERSISTED_APP_UI_STATE,
+    hasHydrated: true,
+    pendingTodayStateByDevice: {},
+  });
+  await useAppUiStore.persist.clearStorage();
+}
