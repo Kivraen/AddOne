@@ -16,6 +16,7 @@ const mqttClient = mqtt.connect(config.mqtt.brokerUrl, {
 });
 
 const recentlyPublishedCommandIds = new Map();
+let queueReplayInFlight = false;
 
 function log(message, details) {
   if (details === undefined) {
@@ -69,9 +70,18 @@ async function publishCommandEnvelope(envelope) {
 }
 
 async function replayQueuedCommands() {
-  const commands = await listQueuedCommandEnvelopes(supabase);
-  for (const envelope of commands) {
-    await publishCommandEnvelope(envelope);
+  if (queueReplayInFlight) {
+    return;
+  }
+
+  queueReplayInFlight = true;
+  try {
+    const commands = await listQueuedCommandEnvelopes(supabase);
+    for (const envelope of commands) {
+      await publishCommandEnvelope(envelope);
+    }
+  } finally {
+    queueReplayInFlight = false;
   }
 }
 
@@ -316,10 +326,17 @@ relayServer.listen(config.relay.port, () => {
   log(`gateway health listening on :${config.relay.port}`);
 });
 
+const queueReplayTimer = setInterval(() => {
+  void replayQueuedCommands().catch((error) => {
+    log("failed to replay queued commands", error.message);
+  });
+}, config.queue.pollIntervalMs);
+
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
     log(`received ${signal}, shutting down`);
     try {
+      clearInterval(queueReplayTimer);
       mqttClient.end(true);
       relayServer.close();
       await supabase.removeChannel(channel);

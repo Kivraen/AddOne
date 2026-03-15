@@ -41,6 +41,7 @@ Copy `.env.example` to `.env` and provide:
 - optional `MQTT_PASSWORD`
 - optional `MQTT_TOPIC_PREFIX`
 - optional `MQTT_QOS`
+- optional `COMMAND_QUEUE_POLL_INTERVAL_MS`
 
 ## Run
 
@@ -75,3 +76,4 @@ docker run --env-file .env.beta -p 8787:8787 addone-realtime-gateway
 - Use TLS-enabled broker URLs in any real deployment.
 - For production, prefer broker ACLs / per-device credentials over broad shared broker passwords.
 - This service does not replace the cloud contract already in the repo; it accelerates it.
+- It keeps a lightweight queued-command polling fallback active even if the Supabase realtime websocket is degraded.

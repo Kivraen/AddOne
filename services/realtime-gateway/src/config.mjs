@@ -18,6 +18,9 @@ function parseInteger(name, fallback) {
 }
 
 export const config = {
+  queue: {
+    pollIntervalMs: Math.max(parseInteger("COMMAND_QUEUE_POLL_INTERVAL_MS", 1500), 250),
+  },
   relay: {
     port: Math.max(parseInteger("COMMAND_RELAY_PORT", 8787), 1),
   },
