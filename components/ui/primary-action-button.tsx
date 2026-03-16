@@ -9,6 +9,7 @@ import { withAlpha } from "@/lib/color";
 export type PrimaryActionState = "done" | "notDone" | "pendingSync" | "syncing" | "disabled";
 
 interface PrimaryActionButtonProps extends PropsWithChildren {
+  activeColor?: string;
   state: PrimaryActionState;
   onPress?: () => void;
   size?: number;
@@ -28,17 +29,17 @@ const stateStyle: Record<
 > = {
   done: {
     background: withAlpha(theme.colors.bgElevated, 0.98),
-    border: withAlpha(theme.colors.textPrimary, 0.12),
-    icon: "checkmark",
-    iconColor: theme.colors.textTertiary,
-    shadow: withAlpha(theme.colors.textPrimary, 0.06),
-  },
-  notDone: {
-    background: withAlpha(theme.colors.bgElevated, 0.98),
-    border: withAlpha(theme.colors.textPrimary, 0.16),
+    border: withAlpha(theme.colors.accentAmber, 0.2),
     icon: "checkmark",
     iconColor: theme.colors.accentAmber,
     shadow: withAlpha(theme.colors.accentAmber, 0.28),
+  },
+  notDone: {
+    background: withAlpha(theme.colors.bgElevated, 0.98),
+    border: withAlpha(theme.colors.textPrimary, 0.12),
+    icon: "checkmark",
+    iconColor: withAlpha(theme.colors.textTertiary, 0.9),
+    shadow: withAlpha(theme.colors.textPrimary, 0.06),
   },
   pendingSync: {
     background: withAlpha(theme.colors.bgElevated, 0.98),
@@ -65,9 +66,27 @@ const stateStyle: Record<
   },
 };
 
-export function PrimaryActionButton({ state, onPress, size = 94, style }: PrimaryActionButtonProps) {
+export function PrimaryActionButton({ activeColor, state, onPress, size = 94, style }: PrimaryActionButtonProps) {
   const pressed = useSharedValue(0);
-  const config = stateStyle[state];
+  const defaultConfig = stateStyle[state];
+  const accent = activeColor ?? theme.colors.accentAmber;
+  const config =
+    state === "done"
+      ? {
+          ...defaultConfig,
+          background: withAlpha(theme.colors.bgElevated, 0.98),
+          border: withAlpha(accent, 0.26),
+          iconColor: accent,
+          shadow: withAlpha(accent, 0.34),
+        }
+      : state === "pendingSync" || state === "syncing"
+        ? {
+            ...defaultConfig,
+            border: withAlpha(accent, 0.24),
+            indicatorColor: accent,
+            shadow: withAlpha(accent, 0.26),
+          }
+        : defaultConfig;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: withTiming(pressed.value ? 0.985 : 1, { duration: theme.motion.press.duration }) }],

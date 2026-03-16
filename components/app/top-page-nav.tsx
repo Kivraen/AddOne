@@ -36,8 +36,8 @@ export function TopPageNav({ activeIndex, onSelect }: TopPageNavProps) {
           overflow: "hidden",
           borderRadius: 28,
           borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-          backgroundColor: withAlpha(theme.colors.bgElevated, 0.56),
+          borderColor: withAlpha(theme.colors.textPrimary, 0.07),
+          backgroundColor: withAlpha(theme.colors.bgElevated, 0.72),
         }}
       >
         <View
@@ -68,7 +68,7 @@ export function TopPageNav({ activeIndex, onSelect }: TopPageNavProps) {
                   gap: 4,
                   paddingVertical: 8,
                   borderRadius: 18,
-                  backgroundColor: active ? withAlpha(theme.colors.textPrimary, 0.08) : "transparent",
+                  backgroundColor: active ? withAlpha(theme.colors.bgSurface, 0.96) : "transparent",
                 }}
               >
                 <Ionicons
@@ -91,7 +91,7 @@ export function TopPageNav({ activeIndex, onSelect }: TopPageNavProps) {
                     width: active ? 18 : 6,
                     height: 2,
                     borderRadius: 2,
-                    backgroundColor: active ? theme.colors.textPrimary : withAlpha(theme.colors.textPrimary, 0.08),
+                    backgroundColor: active ? theme.colors.textPrimary : withAlpha(theme.colors.textPrimary, 0.06),
                   }}
                 />
               </Pressable>

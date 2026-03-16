@@ -78,11 +78,11 @@ function cellColors(state: PixelCellState, palette: BoardPalette) {
       };
     case "socket":
       return {
-        fill: palette.socket,
+        fill: shadeHex(palette.socketEdge, 0.84),
       };
     default:
       return {
-        fill: withAlpha(palette.socket, 0.24),
+        fill: shadeHex(palette.socketEdge, 0.84),
       };
   }
 }

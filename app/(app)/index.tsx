@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import PagerView from "react-native-pager-view";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,7 +14,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
-import { buildBoardCells, getMergedPalette, targetStatusLabel, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
+import { buildBoardCells, getMergedPalette, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { triggerPrimaryActionHaptic } from "@/lib/haptics";
 import { useAppUiStore } from "@/store/app-ui-store";
@@ -94,13 +95,13 @@ function boardStatus(device: AddOneDevice, isApplying: boolean) {
   };
 }
 
-function StatusDot({ color }: { color: string }) {
+function StatusDot({ color, size = 10 }: { color: string; size?: number }) {
   return (
     <View
       style={{
-        height: 10,
-        width: 10,
-        borderRadius: 10,
+        height: size,
+        width: size,
+        borderRadius: size,
         backgroundColor: color,
         shadowColor: color,
         shadowOpacity: 0.5,
@@ -108,6 +109,26 @@ function StatusDot({ color }: { color: string }) {
         shadowOffset: { height: 0, width: 0 },
       }}
     />
+  );
+}
+
+function StatusBadge({ color }: { color: string }) {
+  return (
+    <View
+      style={{
+        minWidth: 34,
+        height: 30,
+        paddingHorizontal: 12,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.07),
+        backgroundColor: withAlpha(theme.colors.bgSurface, 0.96),
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <StatusDot color={color} size={8} />
+    </View>
   );
 }
 
@@ -426,6 +447,12 @@ function HomeTabContent() {
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
   const status = boardStatus(device, buttonIsApplying || activePendingTodayState !== undefined);
   const stats = visibleBoardStats(device);
+  const currentWeekCompleted = device.days[device.today.weekIndex]
+    .slice(0, device.today.dayIndex + 1)
+    .filter(Boolean).length;
+  const topCardSurface = withAlpha(theme.colors.bgElevated, 0.98);
+  const topCardBorder = withAlpha(theme.colors.textPrimary, 0.06);
+  const topCardSubtle = withAlpha(theme.colors.textPrimary, 0.04);
 
   async function openInlineHistoryEditor() {
     if (!activeDevice?.isLive) {
@@ -467,6 +494,7 @@ function HomeTabContent() {
         maxWidth: boardColumnWidth,
         alignSelf: "center",
         gap: 10,
+        paddingHorizontal: 16,
       }}
     >
       <View
@@ -477,8 +505,7 @@ function HomeTabContent() {
           gap: 12,
         }}
       >
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <StatusDot color={status.color} />
+        <View style={{ flex: 1, justifyContent: "center" }}>
           <Text
             style={{
               color: theme.colors.textPrimary,
@@ -493,18 +520,27 @@ function HomeTabContent() {
           </Text>
         </View>
 
-        <Pressable
-          hitSlop={10}
-          onPress={() => router.push("/settings")}
+        <View
           style={{
             alignItems: "center",
-            justifyContent: "center",
-            padding: 4,
-            marginRight: -4,
+            flexDirection: "row",
+            gap: 10,
           }}
         >
-          <Ionicons color={theme.colors.textSecondary} name="options-outline" size={22} />
-        </Pressable>
+          <StatusBadge color={status.color} />
+          <Pressable
+            hitSlop={10}
+            onPress={() => router.push("/settings")}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              width: 30,
+              height: 30,
+            }}
+          >
+            <Ionicons color={theme.colors.textSecondary} name="options-outline" size={21} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -525,8 +561,8 @@ function HomeTabContent() {
           maxWidth: boardColumnWidth,
           borderRadius: boardFrameRadius,
           borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-          backgroundColor: withAlpha(theme.colors.textPrimary, 0.018),
+          borderColor: withAlpha(theme.colors.textPrimary, 0.06),
+          backgroundColor: palette.socket,
           paddingHorizontal: boardFrameInsetX,
           paddingVertical: boardFrameInsetY,
         }}
@@ -564,6 +600,10 @@ function HomeTabContent() {
         width: "100%",
         maxWidth: boardColumnWidth,
         alignSelf: "center",
+        minHeight: 76,
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 12,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
@@ -572,9 +612,47 @@ function HomeTabContent() {
     >
       <InlineStat label="Today" value={todayWeekday} />
       <StatDivider />
-      <InlineStat label="This week" value={targetStatusLabel(device)} />
+      <InlineStat label="This week" value={`${currentWeekCompleted} of ${device.weeklyTarget}`} />
       <StatDivider />
       <InlineStat label="Recorded" value={`${stats.completed} total`} />
+    </View>
+  );
+
+  const topComposition = (
+    <View
+      style={{
+        width: "100%",
+        borderRadius: 28,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: topCardBorder,
+        backgroundColor: topCardSurface,
+        shadowColor: "#000000",
+        shadowOpacity: 0.22,
+        shadowRadius: 28,
+        shadowOffset: { width: 0, height: 14 },
+        paddingTop: 28,
+        paddingBottom: 44,
+        paddingHorizontal: 0,
+        gap: 24,
+      }}
+    >
+      <LinearGradient
+        colors={[withAlpha(theme.colors.textPrimary, 0.08), withAlpha(theme.colors.textPrimary, 0.015), "transparent"]}
+        end={{ x: 0.82, y: 0.6 }}
+        pointerEvents="none"
+        start={{ x: 0, y: 0 }}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          left: 0,
+          height: 180,
+        }}
+      />
+      {boardIdentity}
+      {boardSection}
+      {statsBand}
     </View>
   );
 
@@ -582,9 +660,7 @@ function HomeTabContent() {
     return (
       <ScreenFrame bottomInset={120} scroll>
         <View style={{ gap: 18, paddingTop: 24, paddingBottom: 24 }}>
-          {boardIdentity}
-          {boardSection}
-          {statsBand}
+          {topComposition}
 
           <View
             style={{
@@ -678,12 +754,10 @@ function HomeTabContent() {
           style={{
             flex: topSectionFlex,
             justifyContent: "center",
-            gap: 20,
+            gap: 18,
           }}
         >
-          {boardIdentity}
-          {boardSection}
-          {statsBand}
+          {topComposition}
         </View>
 
         <View
@@ -694,6 +768,7 @@ function HomeTabContent() {
           }}
         >
           <PrimaryActionButton
+            activeColor={palette.dayOn}
             onPress={() => {
               triggerPrimaryActionHaptic();
               void toggleToday(device.id).catch((error) => {
