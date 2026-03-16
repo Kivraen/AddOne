@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import PagerView from "react-native-pager-view";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, LayoutChangeEvent, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, LayoutChangeEvent, Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { FriendsTabContent } from "@/components/app/friends-tab-content";
 import { ProfileTabContent } from "@/components/app/profile-tab-content";
@@ -16,12 +16,12 @@ import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
-import { triggerPrimaryActionHaptic } from "@/lib/haptics";
+import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
 
-function boardButtonState(device: AddOneDevice, isApplyingToday: boolean): PrimaryActionState {
-  if (isApplyingToday) {
+function boardButtonState(device: AddOneDevice, isApplyingToday: boolean, isLocked = false): PrimaryActionState {
+  if (isApplyingToday || isLocked) {
     return "syncing";
   }
 
@@ -74,14 +74,7 @@ function collectHistoryDraftUpdates(baseDevice: AddOneDevice, draftDevice: AddOn
   return updates;
 }
 
-function boardStatus(device: AddOneDevice, isApplying: boolean) {
-  if (isApplying) {
-    return {
-      color: theme.colors.accentAmber,
-      label: "Applying",
-    };
-  }
-
+function boardStatus(device: AddOneDevice) {
   if (device.syncState === "offline" || !device.isLive) {
     return {
       color: theme.colors.textTertiary,
@@ -276,7 +269,9 @@ function HomeTabContent() {
   const [historyIsDirty, setHistoryIsDirty] = useState(false);
   const [historyStatusError, setHistoryStatusError] = useState<string | null>(null);
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
+  const [todayActionInFlight, setTodayActionInFlight] = useState(false);
   const [boardStageWidth, setBoardStageWidth] = useState(0);
+  const todayActionLockRef = useRef(false);
   const deviceSyncKey = `${activeDevice?.id ?? "none"}:${activeDevice?.runtimeRevision ?? 0}:${activeDevice?.lastSnapshotAt ?? ""}`;
 
   useEffect(() => {
@@ -334,6 +329,7 @@ function HomeTabContent() {
           row: effectiveDevice.today.dayIndex,
         }
       : null;
+  const isTodayToggleLocked = todayActionInFlight || activePendingTodayState !== undefined;
   const boardFrameInsetX = 14;
   const boardFrameInsetY = 10;
   const boardFrameRadius = 16;
@@ -345,8 +341,9 @@ function HomeTabContent() {
     0,
     Math.min(homeBoardAvailableWidth + boardFrameInsetX * 2, width - 32),
   );
-  const topSectionFlex = height < 780 ? 1.2 : 1.35;
-  const bottomSectionFlex = 1;
+  const screenBottomInset = 102;
+  const topSectionFlex = height < 780 ? 1.1 : 1.22;
+  const bottomSectionFlex = 1.08;
 
   function handleBoardStageLayout(event: LayoutChangeEvent) {
     const nextWidth = event.nativeEvent.layout.width;
@@ -377,7 +374,7 @@ function HomeTabContent() {
 
   if (!effectiveDevice || !palette) {
     return (
-      <ScreenFrame bottomInset={120}>
+      <ScreenFrame bottomInset={screenBottomInset}>
         <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
           <View style={{ gap: 6 }}>
             <Text
@@ -445,7 +442,7 @@ function HomeTabContent() {
 
   const device = effectiveDevice;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
-  const status = boardStatus(device, buttonIsApplying || activePendingTodayState !== undefined);
+  const status = boardStatus(device);
   const stats = visibleBoardStats(device);
   const currentWeekCompleted = device.days[device.today.weekIndex]
     .slice(0, device.today.dayIndex + 1)
@@ -600,21 +597,27 @@ function HomeTabContent() {
         width: "100%",
         maxWidth: boardColumnWidth,
         alignSelf: "center",
-        minHeight: 76,
+        minHeight: 108,
         paddingHorizontal: 14,
-        paddingTop: 12,
-        paddingBottom: 12,
-        flexDirection: "row",
-        alignItems: "center",
+        paddingTop: 10,
+        paddingBottom: 10,
         justifyContent: "center",
-        gap: 18,
       }}
     >
-      <InlineStat label="Today" value={todayWeekday} />
-      <StatDivider />
-      <InlineStat label="This week" value={`${currentWeekCompleted} of ${device.weeklyTarget}`} />
-      <StatDivider />
-      <InlineStat label="Recorded" value={`${stats.completed} total`} />
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 18,
+        }}
+      >
+        <InlineStat label="Today" value={todayWeekday} />
+        <StatDivider />
+        <InlineStat label="This week" value={`${currentWeekCompleted} of ${device.weeklyTarget}`} />
+        <StatDivider />
+        <InlineStat label="Recorded" value={`${stats.completed} total`} />
+      </View>
     </View>
   );
 
@@ -632,7 +635,7 @@ function HomeTabContent() {
         shadowRadius: 28,
         shadowOffset: { width: 0, height: 14 },
         paddingTop: 28,
-        paddingBottom: 44,
+        paddingBottom: 28,
         paddingHorizontal: 0,
         gap: 24,
       }}
@@ -658,7 +661,7 @@ function HomeTabContent() {
 
   if (isEditingHistory) {
     return (
-      <ScreenFrame bottomInset={120} scroll>
+      <ScreenFrame bottomInset={screenBottomInset} scroll>
         <View style={{ gap: 18, paddingTop: 24, paddingBottom: 24 }}>
           {topComposition}
 
@@ -748,8 +751,8 @@ function HomeTabContent() {
   }
 
   return (
-    <ScreenFrame bottomInset={120}>
-      <View style={{ flex: 1, paddingTop: 8, paddingBottom: 12 }}>
+    <ScreenFrame bottomInset={screenBottomInset}>
+      <View style={{ flex: 1, paddingTop: 12, paddingBottom: 0 }}>
         <View
           style={{
             flex: topSectionFlex,
@@ -765,18 +768,37 @@ function HomeTabContent() {
             flex: bottomSectionFlex,
             alignItems: "center",
             justifyContent: "center",
+            paddingTop: 6,
+            paddingBottom: 6,
           }}
         >
           <PrimaryActionButton
             activeColor={palette.dayOn}
             onPress={() => {
-              triggerPrimaryActionHaptic();
-              void toggleToday(device.id).catch((error) => {
-                console.warn("Failed to toggle today from app", error);
-              });
+              if (todayActionLockRef.current || isTodayToggleLocked) {
+                return;
+              }
+
+              todayActionLockRef.current = true;
+              setTodayActionInFlight(true);
+
+              void toggleToday(device.id)
+                .then(() => {
+                  triggerPrimaryActionSuccessHaptic();
+                })
+                .catch((error) => {
+                  const message = error instanceof Error ? error.message : "Failed to update the device.";
+                  triggerPrimaryActionFailureHaptic();
+                  Alert.alert("Couldn’t update the device", message);
+                  console.warn("Failed to toggle today from app", error);
+                })
+                .finally(() => {
+                  todayActionLockRef.current = false;
+                  setTodayActionInFlight(false);
+                });
             }}
             size={156}
-            state={boardButtonState(device, buttonIsApplying)}
+            state={boardButtonState(device, buttonIsApplying, isTodayToggleLocked)}
             style={{ alignSelf: "center" }}
           />
         </View>

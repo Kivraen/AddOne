@@ -1,7 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, useEffect } from "react";
 import { ActivityIndicator, Pressable, StyleProp, ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
@@ -21,9 +27,9 @@ const stateStyle: Record<
   {
     background: string;
     border: string;
-    icon: keyof typeof Ionicons.glyphMap | null;
+    icon?: keyof typeof Ionicons.glyphMap;
     iconColor: string;
-    indicatorColor?: string;
+    iconOutlineColor?: string;
     shadow: string;
   }
 > = {
@@ -38,36 +44,39 @@ const stateStyle: Record<
     background: withAlpha(theme.colors.bgElevated, 0.98),
     border: withAlpha(theme.colors.textPrimary, 0.12),
     icon: "checkmark",
-    iconColor: withAlpha(theme.colors.textTertiary, 0.9),
+    iconColor: withAlpha(theme.colors.bgBase, 0.8),
+    iconOutlineColor: withAlpha(theme.colors.textPrimary, 0.12),
     shadow: withAlpha(theme.colors.textPrimary, 0.06),
   },
   pendingSync: {
     background: withAlpha(theme.colors.bgElevated, 0.98),
     border: withAlpha(theme.colors.accentAmber, 0.24),
-    icon: null,
-    iconColor: theme.colors.textPrimary,
-    indicatorColor: theme.colors.accentAmber,
+    icon: "checkmark",
+    iconColor: theme.colors.accentAmber,
     shadow: withAlpha(theme.colors.accentAmber, 0.22),
   },
   syncing: {
     background: withAlpha(theme.colors.bgElevated, 0.98),
     border: withAlpha(theme.colors.accentAmber, 0.24),
-    icon: null,
-    iconColor: theme.colors.textPrimary,
-    indicatorColor: theme.colors.accentAmber,
+    icon: "checkmark",
+    iconColor: theme.colors.accentAmber,
     shadow: withAlpha(theme.colors.accentAmber, 0.22),
   },
   disabled: {
     background: withAlpha(theme.colors.bgElevated, 0.92),
     border: withAlpha(theme.colors.textPrimary, 0.08),
     icon: "checkmark",
-    iconColor: withAlpha(theme.colors.textTertiary, 0.78),
+    iconColor: withAlpha(theme.colors.bgBase, 0.74),
+    iconOutlineColor: withAlpha(theme.colors.textPrimary, 0.1),
     shadow: "transparent",
   },
 };
 
 export function PrimaryActionButton({ activeColor, state, onPress, size = 94, style }: PrimaryActionButtonProps) {
   const pressed = useSharedValue(0);
+  const pulseScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(1);
+  const isDisabled = state === "disabled" || state === "pendingSync" || state === "syncing";
   const defaultConfig = stateStyle[state];
   const accent = activeColor ?? theme.colors.accentAmber;
   const config =
@@ -83,22 +92,47 @@ export function PrimaryActionButton({ activeColor, state, onPress, size = 94, st
         ? {
             ...defaultConfig,
             border: withAlpha(accent, 0.24),
-            indicatorColor: accent,
+            iconColor: accent,
             shadow: withAlpha(accent, 0.26),
           }
         : defaultConfig;
 
+  useEffect(() => {
+    if (state === "pendingSync" || state === "syncing") {
+      pulseScale.value = withRepeat(
+        withSequence(withTiming(1.14, { duration: 700 }), withTiming(1, { duration: 700 })),
+        -1,
+        false,
+      );
+      pulseOpacity.value = withRepeat(
+        withSequence(withTiming(0.42, { duration: 700 }), withTiming(1, { duration: 700 })),
+        -1,
+        false,
+      );
+      return;
+    }
+
+    pulseScale.value = withTiming(1, { duration: 140 });
+    pulseOpacity.value = withTiming(1, { duration: 140 });
+  }, [pulseOpacity, pulseScale, state]);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: withTiming(pressed.value ? 0.985 : 1, { duration: theme.motion.press.duration }) }],
+  }));
+  const iconAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: pulseScale.value }],
   }));
 
   return (
     <Animated.View style={[animatedStyle, style]}>
       <Pressable
-        disabled={state === "disabled"}
+        disabled={isDisabled}
         onPress={onPress}
         onPressIn={() => {
-          pressed.value = 1;
+          if (!isDisabled) {
+            pressed.value = 1;
+          }
         }}
         onPressOut={() => {
           pressed.value = 0;
@@ -119,10 +153,28 @@ export function PrimaryActionButton({ activeColor, state, onPress, size = 94, st
         }}
       >
         {config.icon ? (
-          <Ionicons color={config.iconColor} name={config.icon} size={34} />
-        ) : (
-          <ActivityIndicator color={config.indicatorColor ?? config.iconColor} size="small" />
-        )}
+          <Animated.View
+            style={[
+              iconAnimatedStyle,
+              {
+                width: 36,
+                height: 36,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+            ]}
+          >
+            {config.iconOutlineColor ? (
+              <Ionicons
+                color={config.iconOutlineColor}
+                name={config.icon}
+                size={38}
+                style={{ position: "absolute" }}
+              />
+            ) : null}
+            <Ionicons color={config.iconColor} name={config.icon} size={36} />
+          </Animated.View>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
