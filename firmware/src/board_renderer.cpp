@@ -1,5 +1,8 @@
 #include "board_renderer.h"
 
+#include <ArduinoJson.h>
+#include <stdlib.h>
+
 #include "config.h"
 
 namespace {
@@ -63,9 +66,50 @@ BoardRenderer::Palette BoardRenderer::paletteForPreset_(const char* presetId) {
   return Palette{CRGB(245, 241, 232), CRGB(199, 144, 74), CRGB(245, 241, 232), CRGB(165, 84, 73), CRGB(143, 211, 106)};
 }
 
+CRGB BoardRenderer::colorFromHex_(const char* hex, const CRGB& fallback) {
+  if (!hex || strlen(hex) != 7 || hex[0] != '#') {
+    return fallback;
+  }
+
+  char* endPtr = nullptr;
+  const long red = strtol(String(hex).substring(1, 3).c_str(), &endPtr, 16);
+  if (!endPtr || *endPtr != '\0') {
+    return fallback;
+  }
+  const long green = strtol(String(hex).substring(3, 5).c_str(), &endPtr, 16);
+  if (!endPtr || *endPtr != '\0') {
+    return fallback;
+  }
+  const long blue = strtol(String(hex).substring(5, 7).c_str(), &endPtr, 16);
+  if (!endPtr || *endPtr != '\0') {
+    return fallback;
+  }
+
+  return CRGB(static_cast<uint8_t>(red), static_cast<uint8_t>(green), static_cast<uint8_t>(blue));
+}
+
+void BoardRenderer::applyCustomPalette_(Palette& palette, const DeviceSettingsState& settings) {
+  DynamicJsonDocument doc(384);
+  if (deserializeJson(doc, settings.paletteCustomJson) != DeserializationError::Ok || !doc.is<JsonObject>()) {
+    return;
+  }
+
+  JsonObject custom = doc.as<JsonObject>();
+  if (custom["dayOn"].is<const char*>()) {
+    palette.dayOn = colorFromHex_(custom["dayOn"], palette.dayOn);
+  }
+  if (custom["weekSuccess"].is<const char*>()) {
+    palette.weekSuccess = colorFromHex_(custom["weekSuccess"], palette.weekSuccess);
+  }
+  if (custom["weekFail"].is<const char*>()) {
+    palette.weekFail = colorFromHex_(custom["weekFail"], palette.weekFail);
+  }
+}
+
 void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness) {
   clear_();
-  const Palette palette = paletteForPreset_(settings.palettePreset);
+  Palette palette = paletteForPreset_(settings.palettePreset);
+  applyCustomPalette_(palette, settings);
 
   const HabitTracker::WeeklyGrid& grid = tracker.grid();
   for (uint8_t week = 0; week < Config::kWeeks; ++week) {
@@ -143,7 +187,8 @@ void BoardRenderer::renderReward(const DeviceSettingsState& settings,
                                  unsigned long elapsedMs,
                                  uint8_t brightness) {
   clear_();
-  const Palette palette = paletteForPreset_(settings.palettePreset);
+  Palette palette = paletteForPreset_(settings.palettePreset);
+  applyCustomPalette_(palette, settings);
 
   if (rewardType == RewardType::Clock && localNow) {
     renderClockReward_(palette, *localNow);

@@ -201,6 +201,7 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
       command.settingsSync.hasRewardEnabled = !payloadJson["reward_enabled"].isNull();
       command.settingsSync.hasDayResetTime = !payloadJson["day_reset_time"].isNull();
       command.settingsSync.hasName = !payloadJson["name"].isNull();
+      command.settingsSync.hasPaletteCustom = payloadJson.containsKey("palette_custom") && payloadJson["palette_custom"].is<JsonObjectConst>();
       command.settingsSync.hasPalettePreset = !payloadJson["palette_preset"].isNull();
       command.settingsSync.hasRewardTrigger = !payloadJson["reward_trigger"].isNull();
       command.settingsSync.hasRewardType = !payloadJson["reward_type"].isNull();
@@ -212,6 +213,13 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
       command.settingsSync.rewardEnabled = command.settingsSync.hasRewardEnabled ? payloadJson["reward_enabled"].as<bool>() : false;
       command.settingsSync.dayResetTime = payloadJson["day_reset_time"] | "";
       command.settingsSync.name = payloadJson["name"] | "";
+      if (command.settingsSync.hasPaletteCustom) {
+        String paletteCustomJson;
+        serializeJson(payloadJson["palette_custom"], paletteCustomJson);
+        command.settingsSync.paletteCustomJson = paletteCustomJson;
+      } else {
+        command.settingsSync.paletteCustomJson = "";
+      }
       command.settingsSync.palettePreset = payloadJson["palette_preset"] | "";
       command.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
       command.settingsSync.rewardType = payloadJson["reward_type"] | "";
@@ -224,6 +232,7 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
       command.hasSyncSettingsPayload =
           command.settingsSync.hasAmbientAuto || command.settingsSync.hasRewardEnabled || command.settingsSync.hasDayResetTime ||
           command.settingsSync.hasName ||
+          command.settingsSync.hasPaletteCustom ||
           command.settingsSync.hasPalettePreset || command.settingsSync.hasRewardTrigger || command.settingsSync.hasRewardType ||
           command.settingsSync.hasTimezone || command.settingsSync.hasBrightness || command.settingsSync.hasWeeklyTarget;
     }

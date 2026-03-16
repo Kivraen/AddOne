@@ -26,7 +26,7 @@ export const initialDevices: AddOneDevice[] = [
     autoBrightness: true,
     reminderEnabled: true,
     reminderTime: "19:30",
-    firmwareVersion: "v2.preview.1",
+    firmwareVersion: "v2.beta.1",
     today: {
       weekIndex: 0,
       dayIndex: 4,

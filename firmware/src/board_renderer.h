@@ -26,6 +26,8 @@ private:
     CRGB weekSuccess;
   };
 
+  static void applyCustomPalette_(Palette& palette, const DeviceSettingsState& settings);
+  static CRGB colorFromHex_(const char* hex, const CRGB& fallback);
   static Palette paletteForPreset_(const char* presetId);
   static bool digitPixel_(uint8_t digit, uint8_t row, uint8_t col);
   static constexpr uint16_t kTotalLeds = Config::kPanelRows * Config::kPanelCols;

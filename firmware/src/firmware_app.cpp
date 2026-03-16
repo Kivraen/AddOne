@@ -61,7 +61,7 @@ String buildBoardDaysJson(const HabitTracker::WeeklyGrid& grid) {
 }
 
 String buildSettingsJson(const DeviceSettingsState& settings) {
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(768);
   doc["ambient_auto"] = settings.ambientAuto;
   doc["brightness"] = settings.brightness;
   doc["day_reset_time"] = settings.dayResetTime;
@@ -72,6 +72,12 @@ String buildSettingsJson(const DeviceSettingsState& settings) {
   doc["reward_type"] = settings.rewardType == RewardType::Clock ? "clock" : "paint";
   doc["timezone"] = settings.timezone;
   doc["weekly_target"] = settings.weeklyTarget;
+  DynamicJsonDocument paletteCustomDoc(384);
+  if (deserializeJson(paletteCustomDoc, settings.paletteCustomJson) == DeserializationError::Ok && paletteCustomDoc.is<JsonObject>()) {
+    doc["palette_custom"] = paletteCustomDoc.as<JsonObject>();
+  } else {
+    doc.createNestedObject("palette_custom");
+  }
 
   String json;
   serializeJson(doc, json);

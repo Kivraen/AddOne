@@ -1,10 +1,26 @@
 #include "device_settings.h"
 
+#include <ArduinoJson.h>
+#include <ctype.h>
 #include <Preferences.h>
 
 namespace {
 bool isSupportedPalette(const char* value) {
   return strcmp(value, "classic") == 0 || strcmp(value, "amber") == 0 || strcmp(value, "ice") == 0 || strcmp(value, "rose") == 0;
+}
+
+bool isValidHexColor(const char* value) {
+  if (!value || strlen(value) != 7 || value[0] != '#') {
+    return false;
+  }
+
+  for (size_t index = 1; index < 7; ++index) {
+    if (!isxdigit(static_cast<unsigned char>(value[index]))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 uint8_t lerpBrightness(uint8_t from, uint8_t to, float amount) {
@@ -56,6 +72,11 @@ bool DeviceSettingsStore::applySync(const DeviceSettingsSyncPayload& payload, St
   if (payload.hasPalettePreset &&
       !normalizePalette_(payload.palettePreset, settings_.palettePreset, sizeof(settings_.palettePreset))) {
     error = "Invalid palette preset.";
+    return false;
+  }
+  if (payload.hasPaletteCustom &&
+      !normalizePaletteCustomJson_(payload.paletteCustomJson, settings_.paletteCustomJson, sizeof(settings_.paletteCustomJson))) {
+    error = "Invalid custom palette.";
     return false;
   }
 
@@ -111,6 +132,9 @@ void DeviceSettingsStore::load_() {
   String storedPalette = prefs.getString(kPalettePresetKey, "classic");
   normalizePalette_(storedPalette, settings_.palettePreset, sizeof(settings_.palettePreset));
 
+  String storedPaletteCustom = prefs.getString(kPaletteCustomKey, "{}");
+  normalizePaletteCustomJson_(storedPaletteCustom, settings_.paletteCustomJson, sizeof(settings_.paletteCustomJson));
+
   String storedTimezone = prefs.getString(kTimezoneKey, Config::kDefaultTimezoneIana);
   strncpy(settings_.timezone, storedTimezone.c_str(), sizeof(settings_.timezone) - 1);
   settings_.timezone[sizeof(settings_.timezone) - 1] = '\0';
@@ -149,6 +173,44 @@ bool DeviceSettingsStore::normalizePalette_(const String& input, char* outValue,
   return true;
 }
 
+bool DeviceSettingsStore::normalizePaletteCustomJson_(const String& input, char* outValue, size_t outValueSize) {
+  const String normalized = input.isEmpty() ? String("{}") : input;
+  DynamicJsonDocument doc(384);
+  DeserializationError error = deserializeJson(doc, normalized);
+  if (error || !doc.is<JsonObject>()) {
+    return false;
+  }
+
+  JsonObject object = doc.as<JsonObject>();
+  DynamicJsonDocument sanitizedDoc(384);
+  JsonObject sanitized = sanitizedDoc.to<JsonObject>();
+
+  const char* keys[] = {"dayOn", "socket", "socketEdge", "weekFail", "weekSuccess"};
+  for (const char* key : keys) {
+    JsonVariant value = object[key];
+    if (value.isNull()) {
+      continue;
+    }
+
+    const char* color = value.as<const char*>();
+    if (!isValidHexColor(color)) {
+      return false;
+    }
+
+    sanitized[key] = color;
+  }
+
+  String output;
+  serializeJson(sanitized, output);
+  if (output.length() + 1 > outValueSize) {
+    return false;
+  }
+
+  strncpy(outValue, output.c_str(), outValueSize - 1);
+  outValue[outValueSize - 1] = '\0';
+  return true;
+}
+
 bool DeviceSettingsStore::persist_() const {
   Preferences prefs;
   if (!prefs.begin(kNamespace, false)) {
@@ -161,6 +223,7 @@ bool DeviceSettingsStore::persist_() const {
   prefs.putUChar(kWeeklyTargetKey, settings_.weeklyTarget);
   prefs.putString(kDayResetTimeKey, settings_.dayResetTime);
   prefs.putString(kNameKey, settings_.name);
+  prefs.putString(kPaletteCustomKey, settings_.paletteCustomJson);
   prefs.putString(kPalettePresetKey, settings_.palettePreset);
   prefs.putString(kTimezoneKey, settings_.timezone);
   prefs.putString(kRewardTriggerKey, rewardTriggerName_(settings_.rewardTrigger));

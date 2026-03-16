@@ -19,6 +19,7 @@ struct DeviceSettingsSyncPayload {
   bool hasBrightness = false;
   bool hasDayResetTime = false;
   bool hasName = false;
+  bool hasPaletteCustom = false;
   bool hasPalettePreset = false;
   bool hasRewardEnabled = false;
   bool hasRewardTrigger = false;
@@ -29,6 +30,7 @@ struct DeviceSettingsSyncPayload {
   bool rewardEnabled = false;
   String dayResetTime{};
   String name{};
+  String paletteCustomJson{};
   String palettePreset{};
   String rewardTrigger{};
   String rewardType{};
@@ -42,6 +44,7 @@ struct DeviceSettingsState {
   bool rewardEnabled = false;
   char dayResetTime[9] = "00:00:00";
   char name[64] = "AddOne";
+  char paletteCustomJson[256] = "{}";
   char palettePreset[16] = "classic";
   char timezone[64] = "America/Los_Angeles";
   uint8_t brightness = 70;
@@ -66,6 +69,7 @@ private:
   static constexpr const char* kBrightnessKey = "bright";
   static constexpr const char* kDayResetTimeKey = "resetAt";
   static constexpr const char* kNameKey = "name";
+  static constexpr const char* kPaletteCustomKey = "palCustom";
   static constexpr const char* kPalettePresetKey = "palette";
   static constexpr const char* kRewardEnabledKey = "rewardOn";
   static constexpr const char* kRewardTriggerKey = "rewardTrg";
@@ -75,6 +79,7 @@ private:
 
   static uint8_t clampBrightness_(uint8_t brightness);
   static uint8_t clampWeeklyTarget_(uint8_t weeklyTarget);
+  static bool normalizePaletteCustomJson_(const String& input, char* outValue, size_t outValueSize);
   static const char* rewardTriggerName_(RewardTrigger trigger);
   static const char* rewardTypeName_(RewardType type);
   static bool normalizeResetTime_(const String& input, char* outValue, size_t outValueSize);

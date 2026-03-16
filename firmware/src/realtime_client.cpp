@@ -371,6 +371,7 @@ bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCom
   outCommand.settingsSync.hasRewardEnabled = !payloadJson["reward_enabled"].isNull();
   outCommand.settingsSync.hasDayResetTime = !payloadJson["day_reset_time"].isNull();
   outCommand.settingsSync.hasName = !payloadJson["name"].isNull();
+  outCommand.settingsSync.hasPaletteCustom = payloadJson.containsKey("palette_custom") && payloadJson["palette_custom"].is<JsonObjectConst>();
   outCommand.settingsSync.hasPalettePreset = !payloadJson["palette_preset"].isNull();
   outCommand.settingsSync.hasRewardTrigger = !payloadJson["reward_trigger"].isNull();
   outCommand.settingsSync.hasRewardType = !payloadJson["reward_type"].isNull();
@@ -381,6 +382,13 @@ bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCom
   outCommand.settingsSync.rewardEnabled = outCommand.settingsSync.hasRewardEnabled ? payloadJson["reward_enabled"].as<bool>() : false;
   outCommand.settingsSync.dayResetTime = payloadJson["day_reset_time"] | "";
   outCommand.settingsSync.name = payloadJson["name"] | "";
+  if (outCommand.settingsSync.hasPaletteCustom) {
+    String paletteCustomJson;
+    serializeJson(payloadJson["palette_custom"], paletteCustomJson);
+    outCommand.settingsSync.paletteCustomJson = paletteCustomJson;
+  } else {
+    outCommand.settingsSync.paletteCustomJson = "";
+  }
   outCommand.settingsSync.palettePreset = payloadJson["palette_preset"] | "";
   outCommand.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
   outCommand.settingsSync.rewardType = payloadJson["reward_type"] | "";
@@ -391,6 +399,7 @@ bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCom
   outCommand.hasSyncSettingsPayload =
       outCommand.settingsSync.hasAmbientAuto || outCommand.settingsSync.hasRewardEnabled || outCommand.settingsSync.hasDayResetTime ||
       outCommand.settingsSync.hasName ||
+      outCommand.settingsSync.hasPaletteCustom ||
       outCommand.settingsSync.hasPalettePreset || outCommand.settingsSync.hasRewardTrigger || outCommand.settingsSync.hasRewardType ||
       outCommand.settingsSync.hasTimezone || outCommand.settingsSync.hasBrightness || outCommand.settingsSync.hasWeeklyTarget;
 
