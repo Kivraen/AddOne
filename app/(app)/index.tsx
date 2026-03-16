@@ -1,17 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import PagerView from "react-native-pager-view";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, LayoutChangeEvent, Pressable, Text, View, useWindowDimensions } from "react-native";
 
+import { FriendsTabContent } from "@/components/app/friends-tab-content";
+import { ProfileTabContent } from "@/components/app/profile-tab-content";
+import { TopPageNav } from "@/components/app/top-page-nav";
 import { PixelGrid } from "@/components/board/pixel-grid";
 import { ScreenFrame } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
-import { IconButton } from "@/components/ui/icon-button";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette, targetStatusLabel, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
+import { triggerPrimaryActionHaptic } from "@/lib/haptics";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
 
@@ -112,6 +116,7 @@ function InlineStat({ label, value }: { label: string; value: string }) {
     <View
       style={{
         flex: 1,
+        alignItems: "center",
         gap: 2,
       }}
     >
@@ -139,6 +144,18 @@ function InlineStat({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </View>
+  );
+}
+
+function StatDivider() {
+  return (
+    <View
+      style={{
+        width: 1,
+        height: 34,
+        backgroundColor: withAlpha(theme.colors.textPrimary, 0.08),
+      }}
+    />
   );
 }
 
@@ -208,7 +225,15 @@ function visibleBoardStats(device: AddOneDevice) {
   };
 }
 
-export default function HomeScreen() {
+const TAB_KEYS = ["home", "friends", "profile"] as const;
+
+function tabIndexFromParam(tab?: string | string[]) {
+  const value = Array.isArray(tab) ? tab[0] : tab;
+  const index = TAB_KEYS.indexOf((value as (typeof TAB_KEYS)[number]) ?? "home");
+  return index >= 0 ? index : 0;
+}
+
+function HomeTabContent() {
   const router = useRouter();
   const { height, width } = useWindowDimensions();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
@@ -273,10 +298,7 @@ export default function HomeScreen() {
     [effectiveDevice],
   );
   const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
-  const todayLabel = useMemo(() => {
-    const today = new Date();
-    return today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
-  }, []);
+  const todayWeekday = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
   const historyUpdates = useMemo(() => {
     if (!historyBaseDevice || !historyDraftDevice) {
       return [];
@@ -298,30 +320,12 @@ export default function HomeScreen() {
     0,
     Math.min((boardStageWidth || width - 32) - boardFrameInsetX * 2, 760),
   );
-  const buttonStageHeight = Math.max(260, Math.min(420, height - 420));
-
-  const header = (
-    <View
-      style={{
-        alignItems: "center",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        paddingBottom: 18,
-      }}
-    >
-      <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.display.fontFamily,
-          fontSize: 30,
-          lineHeight: 34,
-        }}
-      >
-        AddOne
-      </Text>
-      {effectiveDevice ? <IconButton icon="person-circle-outline" onPress={() => router.push("/account")} /> : null}
-    </View>
+  const boardColumnWidth = Math.max(
+    0,
+    Math.min(homeBoardAvailableWidth + boardFrameInsetX * 2, width - 32),
   );
+  const topSectionFlex = height < 780 ? 1.2 : 1.35;
+  const bottomSectionFlex = 1;
 
   function handleBoardStageLayout(event: LayoutChangeEvent) {
     const nextWidth = event.nativeEvent.layout.width;
@@ -332,7 +336,7 @@ export default function HomeScreen() {
 
   if (isLoading) {
     return (
-      <ScreenFrame header={header}>
+      <ScreenFrame>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 14 }}>
           <ActivityIndicator color={theme.colors.textPrimary} />
           <Text
@@ -352,7 +356,7 @@ export default function HomeScreen() {
 
   if (!effectiveDevice || !palette) {
     return (
-      <ScreenFrame header={header}>
+      <ScreenFrame bottomInset={120}>
         <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
           <View style={{ gap: 6 }}>
             <Text
@@ -456,199 +460,317 @@ export default function HomeScreen() {
     }
   }
 
-  return (
-    <ScreenFrame header={header} scroll>
-      <View style={{ gap: 12, paddingTop: 18, paddingBottom: 24 }}>
-        <View style={{ gap: 18 }}>
-          <View style={{ gap: 14 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text
-                  style={{
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.display.fontFamily,
-                    fontSize: 30,
-                    lineHeight: 34,
-                  }}
-                  numberOfLines={1}
-                >
-                  {device.name}
-                </Text>
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: 14,
-                    lineHeight: 20,
-                  }}
-                >
-                  Today is {todayLabel}
-                </Text>
-              </View>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <StatusDot color={status.color} />
-                <IconButton icon="options-outline" onPress={() => router.push("/settings")} />
-              </View>
-            </View>
-          </View>
+  const boardIdentity = (
+    <View
+      style={{
+        width: "100%",
+        maxWidth: boardColumnWidth,
+        alignSelf: "center",
+        gap: 10,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          flexDirection: "row",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <StatusDot color={status.color} />
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.display.fontFamily,
+              fontSize: 30,
+              lineHeight: 34,
+              flexShrink: 1,
+            }}
+            numberOfLines={1}
+          >
+            {device.name}
+          </Text>
+        </View>
+
+        <Pressable
+          hitSlop={10}
+          onPress={() => router.push("/settings")}
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 4,
+            marginRight: -4,
+          }}
+        >
+          <Ionicons color={theme.colors.textSecondary} name="options-outline" size={22} />
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const boardSection = (
+    <View
+      onLayout={handleBoardStageLayout}
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          width: "100%",
+          maxWidth: boardColumnWidth,
+          borderRadius: boardFrameRadius,
+          borderWidth: 1,
+          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+          backgroundColor: withAlpha(theme.colors.textPrimary, 0.018),
+          paddingHorizontal: boardFrameInsetX,
+          paddingVertical: boardFrameInsetY,
+        }}
+      >
+        <PixelGrid
+          availableWidth={homeBoardAvailableWidth}
+          cells={cells}
+          mode={isEditingHistory ? "edit" : "display"}
+          onCellPress={
+            isEditingHistory
+              ? (row, col) => {
+                  if (!historyDraftDevice || isSavingHistoryDraft) {
+                    return;
+                  }
+
+                  setHistoryStatusError(null);
+                  setHistoryStatusMessage(null);
+                  setHistoryDraftDevice((current) => (current ? toggleHistoryCellLocal(current, row, col) : current));
+                  setHistoryIsDirty(true);
+                }
+              : undefined
+          }
+          palette={palette}
+          pendingPulse={pendingPulse}
+          readOnly={!isEditingHistory}
+          showFooterHint={false}
+        />
+      </View>
+    </View>
+  );
+
+  const statsBand = (
+    <View
+      style={{
+        width: "100%",
+        maxWidth: boardColumnWidth,
+        alignSelf: "center",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 18,
+      }}
+    >
+      <InlineStat label="Today" value={todayWeekday} />
+      <StatDivider />
+      <InlineStat label="This week" value={targetStatusLabel(device)} />
+      <StatDivider />
+      <InlineStat label="Recorded" value={`${stats.completed} total`} />
+    </View>
+  );
+
+  if (isEditingHistory) {
+    return (
+      <ScreenFrame bottomInset={120} scroll>
+        <View style={{ gap: 18, paddingTop: 24, paddingBottom: 24 }}>
+          {boardIdentity}
+          {boardSection}
+          {statsBand}
 
           <View
-            onLayout={handleBoardStageLayout}
             style={{
-              alignItems: "center",
-              justifyContent: "center",
-              paddingVertical: 8,
               width: "100%",
+              maxWidth: boardColumnWidth,
+              alignSelf: "center",
+              gap: 12,
             }}
           >
-            <View
+            <Text
               style={{
-                alignItems: "center",
-                width: "100%",
-                borderRadius: boardFrameRadius,
-                borderWidth: 1,
-                borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                backgroundColor: withAlpha(theme.colors.textPrimary, 0.018),
-                paddingHorizontal: boardFrameInsetX,
-                paddingVertical: boardFrameInsetY,
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: 13,
+                lineHeight: 18,
               }}
             >
-              <PixelGrid
-                availableWidth={homeBoardAvailableWidth}
-                cells={cells}
-                mode={isEditingHistory ? "edit" : "display"}
-                onCellPress={
-                  isEditingHistory
-                    ? (row, col) => {
-                        if (!historyDraftDevice || isSavingHistoryDraft) {
-                          return;
-                        }
+              Edit the board directly here, then save once.
+            </Text>
 
-                        setHistoryStatusError(null);
-                        setHistoryStatusMessage(null);
-                        setHistoryDraftDevice((current) => (current ? toggleHistoryCellLocal(current, row, col) : current));
-                        setHistoryIsDirty(true);
-                      }
-                    : undefined
-                }
-                palette={palette}
-                pendingPulse={pendingPulse}
-                readOnly={!isEditingHistory}
-                showFooterHint={false}
+            {isRefreshingRuntimeSnapshot || historyStatusError || historyStatusMessage ? (
+              <View style={{ gap: 4 }}>
+                {isRefreshingRuntimeSnapshot ? (
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: 12,
+                      lineHeight: 16,
+                    }}
+                  >
+                    Refreshing live board…
+                  </Text>
+                ) : null}
+                {historyStatusError ? (
+                  <Text
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: 12,
+                      lineHeight: 16,
+                    }}
+                  >
+                    {historyStatusError}
+                  </Text>
+                ) : null}
+                {historyStatusMessage ? (
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: 12,
+                      lineHeight: 16,
+                    }}
+                  >
+                    {historyStatusMessage}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+              <ActionPill
+                icon="close-outline"
+                label="Cancel"
+                onPress={() => {
+                  setHistoryDraftDevice(historyBaseDevice);
+                  setHistoryIsDirty(false);
+                  setHistoryStatusError(null);
+                  setHistoryStatusMessage(null);
+                  setIsEditingHistory(false);
+                }}
+              />
+              <ActionPill
+                icon="checkmark-outline"
+                label={isSavingHistoryDraft ? "Saving…" : "Save"}
+                onPress={() => void handleSaveHistory()}
+                tone="accent"
               />
             </View>
           </View>
+        </View>
+      </ScreenFrame>
+    );
+  }
 
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 24,
-              paddingTop: 4,
-            }}
-          >
-            <InlineStat label="This week" value={targetStatusLabel(device)} />
-            <InlineStat label="Recorded" value={`${stats.completed} total`} />
-          </View>
-
-          {isEditingHistory ? (
-            <View style={{ gap: 12 }}>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: 13,
-                  lineHeight: 18,
-                }}
-              >
-                Edit the board directly here, then save once.
-              </Text>
-
-              {isRefreshingRuntimeSnapshot || historyStatusError || historyStatusMessage ? (
-                <View style={{ gap: 4 }}>
-                  {isRefreshingRuntimeSnapshot ? (
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontFamily: theme.typography.body.fontFamily,
-                        fontSize: 12,
-                        lineHeight: 16,
-                      }}
-                    >
-                      Refreshing live board…
-                    </Text>
-                  ) : null}
-                  {historyStatusError ? (
-                    <Text
-                      style={{
-                        color: theme.colors.statusErrorMuted,
-                        fontFamily: theme.typography.body.fontFamily,
-                        fontSize: 12,
-                        lineHeight: 16,
-                      }}
-                    >
-                      {historyStatusError}
-                    </Text>
-                  ) : null}
-                  {historyStatusMessage ? (
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontFamily: theme.typography.body.fontFamily,
-                        fontSize: 12,
-                        lineHeight: 16,
-                      }}
-                    >
-                      {historyStatusMessage}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
-
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                <ActionPill
-                  icon="close-outline"
-                  label="Cancel"
-                  onPress={() => {
-                    setHistoryDraftDevice(historyBaseDevice);
-                    setHistoryIsDirty(false);
-                    setHistoryStatusError(null);
-                    setHistoryStatusMessage(null);
-                    setIsEditingHistory(false);
-                  }}
-                />
-                <ActionPill
-                  icon="checkmark-outline"
-                  label={isSavingHistoryDraft ? "Saving…" : "Save"}
-                  onPress={() => void handleSaveHistory()}
-                  tone="accent"
-                />
-              </View>
-            </View>
-          ) : null}
+  return (
+    <ScreenFrame bottomInset={120}>
+      <View style={{ flex: 1, paddingTop: 8, paddingBottom: 12 }}>
+        <View
+          style={{
+            flex: topSectionFlex,
+            justifyContent: "center",
+            gap: 20,
+          }}
+        >
+          {boardIdentity}
+          {boardSection}
+          {statsBand}
         </View>
 
-        {!isEditingHistory ? (
-          <View
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              height: buttonStageHeight,
-              width: "100%",
+        <View
+          style={{
+            flex: bottomSectionFlex,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <PrimaryActionButton
+            onPress={() => {
+              triggerPrimaryActionHaptic();
+              void toggleToday(device.id).catch((error) => {
+                console.warn("Failed to toggle today from app", error);
+              });
             }}
-          >
-            <PrimaryActionButton
-              onPress={() => {
-                void toggleToday(device.id).catch((error) => {
-                  console.warn("Failed to toggle today from app", error);
-                });
-              }}
-              size={156}
-              state={boardButtonState(device, buttonIsApplying)}
-              style={{ alignSelf: "center" }}
-            />
-          </View>
-        ) : null}
+            size={156}
+            state={boardButtonState(device, buttonIsApplying)}
+            style={{ alignSelf: "center" }}
+          />
+        </View>
       </View>
     </ScreenFrame>
+  );
+}
+
+export default function HomeScreen() {
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const pagerRef = useRef<PagerView>(null);
+  const [selectedTabIndex, setSelectedTabIndex] = useState(() => tabIndexFromParam(tab));
+
+  useEffect(() => {
+    const nextIndex = tabIndexFromParam(tab);
+    setSelectedTabIndex((currentIndex) => {
+      if (nextIndex === currentIndex) {
+        return currentIndex;
+      }
+
+      pagerRef.current?.setPageWithoutAnimation(nextIndex);
+      return nextIndex;
+    });
+  }, [tab]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
+      <PagerView
+        ref={pagerRef}
+        initialPage={selectedTabIndex}
+        offscreenPageLimit={3}
+        onPageSelected={(event) => {
+          setSelectedTabIndex(event.nativeEvent.position);
+        }}
+        overdrag={false}
+        style={{ flex: 1 }}
+      >
+        <View collapsable={false} key="home" style={{ flex: 1 }}>
+          <HomeTabContent />
+        </View>
+        <View collapsable={false} key="friends" style={{ flex: 1 }}>
+          <FriendsTabContent />
+        </View>
+        <View collapsable={false} key="profile" style={{ flex: 1 }}>
+          <ProfileTabContent />
+        </View>
+      </PagerView>
+
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: "absolute",
+          right: 0,
+          bottom: 0,
+          left: 0,
+        }}
+      >
+        <TopPageNav
+          activeIndex={selectedTabIndex}
+          onSelect={(nextIndex) => {
+            if (nextIndex === selectedTabIndex) {
+              return;
+            }
+
+            setSelectedTabIndex(nextIndex);
+            pagerRef.current?.setPage(nextIndex);
+          }}
+        />
+      </View>
+    </View>
   );
 }

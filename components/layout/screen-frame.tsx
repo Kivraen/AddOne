@@ -7,14 +7,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
 
 interface ScreenFrameProps extends PropsWithChildren {
+  bottomOverlay?: ReactNode;
+  bottomInset?: number;
   header?: ReactNode;
   scroll?: boolean;
 }
 
-export function ScreenFrame({ children, header, scroll = false }: ScreenFrameProps) {
+export function ScreenFrame({ children, header, scroll = false, bottomOverlay, bottomInset }: ScreenFrameProps) {
+  const contentBottomInset = bottomOverlay ? 120 : bottomInset ?? 32;
   const content = scroll ? (
     <ScrollView
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ paddingBottom: contentBottomInset }}
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -22,7 +25,9 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
       {children}
     </ScrollView>
   ) : (
-    <View className="flex-1">{children}</View>
+    <View className="flex-1" style={{ paddingBottom: contentBottomInset }}>
+      {children}
+    </View>
   );
 
   return (
@@ -55,6 +60,19 @@ export function ScreenFrame({ children, header, scroll = false }: ScreenFramePro
       >
         {header ? <View className="px-4 pt-2">{header}</View> : null}
         <View className="flex-1 px-4 pb-6">{content}</View>
+        {bottomOverlay ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              right: 0,
+              bottom: 0,
+              left: 0,
+            }}
+          >
+            {bottomOverlay}
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

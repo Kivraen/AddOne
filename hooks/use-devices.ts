@@ -482,7 +482,11 @@ export function useDeviceActions() {
           clearPendingTodayState(targetDevice.id);
           const message = error instanceof Error ? error.message : "Failed to change today's state.";
           if (allowRetry && message.includes("Runtime revision conflict")) {
-            await invalidateCloudDevices();
+            try {
+              await refreshRuntimeSnapshot(targetDevice.id);
+            } catch {
+              await invalidateCloudDevices();
+            }
             return issueToggle(false);
           }
 

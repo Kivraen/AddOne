@@ -1,9 +1,10 @@
 import { Redirect, Stack } from "expo-router";
+import { View } from "react-native";
 
 import { ScreenFrame } from "@/components/layout/screen-frame";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 
 export default function AppLayout() {
   const { mode, status } = useAuth();
@@ -33,8 +34,17 @@ export default function AppLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="history" options={{ animation: "fade" }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "simple_push",
+          animationTypeForReplace: "push",
+          contentStyle: { backgroundColor: theme.colors.bgBase },
+        }}
+      >
+        <Stack.Screen name="history" options={{ animation: "fade", contentStyle: { backgroundColor: theme.colors.bgBase } }} />
+      </Stack>
+    </View>
   );
 }
