@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import {
   applyDeviceSettingsFromApp,
@@ -12,6 +12,7 @@ import {
   setDayStateFromApp,
 } from "@/lib/supabase/addone-repository";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
+import { areCustomPalettesEqual, sanitizeCustomPalette } from "@/lib/device-settings";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
@@ -82,6 +83,9 @@ function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsP
   if (patch.palette_preset !== undefined && device.paletteId !== patch.palette_preset) {
     return false;
   }
+  if (patch.palette_custom !== undefined && !areCustomPalettesEqual(device.customPalette, sanitizeCustomPalette(patch.palette_custom))) {
+    return false;
+  }
   if (patch.timezone !== undefined && device.timezone !== patch.timezone) {
     return false;
   }
@@ -148,6 +152,7 @@ export function useDeviceActions() {
   const queryClient = useQueryClient();
   const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
+  const [isAwaitingSettingsConfirmation, setIsAwaitingSettingsConfirmation] = useState(false);
 
   const demoActions = {
     setAutoBrightness: useAddOneStore((state) => state.setAutoBrightness),
@@ -307,6 +312,7 @@ export function useDeviceActions() {
     setDayStateMutation.isPending ||
     historyDraftMutation.isPending ||
     applySettingsMutation.isPending ||
+    isAwaitingSettingsConfirmation ||
     wifiRecoveryMutation.isPending;
 
   const refreshRuntimeSnapshot = async (deviceId?: string) => {
@@ -377,7 +383,12 @@ export function useDeviceActions() {
       return;
     }
 
-    await applySettingsPatch(normalizedPatch, deviceId);
+    setIsAwaitingSettingsConfirmation(true);
+    try {
+      await applySettingsPatch(normalizedPatch, deviceId);
+    } finally {
+      setIsAwaitingSettingsConfirmation(false);
+    }
   };
 
   if (mode === "demo") {
@@ -435,7 +446,7 @@ export function useDeviceActions() {
     isBusy,
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
     isSavingHistoryDraft: historyDraftMutation.isPending,
-    isSavingSettings: applySettingsMutation.isPending,
+    isSavingSettings: applySettingsMutation.isPending || isAwaitingSettingsConfirmation,
     isStartingWifiRecovery: wifiRecoveryMutation.isPending,
     requestWifiRecovery: async (deviceId?: string) => {
       const targetDevice = await resolveFreshLiveDevice(deviceId);

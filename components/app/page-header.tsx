@@ -1,16 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
 
 interface PageHeaderProps {
+  actions?: ReactNode;
   title: string;
   subtitle?: string;
 }
 
-export function PageHeader({ title, subtitle }: PageHeaderProps) {
+export function PageHeader({ actions, title, subtitle }: PageHeaderProps) {
   const router = useRouter();
 
   return (
@@ -55,6 +57,12 @@ export function PageHeader({ title, subtitle }: PageHeaderProps) {
           </Text>
         ) : null}
       </View>
+
+      {actions ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 2 }}>
+          {actions}
+        </View>
+      ) : null}
     </View>
   );
 }

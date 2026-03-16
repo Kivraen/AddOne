@@ -178,6 +178,7 @@ export interface DeviceSettingsPatch {
   brightness?: number;
   day_reset_time?: string;
   name?: string;
+  palette_custom?: Partial<BoardPalette>;
   palette_preset?: string;
   reward_enabled?: boolean;
   reward_trigger?: RewardTrigger;
