@@ -14,6 +14,7 @@ import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
+import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice } from "@/types/addone";
@@ -275,7 +276,7 @@ export function HomeScreen() {
     }
 
     clearBoardEditorOpen();
-    router.push("/history");
+    router.push(deviceHistoryPath(activeDevice.id));
   }, [activeDevice?.isLive, clearBoardEditorOpen, pendingBoardEditorOpen, router]);
 
   const effectiveDevice = useMemo(() => {
@@ -471,9 +472,9 @@ export function HomeScreen() {
               {device.isLive ? (
                 <HeaderChip color={status.color} />
               ) : (
-                <HeaderChip icon="wifi-outline" label="Recovery" onPress={() => router.push("/recovery")} />
+                <HeaderChip icon="wifi-outline" label="Recovery" onPress={() => router.push(deviceRecoveryPath(device.id))} />
               )}
-              <IconActionPill icon="settings-outline" onPress={() => router.push("/settings")} />
+              <IconActionPill icon="settings-outline" onPress={() => router.push(deviceSettingsPath(device.id))} />
             </View>
           </View>
 

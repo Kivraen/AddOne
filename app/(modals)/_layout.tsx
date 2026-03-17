@@ -32,5 +32,5 @@ export default function ModalLayout() {
     return <Redirect href="/sign-in" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.bgBase }, headerShown: false }} />;
 }

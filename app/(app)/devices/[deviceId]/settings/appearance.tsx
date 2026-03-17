@@ -2,17 +2,21 @@ import Slider from "@react-native-community/slider";
 import { useRouter } from "expo-router";
 import { Pressable, Switch, Text, View } from "react-native";
 
+import { useRoutedDevice } from "@/components/devices/device-route-context";
 import {
   DeviceSettingsScaffold,
+  SettingsDivider,
   SettingsFieldLabel,
   SettingsNote,
+  SettingsRow,
   SettingsSurface,
   SettingsSwatchStrip,
 } from "@/components/settings/device-settings-scaffold";
 import { boardPalettes } from "@/constants/palettes";
+import { theme } from "@/constants/theme";
 import { getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
-import { theme } from "@/constants/theme";
+import { deviceSettingsSectionPath } from "@/lib/device-routes";
 
 function PaletteOption({
   active,
@@ -29,38 +33,67 @@ function PaletteOption({
     <Pressable
       onPress={onPress}
       style={{
-        flexBasis: "48%",
-        gap: 8,
+        minHeight: 60,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
         borderRadius: theme.radius.card,
         borderWidth: 1,
-        borderColor: active ? withAlpha(theme.colors.textPrimary, 0.16) : withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: active ? withAlpha(theme.colors.textPrimary, 0.08) : withAlpha(theme.colors.bgBase, 0.46),
-        paddingHorizontal: 12,
+        borderColor: active ? withAlpha(theme.colors.textPrimary, 0.16) : withAlpha(theme.colors.textPrimary, 0.06),
+        backgroundColor: active ? withAlpha(theme.colors.textPrimary, 0.08) : withAlpha(theme.colors.bgBase, 0.42),
+        paddingHorizontal: 14,
         paddingVertical: 12,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <Text
-          style={{
-            color: theme.colors.textPrimary,
-            fontFamily: active ? theme.typography.label.fontFamily : theme.typography.body.fontFamily,
-            fontSize: theme.typography.label.fontSize,
-            lineHeight: theme.typography.label.lineHeight,
-          }}
-        >
-          {label}
-        </Text>
+      <Text
+        style={{
+          flex: 1,
+          color: theme.colors.textPrimary,
+          fontFamily: active ? theme.typography.label.fontFamily : theme.typography.body.fontFamily,
+          fontSize: theme.typography.label.fontSize,
+          lineHeight: theme.typography.label.lineHeight,
+        }}
+      >
+        {label}
+      </Text>
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        {active ? (
+          <View
+            style={{
+              borderRadius: theme.radius.full,
+              backgroundColor: withAlpha(theme.colors.accentAmber, 0.18),
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.accentAmber,
+                fontFamily: theme.typography.micro.fontFamily,
+                fontSize: theme.typography.micro.fontSize,
+                lineHeight: theme.typography.micro.lineHeight,
+                letterSpacing: theme.typography.micro.letterSpacing,
+                textTransform: "uppercase",
+              }}
+            >
+              Current
+            </Text>
+          </View>
+        ) : null}
         <SettingsSwatchStrip colors={colors} />
       </View>
     </Pressable>
   );
 }
 
-export default function DeviceSettingsAppearanceScreen() {
+export default function DeviceSettingsAppearanceRoute() {
+  const device = useRoutedDevice();
   const router = useRouter();
 
   return (
-    <DeviceSettingsScaffold title="Appearance">
+    <DeviceSettingsScaffold device={device} title="Appearance">
       {(settings) => (
         <>
           <SettingsSurface>
@@ -80,6 +113,8 @@ export default function DeviceSettingsAppearanceScreen() {
                 value={settings.draft.autoBrightness}
               />
             </View>
+
+            <SettingsDivider />
 
             <View style={{ gap: 10, opacity: settings.draft.autoBrightness ? 0.45 : 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -113,11 +148,11 @@ export default function DeviceSettingsAppearanceScreen() {
 
           <SettingsSurface>
             <View style={{ gap: 4 }}>
-              <SettingsFieldLabel>Palettes</SettingsFieldLabel>
-              <SettingsNote>Choose a strong starting palette, then customize the board colors below it.</SettingsNote>
+              <SettingsFieldLabel>Palette</SettingsFieldLabel>
+              <SettingsNote>Start with a palette, then fine-tune the four board colors below it.</SettingsNote>
             </View>
 
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <View style={{ gap: 8 }}>
               {boardPalettes.map((palette) => {
                 const isActive = settings.draft.paletteId === palette.id;
                 const preview = getMergedPalette(palette.id, isActive ? settings.draft.customPalette : {});
@@ -135,26 +170,14 @@ export default function DeviceSettingsAppearanceScreen() {
               })}
             </View>
 
-            <Pressable
-              onPress={() => router.push("/settings/colors")}
-              style={{
-                minHeight: 56,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderRadius: theme.radius.card,
-                borderWidth: 1,
-                borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                backgroundColor: withAlpha(theme.colors.bgBase, 0.44),
-                paddingHorizontal: 14,
-              }}
-            >
-              <View style={{ flex: 1, gap: 4 }}>
-                <SettingsFieldLabel>Customize colors</SettingsFieldLabel>
-                <SettingsNote>{settings.summary.appearance.paletteLabel}</SettingsNote>
-              </View>
-              <SettingsSwatchStrip colors={settings.summary.appearance.colors} />
-            </Pressable>
+            <SettingsDivider />
+
+            <SettingsRow
+              detail="Fine-tune the four board colors that matter most."
+              onPress={() => router.push(deviceSettingsSectionPath(device.id, "colors"))}
+              title="Customize colors"
+              trailing={<SettingsSwatchStrip colors={settings.summary.appearance.colors} />}
+            />
           </SettingsSurface>
         </>
       )}

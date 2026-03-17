@@ -130,8 +130,15 @@ export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set
     }),
   syncFromDeviceIfClean: (device, sourceKey) => {
     const state = get();
-    if (state.deviceId !== device.id || !state.baseDraft || !state.draft) {
+    if (!state.baseDraft || !state.draft) {
       state.initializeFromDevice(device, sourceKey);
+      return;
+    }
+
+    if (state.deviceId !== device.id) {
+      if (areSettingsDraftsEqual(state.baseDraft, state.draft)) {
+        state.initializeFromDevice(device, sourceKey);
+      }
       return;
     }
 

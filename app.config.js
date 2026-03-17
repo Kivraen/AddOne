@@ -13,7 +13,7 @@ module.exports = {
     experiments: {
       typedRoutes: true,
     },
-    plugins: ["expo-router"],
+    plugins: ["expo-router", "@react-native-community/datetimepicker"],
     ios: {
       bundleIdentifier: isBeta ? "studio.addone.beta" : "studio.addone.dev",
       infoPlist: {

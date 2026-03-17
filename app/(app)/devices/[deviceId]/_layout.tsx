@@ -1,14 +1,15 @@
 import { Redirect, Stack } from "expo-router";
 import { Text, View } from "react-native";
 
+import { DeviceRouteProvider } from "@/components/devices/device-route-context";
 import { ScreenView } from "@/components/layout/screen-frame";
 import { theme } from "@/constants/theme";
-import { useAuth } from "@/hooks/use-auth";
+import { useRouteDevice } from "@/hooks/use-route-device";
 
-export default function AppLayout() {
-  const { mode, status } = useAuth();
+export default function DeviceScopeLayout() {
+  const { device, isLoading, notFound } = useRouteDevice();
 
-  if (mode === "cloud" && status === "loading") {
+  if (isLoading) {
     return (
       <ScreenView contentMaxWidth={theme.layout.narrowContentWidth}>
         <View style={{ flex: 1, justifyContent: "center" }}>
@@ -21,30 +22,30 @@ export default function AppLayout() {
               textAlign: "center",
             }}
           >
-            Restoring your AddOne session…
+            Loading device…
           </Text>
         </View>
       </ScreenView>
     );
   }
 
-  if (mode === "cloud" && status !== "signedIn") {
-    return <Redirect href="/sign-in" />;
+  if (notFound || !device) {
+    return <Redirect href="/" />;
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
+    <DeviceRouteProvider device={device}>
       <Stack
         screenOptions={{
-          headerShown: false,
-          animation: "simple_push",
-          animationTypeForReplace: "push",
           contentStyle: { backgroundColor: theme.colors.bgBase },
+          headerBackButtonDisplayMode: "minimal",
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: theme.colors.bgBase },
+          headerTintColor: theme.colors.textPrimary,
         }}
       >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="devices/[deviceId]" options={{ contentStyle: { backgroundColor: theme.colors.bgBase } }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack>
-    </View>
+    </DeviceRouteProvider>
   );
 }

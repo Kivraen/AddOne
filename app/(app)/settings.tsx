@@ -4,9 +4,9 @@ import { Text, View } from "react-native";
 import { ScreenView } from "@/components/layout/screen-frame";
 import { theme } from "@/constants/theme";
 import { useDevices } from "@/hooks/use-devices";
-import { deviceRecoveryPath } from "@/lib/device-routes";
+import { deviceSettingsPath } from "@/lib/device-routes";
 
-export default function LegacyRecoveryRedirectRoute() {
+export default function LegacySettingsRedirectRoute() {
   const { activeDeviceId, isLoading } = useDevices();
 
   if (isLoading) {
@@ -22,12 +22,12 @@ export default function LegacyRecoveryRedirectRoute() {
               textAlign: "center",
             }}
           >
-            Loading recovery…
+            Loading device settings…
           </Text>
         </View>
       </ScreenView>
     );
   }
 
-  return <Redirect href={activeDeviceId ? deviceRecoveryPath(activeDeviceId) : "/"} />;
+  return <Redirect href={activeDeviceId ? deviceSettingsPath(activeDeviceId) : "/"} />;
 }

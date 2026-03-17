@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
 
-import { useActiveDevice } from "@/hooks/use-active-device";
 import { useDeviceActions } from "@/hooks/use-devices";
 import {
   DeviceSettingsDraft,
@@ -13,8 +12,9 @@ import {
 } from "@/lib/device-settings";
 import { useDeviceSettingsDraftStore } from "@/store/device-settings-draft-store";
 import { usePaletteHistoryStore } from "@/store/palette-history-store";
+import { AddOneDevice } from "@/types/addone";
 
-function deviceSettingsSourceKey(device: ReturnType<typeof useActiveDevice>) {
+function deviceSettingsSourceKey(device: AddOneDevice) {
   return [
     device.id,
     device.runtimeRevision,
@@ -30,8 +30,7 @@ function deviceSettingsSourceKey(device: ReturnType<typeof useActiveDevice>) {
   ].join(":");
 }
 
-export function useDeviceSettingsDraft() {
-  const device = useActiveDevice();
+export function useDeviceSettingsDraft(device: AddOneDevice) {
   const { applySettingsDraft, isSavingSettings } = useDeviceActions();
   const rememberAppliedPalette = usePaletteHistoryStore((state) => state.rememberAppliedPalette);
   const {

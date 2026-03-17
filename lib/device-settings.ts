@@ -218,13 +218,17 @@ export function buildSettingsPatchFromDraft(base: DeviceSettingsDraft, draft: De
 export function buildDraftSummary(draft: DeviceSettingsDraft) {
   const palette = getMergedPalette(draft.paletteId, draft.customPalette);
   const isCustom = Object.keys(sanitizeCustomPalette(draft.customPalette)).length > 0;
+  const trimmedHabitName = draft.habitName.trim() || "Untitled";
+  const weeklyTargetLabel = draft.weeklyTarget === 1 ? "1 day each week" : `${draft.weeklyTarget} days each week`;
+
   return {
     appearance: {
       brightness: draft.autoBrightness ? "Auto brightness" : `Brightness ${draft.brightness}%`,
       colors: [palette.socketEdge, palette.dayOn, palette.weekSuccess, palette.weekFail],
       paletteLabel: isCustom ? `${paletteById[draft.paletteId]?.name ?? "Classic"} + Custom` : paletteById[draft.paletteId]?.name ?? "Classic",
     },
-    habit: `${draft.habitName.trim() || "Untitled"} · ${draft.weeklyTarget} days`,
+    habit: `${trimmedHabitName} · ${draft.weeklyTarget} days`,
+    routine: `${trimmedHabitName} · ${weeklyTargetLabel} · ${draft.resetTime}`,
     time: `${draft.timezone} · ${draft.resetTime}`,
   };
 }

@@ -3,13 +3,19 @@ import { LayoutChangeEvent, Pressable, Text, TextInput, View, useWindowDimension
 import ColorPicker, { HueSlider, Panel1 } from "reanimated-color-picker";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
-import { GlassCard } from "@/components/ui/glass-card";
+import {
+  SettingsDivider,
+  SettingsFieldLabel,
+  SettingsNote,
+  SettingsSectionTitle,
+  SettingsSurface,
+} from "@/components/settings/device-settings-scaffold";
 import { theme } from "@/constants/theme";
 import { buildBoardCells } from "@/lib/board";
 import {
-  areSettingsDraftsEqual,
   DeviceSettingsDraft,
   EditablePaletteRole,
+  areSettingsDraftsEqual,
   getDraftPalette,
   getEditablePaletteRoleColor,
   getEditablePaletteRoleLabel,
@@ -27,42 +33,34 @@ function PreviewBoard({ device, palette }: { device: AddOneDevice; palette: Boar
   const cells = useMemo(() => buildBoardCells(device), [device]);
 
   function handleLayout(event: LayoutChangeEvent) {
-    const next = event.nativeEvent.layout.width - 28;
+    const next = event.nativeEvent.layout.width - 32;
     if (Math.abs(next - availableWidth) > 1) {
       setAvailableWidth(next);
     }
   }
 
   return (
-    <GlassCard style={{ gap: 14, paddingHorizontal: 14, paddingVertical: 14 }}>
-      <Text
-        style={{
-          color: theme.colors.textSecondary,
-          fontFamily: theme.typography.micro.fontFamily,
-          fontSize: theme.typography.micro.fontSize,
-          lineHeight: theme.typography.micro.lineHeight,
-          letterSpacing: theme.typography.micro.letterSpacing,
-          textTransform: "uppercase",
-        }}
-      >
-        Live preview
-      </Text>
+    <SettingsSurface style={{ gap: 24, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 }}>
+      <View style={{ paddingBottom: 2 }}>
+        <SettingsSectionTitle>Live preview</SettingsSectionTitle>
+      </View>
       <View
         onLayout={handleLayout}
         style={{
           alignItems: "center",
           justifyContent: "center",
           width: "100%",
-          borderRadius: 18,
+          borderRadius: theme.radius.card,
           borderWidth: 1,
           borderColor: withAlpha(theme.colors.textPrimary, 0.06),
           backgroundColor: palette.socket,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
+          paddingHorizontal: 16,
+          paddingTop: 14,
+          paddingBottom: 12,
         }}
       >
         <PixelGrid
-          availableWidth={Math.max(0, Math.min(availableWidth || width - 92, width - 92))}
+          availableWidth={Math.max(0, Math.min(availableWidth || width - 96, width - 96))}
           cells={cells}
           mode="preview"
           palette={palette}
@@ -70,7 +68,7 @@ function PreviewBoard({ device, palette }: { device: AddOneDevice; palette: Boar
           showFooterHint={false}
         />
       </View>
-    </GlassCard>
+    </SettingsSurface>
   );
 }
 
@@ -97,16 +95,7 @@ function QuickSwatches({
 
   return (
     <View style={{ gap: 8 }}>
-      <Text
-        style={{
-          color: theme.colors.textSecondary,
-          fontFamily: theme.typography.label.fontFamily,
-          fontSize: 12,
-          lineHeight: 16,
-        }}
-      >
-        Quick colors
-      </Text>
+      <SettingsFieldLabel>Quick colors</SettingsFieldLabel>
 
       <View
         onLayout={(event) => {
@@ -208,7 +197,13 @@ export function PaletteColorEditor({
         palette={draftPalette}
       />
 
-      <GlassCard style={{ gap: 8, paddingHorizontal: 10, paddingVertical: 10 }}>
+      <SettingsSurface style={{ gap: 10, paddingVertical: 8 }}>
+        <View style={{ gap: 4 }}>
+          <SettingsFieldLabel>Board colors</SettingsFieldLabel>
+          <SettingsNote>Pick the part of the board you want to edit, then fine-tune it below.</SettingsNote>
+        </View>
+        <SettingsDivider />
+
         {(["off", "on", "weekSuccess", "weekFail"] as EditablePaletteRole[]).map((role, index, list) => {
           const color = getEditablePaletteRoleColor(editorDraft, role);
           const selected = role === activeRole;
@@ -231,26 +226,8 @@ export function PaletteColorEditor({
                 }}
               >
                 <View style={{ gap: 2 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.label.fontFamily,
-                      fontSize: theme.typography.label.fontSize,
-                      lineHeight: theme.typography.label.lineHeight,
-                    }}
-                  >
-                    {getEditablePaletteRoleLabel(role)}
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: 13,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {color}
-                  </Text>
+                  <SettingsFieldLabel>{getEditablePaletteRoleLabel(role)}</SettingsFieldLabel>
+                  <SettingsNote>{color}</SettingsNote>
                 </View>
 
                 <View
@@ -270,11 +247,11 @@ export function PaletteColorEditor({
             </View>
           );
         })}
-      </GlassCard>
+      </SettingsSurface>
 
-      <GlassCard style={{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}>
+      <SettingsSurface>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
             <View
               style={{
                 width: 28,
@@ -285,27 +262,9 @@ export function PaletteColorEditor({
                 backgroundColor: activeColor,
               }}
             />
-            <View>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.label.fontFamily,
-                  fontSize: theme.typography.label.fontSize,
-                  lineHeight: theme.typography.label.lineHeight,
-                }}
-              >
-                {getEditablePaletteRoleLabel(activeRole)}
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: 13,
-                  lineHeight: 18,
-                }}
-              >
-                Drag across the palette, then slide hue to dial the color in.
-              </Text>
+            <View style={{ flex: 1, gap: 2 }}>
+              <SettingsFieldLabel>{getEditablePaletteRoleLabel(activeRole)}</SettingsFieldLabel>
+              <SettingsNote>Drag across the palette, then use hue and hex to dial the color in.</SettingsNote>
             </View>
           </View>
 
@@ -369,16 +328,7 @@ export function PaletteColorEditor({
             }}
           />
           <View style={{ gap: 6 }}>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: 12,
-                lineHeight: 16,
-              }}
-            >
-              Hue
-            </Text>
+            <SettingsFieldLabel>Hue</SettingsFieldLabel>
             <HueSlider
               style={{
                 borderRadius: theme.radius.pill,
@@ -404,16 +354,7 @@ export function PaletteColorEditor({
         />
 
         <View style={{ gap: 6 }}>
-          <Text
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.label.fontFamily,
-              fontSize: 12,
-              lineHeight: 16,
-            }}
-          >
-            Hex
-          </Text>
+          <SettingsFieldLabel>Hex</SettingsFieldLabel>
           <TextInput
             autoCapitalize="characters"
             autoCorrect={false}
@@ -443,7 +384,7 @@ export function PaletteColorEditor({
             value={hexInput}
           />
         </View>
-      </GlassCard>
+      </SettingsSurface>
     </View>
   );
 }

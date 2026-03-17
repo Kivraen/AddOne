@@ -10,7 +10,7 @@ import {
   ViewProps,
   ViewStyle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Edge, SafeAreaView } from "react-native-safe-area-context";
 
 import { theme } from "@/constants/theme";
 
@@ -22,6 +22,7 @@ interface ScreenFrameProps extends PropsWithChildren {
   contentContainerStyle?: StyleProp<ViewStyle>;
   contentMaxWidth?: number;
   header?: ReactNode;
+  safeAreaEdges?: Edge[];
   scroll?: boolean;
 }
 
@@ -34,19 +35,13 @@ function ScreenBackdrop() {
         start={{ x: 0.5, y: 0 }}
         style={{ flex: 1 }}
       />
-      <LinearGradient
-        colors={[theme.colors.overlayHighlight, "transparent"]}
-        end={{ x: 0.85, y: 0.5 }}
-        start={{ x: 0, y: 0 }}
-        style={{ position: "absolute", top: 0, right: 0, left: 0, height: 220 }}
-      />
     </View>
   );
 }
 
-function ScreenShell({ children }: PropsWithChildren) {
+function ScreenShell({ children, safeAreaEdges }: PropsWithChildren<{ safeAreaEdges?: Edge[] }>) {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
+    <SafeAreaView edges={safeAreaEdges} style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
       <StatusBar style="light" />
       <ScreenBackdrop />
       {children}
@@ -68,6 +63,7 @@ interface ScreenViewProps extends PropsWithChildren {
   contentContainerStyle?: StyleProp<ViewStyle>;
   contentMaxWidth?: number;
   header?: ReactNode;
+  safeAreaEdges?: Edge[];
   style?: StyleProp<ViewStyle>;
 }
 
@@ -78,12 +74,13 @@ export function ScreenView({
   bottomInset,
   contentContainerStyle,
   contentMaxWidth,
+  safeAreaEdges,
   style,
 }: ScreenViewProps) {
   const contentBottomInset = bottomOverlay ? theme.layout.tabScrollBottom : bottomInset ?? theme.layout.scrollBottom;
 
   return (
-    <ScreenShell>
+    <ScreenShell safeAreaEdges={safeAreaEdges}>
       <KeyboardAvoidingView
         behavior={IS_IOS ? "padding" : undefined}
         keyboardVerticalOffset={IS_IOS ? 8 : 0}
@@ -126,6 +123,7 @@ interface ScreenScrollViewProps extends Omit<ScrollViewProps, "contentContainerS
   contentContainerStyle?: StyleProp<ViewStyle>;
   contentMaxWidth?: number;
   header?: ReactNode;
+  safeAreaEdges?: Edge[];
 }
 
 export function ScreenScrollView({
@@ -137,13 +135,14 @@ export function ScreenScrollView({
   contentMaxWidth,
   keyboardDismissMode = "interactive",
   keyboardShouldPersistTaps = "handled",
+  safeAreaEdges,
   showsVerticalScrollIndicator = false,
   ...scrollViewProps
 }: ScreenScrollViewProps) {
   const contentBottomInset = bottomOverlay ? theme.layout.tabScrollBottom : bottomInset ?? theme.layout.scrollBottom;
 
   return (
-    <ScreenShell>
+    <ScreenShell safeAreaEdges={safeAreaEdges}>
       <KeyboardAvoidingView
         behavior={IS_IOS ? "padding" : undefined}
         keyboardVerticalOffset={IS_IOS ? 8 : 0}
@@ -203,6 +202,7 @@ export function ScreenFrame({
   bottomInset,
   contentContainerStyle,
   contentMaxWidth,
+  safeAreaEdges,
 }: ScreenFrameProps) {
   if (scroll) {
     return (
@@ -212,6 +212,7 @@ export function ScreenFrame({
         contentContainerStyle={contentContainerStyle}
         contentMaxWidth={contentMaxWidth}
         header={header}
+        safeAreaEdges={safeAreaEdges}
       >
         {children}
       </ScreenScrollView>
@@ -225,6 +226,7 @@ export function ScreenFrame({
       contentContainerStyle={contentContainerStyle}
       contentMaxWidth={contentMaxWidth}
       header={header}
+      safeAreaEdges={safeAreaEdges}
     >
       {children}
     </ScreenView>

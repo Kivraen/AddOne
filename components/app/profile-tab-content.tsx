@@ -37,7 +37,7 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Account controls live here, separate from the current device board and setup surfaces.
+            Account controls live here, separate from every device board and its device-specific settings flow.
           </Text>
         </View>
 
@@ -66,7 +66,19 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
           </Text>
         </GlassCard>
 
-        <GlassCard style={{ gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+        <GlassCard style={{ gap: 10, paddingHorizontal: 18, paddingVertical: 18 }}>
+          <Text
+            style={{
+              color: theme.colors.textTertiary,
+              fontFamily: theme.typography.micro.fontFamily,
+              fontSize: theme.typography.micro.fontSize,
+              lineHeight: theme.typography.micro.lineHeight,
+              letterSpacing: theme.typography.micro.letterSpacing,
+              textTransform: "uppercase",
+            }}
+          >
+            Scope
+          </Text>
           <Text
             style={{
               color: theme.colors.textPrimary,
@@ -75,7 +87,7 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
               lineHeight: theme.typography.label.lineHeight,
             }}
           >
-            Device tools
+            Device settings now open from the specific board they control.
           </Text>
           <Text
             style={{
@@ -85,31 +97,8 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Manage the active board’s appearance, timing, and recovery flow from device settings.
+            Swipe to the right device on Home, then open its own settings from there.
           </Text>
-          <Pressable
-            onPress={() => router.push("/settings")}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 48,
-              borderRadius: theme.radius.pill,
-              borderWidth: 1,
-              borderColor: theme.materials.panel.border,
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.16),
-            }}
-          >
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: theme.typography.label.fontSize,
-                lineHeight: theme.typography.label.lineHeight,
-              }}
-            >
-              Open device settings
-            </Text>
-          </Pressable>
         </GlassCard>
 
         {mode === "cloud" ? (

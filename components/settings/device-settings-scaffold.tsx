@@ -1,16 +1,15 @@
-import { useNavigation } from "@react-navigation/native";
-import { usePreventRemove } from "@react-navigation/native";
+import { Stack } from "expo-router";
 import { PropsWithChildren, ReactNode } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, StyleProp, Text, View, ViewStyle } from "react-native";
 
-import { PageHeader } from "@/components/app/page-header";
-import { ScreenFrame } from "@/components/layout/screen-frame";
+import { ScreenScrollView } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useDeviceSettingsDraft } from "@/hooks/use-device-settings-draft";
 import { withAlpha } from "@/lib/color";
+import { AddOneDevice } from "@/types/addone";
 
-function ActionBarButton({
+function HeaderActionButton({
   disabled = false,
   label,
   onPress,
@@ -24,20 +23,14 @@ function ActionBarButton({
       disabled={disabled}
       onPress={onPress}
       style={{
-        minHeight: 36,
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: theme.radius.pill,
-        borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, 0.12),
-        backgroundColor: withAlpha(theme.colors.bgElevated, 0.84),
-        opacity: disabled ? 0.38 : 1,
-        paddingHorizontal: 14,
+        opacity: disabled ? 0.4 : 1,
+        paddingHorizontal: 2,
+        paddingVertical: 6,
       }}
     >
       <Text
         style={{
-          color: theme.colors.textPrimary,
+          color: disabled ? theme.colors.textTertiary : theme.colors.accentAmber,
           fontFamily: theme.typography.label.fontFamily,
           fontSize: theme.typography.label.fontSize,
           lineHeight: theme.typography.label.lineHeight,
@@ -84,6 +77,7 @@ export function SettingsSectionTitle({ children }: PropsWithChildren) {
 export function SettingsNote({ children, tone = "secondary" }: PropsWithChildren<{ tone?: "error" | "secondary" }>) {
   return (
     <Text
+      selectable
       style={{
         color: tone === "error" ? theme.colors.statusErrorMuted : theme.colors.textSecondary,
         fontFamily: theme.typography.body.fontFamily,
@@ -96,9 +90,18 @@ export function SettingsNote({ children, tone = "secondary" }: PropsWithChildren
   );
 }
 
-export function SettingsSurface({ children, style }: { children: ReactNode; style?: object }) {
+export function SettingsSurface({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <GlassCard style={[{ gap: 14, paddingHorizontal: 16, paddingVertical: 16 }, style]}>
+    <GlassCard
+      style={[
+        {
+          gap: 14,
+          paddingHorizontal: 16,
+          paddingVertical: 16,
+        },
+        style,
+      ]}
+    >
       {children}
     </GlassCard>
   );
@@ -184,99 +187,66 @@ export function SettingsSwatchStrip({ colors }: { colors: string[] }) {
   );
 }
 
+export function SettingsDivider() {
+  return <View style={{ height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.06) }} />;
+}
+
 export function DeviceSettingsScaffold({
   children,
+  device,
+  headerLeft,
+  largeTitle = false,
   subtitle,
   title,
 }: {
   children: (settings: ReturnType<typeof useDeviceSettingsDraft>) => ReactNode;
+  device: AddOneDevice;
+  headerLeft?: () => ReactNode;
+  largeTitle?: boolean;
   subtitle?: string;
   title: string;
 }) {
-  const navigation = useNavigation();
-  const settings = useDeviceSettingsDraft();
-
-  usePreventRemove(settings.isSavingSettings || settings.isDirty, ({ data }) => {
-    if (settings.isSavingSettings) {
-      Alert.alert("Applying changes", "AddOne is still waiting for the device to confirm these settings.");
-      return;
-    }
-
-    if (!settings.isDirty) {
-      return;
-    }
-
-    const continueAction = () => navigation.dispatch(data.action);
-
-    Alert.alert(
-      "Keep your changes?",
-      settings.validation.isValid
-        ? "You have unpublished device changes."
-        : "You have unpublished changes, but some values still need to be fixed.",
-      settings.validation.isValid
-        ? [
-            { style: "cancel", text: "Stay" },
-            {
-              style: "destructive",
-              text: "Discard",
-              onPress: () => {
-                settings.clearDraft();
-                continueAction();
-              },
-            },
-            {
-              text: settings.isSavingSettings ? "Applying…" : "Apply",
-              onPress: () => {
-                void settings.apply().then((success) => {
-                  if (!success) {
-                    return;
-                  }
-
-                  settings.clearDraft();
-                  continueAction();
-                });
-              },
-            },
-          ]
-        : [
-            { style: "cancel", text: "Stay" },
-            {
-              style: "destructive",
-              text: "Discard",
-              onPress: () => {
-                settings.clearDraft();
-                continueAction();
-              },
-            },
-          ],
-    );
-  });
+  const settings = useDeviceSettingsDraft(device);
 
   return (
-    <ScreenFrame
-      header={
-        <View style={{ gap: 12 }}>
-          <PageHeader
-            actions={
-              <ActionBarButton
-                disabled={!settings.canApply}
-                label={settings.isSavingSettings ? "Applying…" : "Apply"}
-                onPress={() => {
-                  void settings.apply();
-                }}
-              />
-            }
-            subtitle={subtitle}
-            title={title}
-          />
-
+    <>
+      <ScreenScrollView
+        contentContainerStyle={{ paddingTop: 0 }}
+        contentMaxWidth={theme.layout.narrowContentWidth}
+        safeAreaEdges={["left", "right", "bottom"]}
+      >
+        <View style={{ gap: 14 }}>
+          {subtitle ? <SettingsNote>{subtitle}</SettingsNote> : null}
           {settings.statusMessage ? <SettingsNote>{settings.statusMessage}</SettingsNote> : null}
           {settings.statusError ? <SettingsNote tone="error">{settings.statusError}</SettingsNote> : null}
+          <View style={{ gap: 12 }}>{children(settings)}</View>
         </View>
-      }
-      scroll
-    >
-      <View style={{ gap: 12 }}>{children(settings)}</View>
-    </ScreenFrame>
+      </ScreenScrollView>
+
+      <Stack.Screen
+        options={{
+          headerLargeTitle: largeTitle,
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: theme.colors.bgBase },
+          headerTintColor: theme.colors.textPrimary,
+          headerLeft,
+          headerTitle: title,
+          headerTitleStyle: {
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.title.fontFamily,
+            fontSize: theme.typography.title.fontSize,
+          },
+          headerRight: () => (
+            <HeaderActionButton
+              disabled={!settings.canApply}
+              label={settings.isSavingSettings ? "Applying…" : "Apply"}
+              onPress={() => {
+                void settings.apply();
+              }}
+            />
+          ),
+        }}
+      />
+    </>
   );
 }

@@ -1,14 +1,16 @@
 import { useState } from "react";
 
+import { useRoutedDevice } from "@/components/devices/device-route-context";
 import { PaletteColorEditor } from "@/components/settings/palette-color-editor";
 import { DeviceSettingsScaffold } from "@/components/settings/device-settings-scaffold";
 import { EditablePaletteRole } from "@/lib/device-settings";
 
-export default function DeviceSettingsColorsScreen() {
+export default function DeviceSettingsColorsRoute() {
+  const device = useRoutedDevice();
   const [activeRole, setActiveRole] = useState<EditablePaletteRole>("on");
 
   return (
-    <DeviceSettingsScaffold subtitle="Edit the four board colors that matter most." title="Colors">
+    <DeviceSettingsScaffold device={device} title="Colors">
       {(settings) => (
         <PaletteColorEditor
           activeRole={activeRole}

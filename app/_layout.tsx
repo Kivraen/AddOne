@@ -13,6 +13,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppErrorBoundary } from "@/components/app/app-error-boundary";
 import { BootScreen } from "@/components/app/boot-screen";
+import { theme } from "@/constants/theme";
 import { AppProviders } from "@/providers/app-providers";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -52,7 +53,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AppErrorBoundary>
           <AppProviders>
-            <Stack screenOptions={{ headerShown: false }}>
+            <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.bgBase }, headerShown: false }}>
               <Stack.Screen name="(app)" />
               <Stack.Screen name="(modals)" options={{ animation: "default" }} />
               <Stack.Screen name="sign-in" />
