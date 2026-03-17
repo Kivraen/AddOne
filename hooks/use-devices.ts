@@ -240,6 +240,7 @@ export function useDeviceActions() {
       baseRevision?: number;
       commandId?: string | null;
       errorMessage?: string;
+      requireRevisionAdvance?: boolean;
       timeoutMs?: number;
     },
     predicate: (device: AddOneDevice) => boolean,
@@ -247,11 +248,14 @@ export function useDeviceActions() {
     const timeoutMs = options.timeoutMs ?? 12_000;
     const startedAt = Date.now();
     let lastRefreshAt = 0;
+    const requireRevisionAdvance = options.requireRevisionAdvance ?? false;
 
     while (Date.now() - startedAt < timeoutMs) {
       const latestDevices = getCachedDevices();
       const next = latestDevices.find((device) => device.id === deviceId);
-      if (next && (options.baseRevision === undefined || next.runtimeRevision > options.baseRevision) && predicate(next)) {
+      const revisionSatisfied =
+        options.baseRevision === undefined || !requireRevisionAdvance || (next?.runtimeRevision ?? 0) > options.baseRevision;
+      if (next && revisionSatisfied && predicate(next)) {
         return next;
       }
 
@@ -265,11 +269,11 @@ export function useDeviceActions() {
 
     const finalDevices = await loadLatestDevices();
     const finalMatch = finalDevices.find((device) => device.id === deviceId);
-    if (
-      finalMatch &&
-      (options.baseRevision === undefined || finalMatch.runtimeRevision > options.baseRevision) &&
-      predicate(finalMatch)
-    ) {
+    const finalRevisionSatisfied =
+      options.baseRevision === undefined ||
+      !requireRevisionAdvance ||
+      (finalMatch?.runtimeRevision ?? 0) > options.baseRevision;
+    if (finalMatch && finalRevisionSatisfied && predicate(finalMatch)) {
       return finalMatch;
     }
 
@@ -330,6 +334,7 @@ export function useDeviceActions() {
         baseRevision: previousRevision,
         commandId: result.command_id ?? null,
         errorMessage: "The device did not publish a fresh runtime snapshot in time.",
+        requireRevisionAdvance: false,
       },
       (device) => (device.lastSnapshotAt ?? "") !== previousSnapshotAt || device.runtimeRevision > previousRevision,
     );
@@ -349,6 +354,7 @@ export function useDeviceActions() {
         baseRevision,
         commandId: result.command_id ?? null,
         errorMessage: "The device did not confirm the updated settings in time.",
+        requireRevisionAdvance: true,
       },
       (device) => deviceMatchesSettingsPatch(device, patch),
     );
@@ -437,6 +443,7 @@ export function useDeviceActions() {
           baseRevision,
           commandId: result.command_id ?? null,
           errorMessage: "The device did not confirm the saved history draft in time.",
+          requireRevisionAdvance: true,
         },
         (device) => deviceMatchesHistory(device, updates),
       );
@@ -459,7 +466,12 @@ export function useDeviceActions() {
     toggleHistoryCell: async () => undefined,
     toggleToday: async (deviceId?: string) => {
       const issueToggle = async (allowRetry: boolean) => {
-        const targetDevice = await resolveFreshLiveDevice(deviceId);
+        let targetDevice = await resolveFreshLiveDevice(deviceId);
+        if (targetDevice.needsSnapshotRefresh) {
+          await refreshRuntimeSnapshot(targetDevice.id);
+          targetDevice = await resolveFreshLiveDevice(targetDevice.id);
+        }
+
         const localDate = targetDevice.dateGrid?.[targetDevice.today.weekIndex]?.[targetDevice.today.dayIndex];
         if (!localDate) {
           throw new Error("The device board is missing today's date.");
@@ -484,6 +496,7 @@ export function useDeviceActions() {
               baseRevision,
               commandId: result.command_id ?? null,
               errorMessage: "The device did not confirm today's state in time.",
+              requireRevisionAdvance: true,
             },
             (device) => getDayStateByLocalDate(device, localDate) === desiredState,
           );

@@ -82,6 +82,10 @@ String TimeService::currentUtcIsoTimestamp() const {
   return String(buffer);
 }
 
+bool TimeService::hasAuthoritativeTime() const {
+  return hasValidTime() && !rtc_.lostPower();
+}
+
 bool TimeService::hasValidTime() const {
   return saneUtc_(time(nullptr));
 }
@@ -89,6 +93,10 @@ bool TimeService::hasValidTime() const {
 bool TimeService::loadRtcToSystem_() {
   if (rtcLoaded_) {
     return true;
+  }
+
+  if (rtc_.lostPower()) {
+    return false;
   }
 
   time_t rtcUtc = 0;
@@ -176,7 +184,7 @@ void TimeService::syncRtcFromSystem_() {
   }
 
   const unsigned long nowMs = millis();
-  if (nowMs - lastRtcWriteAtMs_ < Config::kRtcWriteIntervalMs) {
+  if (!rtc_.lostPower() && nowMs - lastRtcWriteAtMs_ < Config::kRtcWriteIntervalMs) {
     return;
   }
 

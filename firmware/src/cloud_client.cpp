@@ -139,6 +139,14 @@ bool CloudClient::heartbeat() {
   return ok;
 }
 
+bool CloudClient::hasPersistedDeviceAuthToken() const {
+  Preferences prefs;
+  prefs.begin(kCloudPrefsNamespace, true);
+  const bool hasToken = prefs.isKey(kDeviceAuthTokenKey);
+  prefs.end();
+  return hasToken;
+}
+
 bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount) {
   outCount = 0;
   if (!outCommands || maxCommands == 0 || !identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {

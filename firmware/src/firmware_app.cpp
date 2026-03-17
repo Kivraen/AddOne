@@ -13,6 +13,7 @@ constexpr unsigned long kRuntimeSnapshotSyncIntervalMs = 250;
 constexpr unsigned long kHeartbeatIntervalMs = 60000;
 constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
 constexpr unsigned long kRecoveryCommandCooldownMs = 15000;
+constexpr uint8_t kWifiReconnectMaxAttempts = 3;
 
 const char* stateName(FirmwareState state) {
   switch (state) {
@@ -22,6 +23,8 @@ const char* stateName(FirmwareState state) {
       return "Tracking";
     case FirmwareState::Reward:
       return "Reward";
+    case FirmwareState::TimeInvalid:
+      return "TimeInvalid";
     default:
       return "Unknown";
   }
@@ -85,6 +88,94 @@ String buildSettingsJson(const DeviceSettingsState& settings) {
 }
 } // namespace
 
+void FirmwareApp::migrateReadyForTrackingFlag_() {
+  if (!provisioningStore_.hasPendingClaim() &&
+      !provisioningStore_.isReadyForTracking() &&
+      cloudClient_.hasPersistedDeviceAuthToken()) {
+    provisioningStore_.markReadyForTracking();
+    Serial.println("Migrated device into ready-for-tracking state.");
+  }
+}
+
+bool FirmwareApp::bootReadyForTracking_() const {
+  return provisioningStore_.isReadyForTracking() && !provisioningStore_.hasPendingClaim();
+}
+
+bool FirmwareApp::hasAuthoritativeTime_() const {
+  return timeService_.hasAuthoritativeTime();
+}
+
+bool FirmwareApp::prepareTrackerForCurrentTime_() {
+  tm logicalNow{};
+  if (!timeService_.nowLogical(logicalNow)) {
+    return false;
+  }
+
+  return habitTracker_.checkWeekBoundary(logicalNow);
+}
+
+void FirmwareApp::resetWifiReconnectPolicy_() {
+  nextWifiReconnectAttemptAtMs_ = 0;
+  wifiReconnectAttemptStartedAtMs_ = 0;
+  wifiReconnectAttemptActive_ = false;
+  wifiReconnectAttemptCount_ = 0;
+  wifiReconnectExhausted_ = false;
+}
+
+unsigned long FirmwareApp::wifiReconnectBackoffMs_(uint8_t attemptNumber) const {
+  if (attemptNumber <= 1) {
+    return 5000;
+  }
+  if (attemptNumber == 2) {
+    return 15000;
+  }
+  return 30000;
+}
+
+bool FirmwareApp::tickWifiReconnectPolicy_(bool allowRecoveryEscalation) {
+  if (apServer_.isRunning() || !cloudClient_.isConfigured()) {
+    return false;
+  }
+
+  const bool wifiConnected = WiFi.status() == WL_CONNECTED;
+  if (wifiConnected) {
+    if (!lastWifiConnected_) {
+      Serial.println("Wi-Fi connected.");
+      markRuntimeSnapshotDirty_();
+    }
+    lastWifiConnected_ = true;
+    resetWifiReconnectPolicy_();
+    return false;
+  }
+
+  lastWifiConnected_ = false;
+
+  if (wifiReconnectAttemptActive_) {
+    if (millis() - wifiReconnectAttemptStartedAtMs_ < Config::kWifiReconnectTimeoutMs) {
+      return false;
+    }
+
+    wifiReconnectAttemptActive_ = false;
+    WiFi.disconnect(false, false);
+
+    if (wifiReconnectAttemptCount_ >= kWifiReconnectMaxAttempts) {
+      wifiReconnectExhausted_ = true;
+      Serial.println("Wi-Fi reconnect attempts exhausted.");
+      return allowRecoveryEscalation;
+    }
+
+    nextWifiReconnectAttemptAtMs_ = millis() + wifiReconnectBackoffMs_(wifiReconnectAttemptCount_);
+    return false;
+  }
+
+  if (wifiReconnectExhausted_ || millis() < nextWifiReconnectAttemptAtMs_) {
+    return false;
+  }
+
+  beginWifiReconnect_();
+  return false;
+}
+
 void FirmwareApp::begin() {
   recoveryRequestedAtBoot_ = ButtonInput::recoveryHeldAtBoot();
   buttonInput_.begin();
@@ -94,11 +185,17 @@ void FirmwareApp::begin() {
   habitTracker_.begin();
   habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
   provisioningStore_.begin();
+  migrateReadyForTrackingFlag_();
   cloudClient_.begin(identity_);
   realtimeClient_.begin(identity_);
   timeService_.begin();
   timeService_.applySettings(deviceSettings_.current());
   rewardEngine_.clear();
+
+  const bool trackerShiftedAtBoot = bootReadyForTracking_() && hasAuthoritativeTime_() && prepareTrackerForCurrentTime_();
+  if (trackerShiftedAtBoot) {
+    runtimeSnapshotDirty_ = true;
+  }
 
   queueMutex_ = xSemaphoreCreateMutex();
   stateMutex_ = xSemaphoreCreateMutex();
@@ -112,9 +209,17 @@ void FirmwareApp::begin() {
   Serial.printf("Hardware UID: %s\n", identity_.hardwareUid().c_str());
   Serial.printf("AP SSID: %s\n", identity_.apSsid().c_str());
   Serial.printf("Pending claim present: %s\n", provisioningStore_.hasPendingClaim() ? "yes" : "no");
+  Serial.printf("Ready for tracking: %s\n", provisioningStore_.isReadyForTracking() ? "yes" : "no");
+  Serial.printf("Authoritative time available: %s\n", hasAuthoritativeTime_() ? "yes" : "no");
   Serial.printf("Recovery requested at boot: %s\n", recoveryRequestedAtBoot_ ? "yes" : "no");
 
-  enterState_(FirmwareState::SetupRecovery);
+  if (recoveryRequestedAtBoot_ || provisioningStore_.hasPendingClaim() || !bootReadyForTracking_()) {
+    enterState_(FirmwareState::SetupRecovery);
+  } else if (!hasAuthoritativeTime_()) {
+    enterState_(FirmwareState::TimeInvalid);
+  } else {
+    enterState_(FirmwareState::Tracking);
+  }
 }
 
 void FirmwareApp::loop() {
@@ -128,6 +233,9 @@ void FirmwareApp::loop() {
     case FirmwareState::Reward:
       tickReward_();
       break;
+    case FirmwareState::TimeInvalid:
+      tickTimeInvalid_();
+      break;
   }
 }
 
@@ -139,9 +247,7 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   lastRuntimeSnapshotAttemptAtMs_ = 0;
   lastHeartbeatAtMs_ = 0;
   lastLocalInteractionAtMs_ = 0;
-  waitingForApFallback_ = false;
-  wifiReconnectStarted_ = false;
-  wifiReconnectStartedAtMs_ = 0;
+  resetWifiReconnectPolicy_();
   if (nextState == FirmwareState::Tracking) {
     runtimeSnapshotDirty_ = true;
   }
@@ -277,6 +383,10 @@ bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
                                               uint8_t& todayRow,
                                               uint32_t& revision,
                                               String& generatedAt) {
+  if (!hasAuthoritativeTime_()) {
+    return false;
+  }
+
   tm logicalNow{};
   if (!timeService_.nowLogical(logicalNow)) {
     return false;
@@ -312,6 +422,11 @@ bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
 
 bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason) {
   if (command.kind == "set_day_state") {
+    if (!hasAuthoritativeTime_()) {
+      failureReason = "Authoritative time is unavailable.";
+      return false;
+    }
+
     tm nowLogical{};
     if (!timeService_.nowLogical(nowLogical)) {
       failureReason = "Logical time is unavailable.";
@@ -320,6 +435,17 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
 
     if (!command.hasSetDayStatePayload || command.localDate.isEmpty() || !command.hasBaseRevision) {
       failureReason = "set_day_state payload missing local_date, is_done, or base_revision.";
+      return false;
+    }
+
+    const String currentLogicalDate = timeService_.currentLogicalDate();
+    if (currentLogicalDate.isEmpty()) {
+      failureReason = "Logical time is unavailable.";
+      return false;
+    }
+
+    if (command.localDate != currentLogicalDate) {
+      failureReason = "set_day_state only supports the current logical day.";
       return false;
     }
 
@@ -346,6 +472,11 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   }
 
   if (command.kind == "apply_history_draft") {
+    if (!hasAuthoritativeTime_()) {
+      failureReason = "Authoritative time is unavailable.";
+      return false;
+    }
+
     if (!command.hasHistoryDraftPayload || command.payloadJson.isEmpty() || !command.hasBaseRevision) {
       failureReason = "History draft payload missing updates or base_revision.";
       return false;
@@ -438,6 +569,11 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   }
 
   if (command.kind == "request_runtime_snapshot") {
+    if (!hasAuthoritativeTime_()) {
+      failureReason = "Authoritative time is unavailable.";
+      return false;
+    }
+
     markRuntimeSnapshotDirty_();
     Serial.println("Runtime snapshot requested.");
     return true;
@@ -626,62 +762,70 @@ void FirmwareApp::syncTask_() {
 }
 
 void FirmwareApp::beginWifiReconnect_() {
-  if (wifiReconnectStarted_) {
+  if (wifiReconnectAttemptActive_ || WiFi.status() == WL_CONNECTED) {
     return;
   }
 
   WiFi.mode(WIFI_STA);
-  if (strlen(CloudConfig::kBootstrapWifiSsid) > 0) {
+  const bool preferBootstrapCredentials = state_ == FirmwareState::SetupRecovery && provisioningStore_.hasPendingClaim();
+  if (preferBootstrapCredentials && strlen(CloudConfig::kBootstrapWifiSsid) > 0) {
     WiFi.begin(CloudConfig::kBootstrapWifiSsid, CloudConfig::kBootstrapWifiPassword);
     Serial.printf("Attempting bootstrap Wi-Fi '%s'.\n", CloudConfig::kBootstrapWifiSsid);
   } else {
     WiFi.begin();
     Serial.println("Attempting reconnect with stored Wi-Fi credentials.");
   }
-  wifiReconnectStarted_ = true;
-  wifiReconnectStartedAtMs_ = millis();
+  wifiReconnectAttemptActive_ = true;
+  wifiReconnectAttemptStartedAtMs_ = millis();
+  wifiReconnectAttemptCount_++;
 }
 
 void FirmwareApp::tickSetupRecovery_() {
+  buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
 
-  if (!recoveryRequestedAtRuntime_ && !provisioningStore_.hasPendingClaim() && !apServer_.isRunning()) {
-    beginWifiReconnect_();
+  if (buttonInput_.consumeLongHold()) {
+    recoveryRequestedAtRuntime_ = true;
   }
 
-  if (wifiReconnectStarted_ && WiFi.status() == WL_CONNECTED && !provisioningStore_.hasPendingClaim()) {
-    enterState_(FirmwareState::Tracking);
-    return;
+  const bool pendingClaim = provisioningStore_.hasPendingClaim();
+  if (pendingClaim) {
+    tickWifiReconnectPolicy_(false);
   }
 
-  if (!apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
-    const bool reconnectTimedOut =
-        wifiReconnectStarted_ && (millis() - wifiReconnectStartedAtMs_ >= Config::kWifiReconnectTimeoutMs);
-    const bool forceRecovery =
-        recoveryRequestedAtRuntime_ || recoveryRequestedAtBoot_ || !wifiReconnectStarted_ || waitingForApFallback_ ||
-        reconnectTimedOut || provisioningStore_.hasPendingClaim();
-
-    if (forceRecovery) {
-      apServer_.begin(identity_, provisioningStore_);
-      waitingForApFallback_ = true;
-      recoveryRequestedAtRuntime_ = false;
-    }
+  if (!pendingClaim && !apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
+    apServer_.begin(identity_, provisioningStore_);
+    recoveryRequestedAtRuntime_ = false;
+  } else if ((recoveryRequestedAtRuntime_ || recoveryRequestedAtBoot_ || (pendingClaim && wifiReconnectExhausted_)) &&
+             !apServer_.isRunning() &&
+             !apServer_.hasCompletedProvisioning()) {
+    apServer_.begin(identity_, provisioningStore_);
+    recoveryRequestedAtRuntime_ = false;
   }
 
   if (apServer_.isRunning()) {
     apServer_.loop();
   }
+
   const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-  boardRenderer_.renderSetupState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
+  boardRenderer_.renderRecoveryState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
 
   if (!apServer_.hasCompletedProvisioning() || !apServer_.isWifiConnected()) {
     return;
   }
 
-  if (!provisioningStore_.hasPendingClaim()) {
+  if (!pendingClaim) {
+    provisioningStore_.markReadyForTracking();
     ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
-    enterState_(FirmwareState::Tracking);
+    if (hasAuthoritativeTime_()) {
+      if (prepareTrackerForCurrentTime_()) {
+        markRuntimeSnapshotDirty_();
+      }
+      enterState_(FirmwareState::Tracking);
+    } else {
+      enterState_(FirmwareState::TimeInvalid);
+    }
     return;
   }
 
@@ -703,9 +847,17 @@ void FirmwareApp::tickSetupRecovery_() {
 
   if (cloudClient_.redeemPendingClaim(claim)) {
     provisioningStore_.clearPendingClaim();
+    provisioningStore_.markReadyForTracking();
     markRuntimeSnapshotDirty_();
     ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
-    enterState_(FirmwareState::Tracking);
+    if (hasAuthoritativeTime_()) {
+      if (prepareTrackerForCurrentTime_()) {
+        markRuntimeSnapshotDirty_();
+      }
+      enterState_(FirmwareState::Tracking);
+    } else {
+      enterState_(FirmwareState::TimeInvalid);
+    }
   }
 }
 
@@ -713,8 +865,18 @@ void FirmwareApp::tickTracking_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
+  if (buttonInput_.consumeLongHold()) {
+    recoveryRequestedAtRuntime_ = true;
+  }
+
+  tickWifiReconnectPolicy_(false);
 
   drainIncomingCommands_();
+
+  if (!hasAuthoritativeTime_()) {
+    enterState_(FirmwareState::TimeInvalid);
+    return;
+  }
 
   tm logicalNow{};
   if (timeService_.nowLogical(logicalNow)) {
@@ -749,7 +911,7 @@ void FirmwareApp::tickTracking_() {
     }
   } else {
     const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-    boardRenderer_.renderSetupState(false, WiFi.status() == WL_CONNECTED, brightness);
+    boardRenderer_.renderTimeErrorState(false, WiFi.status() == WL_CONNECTED, brightness);
   }
 
   if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
@@ -761,7 +923,14 @@ void FirmwareApp::tickReward_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
+  tickWifiReconnectPolicy_(false);
   drainIncomingCommands_();
+
+  if (buttonInput_.consumeLongHold()) {
+    recoveryRequestedAtRuntime_ = true;
+    enterState_(FirmwareState::Tracking);
+    return;
+  }
 
   if (buttonInput_.consumeShortPress() || rewardEngine_.shouldDismiss()) {
     enterState_(FirmwareState::Tracking);
@@ -779,4 +948,47 @@ void FirmwareApp::tickReward_() {
   }
   boardRenderer_.renderReward(
       settings, rewardEngine_.type(), logicalNowPtr, rewardEngine_.elapsedMs(), brightness);
+}
+
+void FirmwareApp::tickTimeInvalid_() {
+  buttonInput_.loop();
+  ambientLight_.loop();
+  timeService_.update(WiFi.status() == WL_CONNECTED);
+  drainIncomingCommands_();
+
+  if (buttonInput_.consumeLongHold()) {
+    recoveryRequestedAtRuntime_ = true;
+  }
+
+  if (tickWifiReconnectPolicy_(true)) {
+    recoveryRequestedAtRuntime_ = true;
+  }
+
+  if (hasAuthoritativeTime_()) {
+    bool trackerReady = false;
+    if (!stateMutex_) {
+      if (prepareTrackerForCurrentTime_()) {
+        markRuntimeSnapshotDirty_();
+      }
+      trackerReady = true;
+    } else if (xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+      if (prepareTrackerForCurrentTime_()) {
+        markRuntimeSnapshotDirty_();
+      }
+      xSemaphoreGive(stateMutex_);
+      trackerReady = true;
+    }
+
+    if (trackerReady) {
+      enterState_(FirmwareState::Tracking);
+    }
+    return;
+  }
+
+  const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  boardRenderer_.renderTimeErrorState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
+
+  if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
+    enterWifiRecoveryMode_();
+  }
 }

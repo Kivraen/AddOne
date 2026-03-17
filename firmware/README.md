@@ -19,15 +19,20 @@ Reference documents:
 Current contents:
 - minimal PlatformIO project
 - device identity helper
-- pending claim persistence
-- top-level firmware state machine skeleton
+- pending claim persistence plus a persisted `ready for tracking` marker
+- top-level firmware state machine with `SetupRecovery`, `Tracking`, `Reward`, and `TimeInvalid`
+- a background sync task that keeps button handling local-first
 - AP provisioning HTTP server for the locked local onboarding contract
-- cloud claim redemption, heartbeat, command sync, and device day-event sync plumbing
+- cloud claim redemption, heartbeat, fallback command poll, and runtime snapshot upload plumbing
 - single-button input, RTC/NTP-backed time service, 21-week habit tracker, and LED board renderer
 - minimal device settings store with cloud-applied `sync_settings`
 - ambient-light-driven brightness control with palette preset application
 - optional reward engine with built-in `clock` and palette-based `paint` rendering
-- realtime MQTT command client for low-latency online command delivery, with fallback cloud polling still retained
+- realtime MQTT command client plus MQTT presence and runtime snapshot publish for low-latency online delivery, with fallback cloud polling still retained
+- offline-first boot behavior for provisioned devices with valid RTC time
+- capped background Wi-Fi reconnect without automatic AP takeover for ordinary offline boots
+- `5 second` runtime long-hold to enter Wi-Fi recovery
+- dedicated time-error rendering when RTC/system time is not trustworthy
 
 Local flashing:
 - tracked [cloud_config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.h) now supports explicit development and beta config profiles
@@ -45,6 +50,6 @@ PlatformIO environments:
 - `addone-esp32dev-beta`: hosted beta firmware profile
 
 Not implemented yet:
-- real cloud credentials/config for flashed hardware
+- final beta/production cloud credentials on flashed hardware
 - custom reward artwork sync
-- end-to-end hardware validation on a real device
+- full end-to-end validation on the real beta stack across router, reconnect, and recovery cases

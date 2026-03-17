@@ -34,6 +34,7 @@ public:
   bool ackCommand(const String& commandId, CommandAckStatus status, const String& lastError = "");
   const String& deviceAuthToken();
   bool heartbeat();
+  bool hasPersistedDeviceAuthToken() const;
   bool isConfigured() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);
   bool redeemPendingClaim(const ProvisioningContract::PendingClaim& claim);

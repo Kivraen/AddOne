@@ -1,9 +1,10 @@
 # AddOne V1 Canonical Spec
 
-Last locked: March 9, 2026
+Last locked: March 17, 2026
 
 This document is the canonical product and UI spec for AddOne v1.
 If another doc conflicts with this one, this file wins until an explicit new decision is made.
+Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md).
 
 ## Product Summary
 - AddOne v1 is a `single-owner`, `single-device`, `single-button`, `single-habit`, `cloud-backed`, `offline-tolerant` product.
@@ -16,7 +17,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Removed from the shipped product: `second button`, `rotary encoder`, `haptic`, `multi-habit`, old browser UI.
 - Normal idle screen is `habit grid only`.
 - Daily device action is `short-press toggle` for today.
-- No normal runtime long-press behavior.
+- Holding the main button for `5 seconds` in runtime enters Wi-Fi recovery.
+- If RTC/system time is not trustworthy, the device must show a dedicated time-error state and block normal tracking until time is repaired.
 - Rewards are out of scope for first-user v1.
 
 ## Board And Habit Rules
@@ -41,6 +43,8 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Cloud backup is `automatic` whenever the linked device is online.
 - Remote app completion is allowed only during a live device session.
 - If the device is offline remotely, the app is `read-only` for device-affecting actions.
+- The app projects the current logical board from the latest confirmed runtime snapshot plus the device's `timezone`, `reset time`, and `week start`.
+- If a live board is projected ahead of the latest snapshot, the app should request one fresh runtime snapshot and keep today control locked until it settles.
 - Online device delivery should use a `realtime command transport`, not periodic polling as the primary path.
 - Supabase remains the product source of truth; realtime transport is the low-latency delivery lane for online devices.
 - Device is the runtime source of truth for board state and device-affecting settings.
@@ -50,7 +54,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - The app requires sign-in.
 - Current app auth flow is `email OTP`.
 - Future auth can add Google or password-based login later without changing the data model.
-- Sharing is out of scope for first-user v1.
+- `Friends` / sharing is now a planned beta workstream rather than a surface to hide, but the exact first-user scope still needs to be locked before shipping.
 - Ownership model for first-user v1 is `single owner, one device`.
 
 ## Future Domain And Branding
@@ -73,17 +77,22 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - AP starts on:
   - first boot
   - manual power-up hold
-  - saved Wi-Fi join failure after reboot
+- pending-claim recovery bootstrap
+- explicit recovery request from the app while the device is still online
+- holding the main button for `5 seconds`
 - Wi-Fi recovery reuses the same temporary AP + short-lived session contract as onboarding.
 - Wi-Fi recovery does not transfer ownership or factory-reset the device; it only reprovisions network access for the current owner.
 - First-user v1 stores one active Wi-Fi profile only. Rejoining Wi-Fi replaces the previous credentials instead of keeping a saved multi-network list.
 - Wi-Fi recovery can be started either:
   - from the app while the device is still online
   - by holding the main button while reconnecting power
+  - by holding the main button for `5 seconds` while the device is already running
 - Cloud failure alone must never trigger AP mode.
 - AP should time out after about `10 minutes idle`.
 - First-user v1 requires Wi-Fi during first setup.
 - After onboarding, the device itself must continue working locally even if Wi-Fi is later lost.
+- After onboarding, a provisioned device with valid RTC time must boot straight into normal tracking even if Wi-Fi is unavailable.
+- After onboarding, a provisioned device with invalid RTC/system time must boot into a dedicated `TimeInvalid` safety state instead of guessing the board.
 
 ## Onboarding Contract
 - Devices may be pre-registered during manufacturing / firmware flashing.
@@ -123,7 +132,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
   - app/account settings entry
 - The device `name` is treated as the visible habit name in first-user v1 and appears above the board.
 - Sync status is shown quietly as a small board-corner status indicator, not as a large header badge.
-- `History edit` belongs to the main habit surface and opens as a full-page landscape editor with normal back navigation.
+- `History edit` belongs to the main habit surface and uses one explicit `Draft + Save` flow.
 - Device-specific actions such as history and device settings belong near the board for the current device.
 - The top-right gear opens app/account-level settings, not the current device editor.
 - Account/session info lives in a separate account screen, not mixed into the device settings list.
@@ -196,7 +205,7 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Board-first home screen exists.
 - The active device `name` is now the visible habit name above the board.
 - Device settings are separated from account/session info.
-- History is now a dedicated landscape route rather than a sheet.
+- History correction now uses `Draft + Save`; the currently surfaced flow is the inline board editor opened from device settings, while the older dedicated `/history` route still exists in code.
 - Onboarding exists as a real AP + claim flow, and recovery reuses that contract as a real `Rejoin Wi-Fi` flow.
 - Onboarding and Wi-Fi recovery now present as guided step flows rather than long conditional pages.
 - Onboarding now has a real cloud-side claim-session flow.
@@ -220,35 +229,47 @@ If another doc conflicts with this one, this file wins until an explicit new dec
 - Firmware v2 now includes claim redemption, heartbeat, command pull/ack, runtime revision tracking, and snapshot-based cloud healing against the AddOne cloud RPC contract.
 - Firmware v2 now includes the first real AddOne behavior layer: single-button local toggling, 21-week board persistence, RTC/NTP-backed time service, and LED board rendering.
 - Firmware v2 now includes minimal settings sync application, palette preset handling, and ambient-light-driven brightness.
+- Firmware v2 now runs network sync in a background task so local button handling and board rendering stay off the blocking cloud path.
+- Firmware v2 now persists a `ready for tracking` marker so previously provisioned devices can boot directly into offline tracking.
+- Firmware v2 now distinguishes `SetupRecovery` from `TimeInvalid` so broken time does not silently mutate history.
+- Firmware v2 now performs background Wi-Fi reconnect with capped retries instead of automatically stealing the board with AP mode.
 - A dedicated MQTT-based realtime transport contract and gateway scaffold now exist for low-latency online device delivery, with polling retained only as fallback.
+- The realtime gateway now handles both directions:
+  - `Supabase queued commands -> MQTT`
+  - `MQTT ack / presence / day-state / runtime snapshots -> Supabase RPCs`
 - The runtime cleanup pass removed the old user-facing `queued` state, command-row polling waits, and `device_day_states` live invalidation from the app runtime path.
+- The app runtime board now projects stale snapshots onto the current logical day and guards today toggles so a stale post-reset snapshot cannot clear yesterday by mistake.
 
 ## Known Gaps
+- App navigation still needs a first-user beta cleanup pass:
+  - turn the `Friends` tab from placeholder UI into the intended beta sharing flow
+  - reconcile the leftover dedicated `/history` route with the currently surfaced inline board editor so the shipped UX and docs match
 - Onboarding and recovery now use the device-side Wi-Fi scan list with hidden-network manual fallback, but they still need continued polish against real devices and real routers.
 - Nearby AP maintenance currently covers setup and Wi-Fi recovery only, which is the intended first-user v1 scope.
 - Auth is still staging-grade `email OTP`; branded mail, production redirect configuration, and optional Google/password login remain future work.
 - Production broker hardening and release deployment shape are not finished; the current broker/gateway path is still staging/development oriented.
-- Rewards, reminders, sharing, and multi-device UX are intentionally out of scope for first-user v1 and should stay hidden.
+- The app shell still exposes placeholder non-final surfaces, especially the visible `Friends` tab, and those should be turned into real product flow before first-user beta ships.
+- Rewards, reminders, and multi-device UX are still out of scope for first-user v1 unless we explicitly bring them in.
 
 ## Canonical Next Steps
-1. Revalidate the current runtime path on real hardware as a locked baseline:
+1. Lock the first-user beta surface:
+   - define the first-user beta `Friends` / sharing scope
+   - replace the current `Friends` placeholder UI with the intended product flow
+   - choose one history-editing entry path and remove the stale alternative from the shipped surface
+   - keep rewards, reminders, and multi-device UX hidden unless explicitly brought into scope
+2. Revalidate the current runtime path on real hardware as a locked baseline:
    - board parity
    - local button reliability
    - app today toggle latency
    - history `Draft + Save`
    - settings `Draft + Apply`
    - offline/reconnect snapshot healing
-2. Polish the MVP onboarding and recovery flows:
+3. Polish onboarding and recovery against real devices and real routers:
    - calmer copy
    - stronger pending/error states
-   - full real-device validation across different routers and passwords
-3. Keep all out-of-scope first-user v1 surfaces hidden:
-   - rewards
-   - reminders
-   - sharing
-   - multi-device UX
+   - real-world Wi-Fi validation
 4. Promote the current staging stack into a production-ready beta shape:
+   - hosted broker + gateway validation
    - branded auth email
-   - production Supabase project
-   - broker hardening
+   - beta deployment hardening
    - release hardening

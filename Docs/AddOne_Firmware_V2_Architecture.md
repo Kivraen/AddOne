@@ -1,6 +1,6 @@
 # AddOne Firmware V2 Architecture
 
-Last locked: March 9, 2026
+Last locked: March 17, 2026
 
 This document marks the transition from `contract validation` to `real AddOne firmware v2`.
 
@@ -30,6 +30,7 @@ Firmware v2 should implement only the AddOne product model:
 - `tracking`
 - `reward`
 - `setup/recovery`
+- `time invalid safety`
 
 Removed from v2:
 - second-button interaction model
@@ -81,15 +82,25 @@ Purpose:
 ### `SetupRecovery`
 Used for:
 - first boot
-- Wi-Fi recovery
+- pending onboarding claim redemption
+- manual Wi-Fi recovery
 - AP onboarding
-- claim redemption bootstrap
+
+Provisioned devices should not enter this state merely because Wi-Fi is unavailable.
 
 ### `Tracking`
 Used for:
 - normal daily single-button interaction
 - local habit persistence
 - steady-state cloud sync
+- offline-first board rendering with background reconnect only
+
+### `TimeInvalid`
+Used for:
+- provisioned devices whose RTC/system time is not trustworthy
+- blocking normal tracking until time is trustworthy again
+- showing a dedicated on-device time error instead of rendering a wrong board
+- allowing manual Wi-Fi recovery so NTP can repair time if needed
 
 ### `Reward`
 Used for:
@@ -118,22 +129,30 @@ Used for:
 - The next firmware milestone is real broker-backed validation, then remaining hardware polish, custom reward payload sync, and real-device validation.
 - Firmware v2 runtime rebuild direction:
   - physical button is fully local-first
+  - background sync now runs separately from the main interaction loop
   - runtime revision advances on accepted device or cloud-applied state changes
   - runtime snapshots heal cloud/app state after reconnect, boot uncertainty, or explicit refresh
   - history edits are applied as live `Draft + Save`, not streamed per-cell commands
-- Hardware validation exposed a runtime-consistency problem set:
-  - app and firmware board projection are not yet fully aligned
-  - button capture is still coupled to blocking network work
-  - history correction still needs latest-wins revision sync instead of command replay
+- Firmware v2 offline-first hardening is now locked:
+  - a provisioned device with authoritative RTC time boots straight into `Tracking` even with no Wi-Fi
+  - a provisioned device with invalid or lost RTC time boots into `TimeInvalid`
+  - provisioned devices no longer auto-enter AP mode just because Wi-Fi is missing
+  - Wi-Fi reconnect now runs in the background with capped retries and does not steal the board
+  - holding the main button for `5 seconds` from normal runtime enters Wi-Fi recovery
+  - `set_day_state` is now a today-only command; non-today edits must use history draft apply
+- Remaining firmware validation risks:
+  - app and firmware still need real-device parity validation around board projection and recovery flows
+  - broker and realtime fallback behavior still need end-to-end beta validation
+  - custom reward payload sync is not implemented yet
 - The canonical rebuild rules for those issues are now locked in [AddOne_Runtime_Consistency_Rebuild.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Consistency_Rebuild.md).
 
 ## Rebuild Constraint
-- Physical button capture must become fully local-first and remain reliable even while cloud transport is busy.
+- Physical button capture must stay fully local-first and remain reliable even while cloud transport is busy.
 - Firmware rendering must follow the same board contract as the app:
   - same week orientation
   - same week-start logic
   - same weekly-row semantics
-- History correction must apply the latest settled revision, not replay a stream of stale intermediate edits.
+- History correction must stay latest-wins and must not regress to replaying stale intermediate edits.
 
 ## Relation To The Prototype Spike
 The prototype spike was useful and should be treated as a reference note:

@@ -1,6 +1,11 @@
 # AddOne Runtime Consistency Rebuild
 
-Last locked: March 9, 2026
+Last locked: March 17, 2026
+
+Status note:
+- This document captures the failure modes that triggered the runtime rebuild.
+- Parts of that rebuild have since landed, especially the device-authoritative snapshot path and the separation of local button handling from background sync.
+- Use [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md) and [AddOne_V1_Canonical_Spec.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_V1_Canonical_Spec.md) for current project status and next steps.
 
 This document resets the runtime architecture around the real failure modes found during hardware validation.
 For the simplified target runtime model that replaces the layered patch path, see [AddOne_Runtime_Simplification_Reset.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Runtime_Simplification_Reset.md).
@@ -85,6 +90,8 @@ This is the board model both app and firmware must follow.
 - Online device delivery should be realtime.
 - The device applies the latest app toggle and acks it.
 - Cloud board state must update only after the device confirms apply, not when the app merely requests it.
+- If the latest snapshot is stale for the current logical day, the app must refresh the live snapshot before it lets a today toggle target the board.
+- Firmware must reject any `set_day_state` request whose `local_date` is not the current logical day.
 
 ### History correction
 - History correction is available only during a live device session.
@@ -110,6 +117,7 @@ This is the board model both app and firmware must follow.
 ### App data model
 - The app should project the board from the same canonical board contract as firmware.
 - Board projection logic should live in one explicit contract module and be testable.
+- The app should not freeze on a stale snapshot's `today_row/current_week_start`; it must remap recorded dates onto the current logical board frame.
 
 ## Rebuild Order
 1. Lock the canonical board contract in code and docs.

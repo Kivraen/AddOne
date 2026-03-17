@@ -27,6 +27,9 @@ export const initialDevices: AddOneDevice[] = [
     reminderEnabled: true,
     reminderTime: "19:30",
     firmwareVersion: "v2.beta.1",
+    logicalToday: "2026-03-13",
+    isProjectedBeyondSnapshot: false,
+    needsSnapshotRefresh: false,
     today: {
       weekIndex: 0,
       dayIndex: 4,

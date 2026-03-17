@@ -1,6 +1,11 @@
 # AddOne Runtime Simplification Reset
 
-Last locked: March 9, 2026
+Last locked: March 17, 2026
+
+Status note:
+- This document still describes the locked runtime direction.
+- Several of the cleanup items here have since been implemented in code.
+- Use [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md) and [AddOne_V1_Canonical_Spec.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_V1_Canonical_Spec.md) for current project status and next steps.
 
 ## Why This Reset Exists
 - The product runtime is simpler than the current implementation.
@@ -31,21 +36,28 @@ Last locked: March 9, 2026
 ### Runtime read model
 - The active board read model for app/runtime should be the latest `device_runtime_snapshot`
 - `device_day_states` becomes a derived compatibility/read table, not the primary runtime board source
-- If a snapshot exists, the app should render from that snapshot
+- If a snapshot exists, the app should render the current logical board by projecting that snapshot onto the current device `timezone + reset time + week start`
 - The app should invalidate live board state from `device_runtime_snapshots`, not from `device_day_states`
 - Backend command rows may still use `queued` for delivery, but `queued` should not be treated as a user-facing board runtime state
 - The app should no longer fetch `device_day_states` for runtime board rendering; devices without a snapshot remain in bootstrap state until the first snapshot arrives
 - User-facing “last synced” messaging should come from the latest device runtime snapshot timestamp, not generic command or heartbeat timestamps
+- If the projected logical board is ahead of the latest confirmed snapshot, the app should:
+  - mark the board as `verifying`
+  - request one fresh runtime snapshot for live devices in the background
+  - keep the today action locked until the refresh settles
 
 ### Runtime write model
 - App sends commands only during a live device session
 - Device applies locally
 - Device publishes or uploads a fresh snapshot
 - App advances to the new board when the snapshot revision advances
+- `set_day_state` is valid only for the device's current logical date
+- Non-today edits use `apply_history_draft`
 
 ### Offline behavior
 - Device always works offline
 - Remote app becomes read-only when the device is offline
+- When the latest snapshot is stale across reset or long downtime, the app still projects the correct current logical frame from the last confirmed board plus device settings
 - On reconnect, the device uploads a new snapshot and heals cloud/app
 
 ## What We Should Stop Doing
@@ -58,10 +70,11 @@ Last locked: March 9, 2026
 ## Simplified Runtime Flows
 
 ### Today toggle
-1. App sends `set_day_state(base_revision, desired_state, local_date)`
-2. Device applies immediately if revision matches
-3. Device uploads snapshot with new revision
-4. App updates from the new snapshot
+1. App ensures the live board is not stale for the current logical day
+2. App sends `set_day_state(base_revision, desired_state, local_date)`
+3. Device applies immediately if revision matches and `local_date` matches the current logical day
+4. Device uploads snapshot with new revision
+5. App updates from the new snapshot
 
 ### History edit
 1. App loads latest device snapshot
@@ -91,10 +104,11 @@ Last locked: March 9, 2026
 
 ## Implementation Priority
 1. Make app board rendering prefer `device_runtime_snapshots`
-2. Remove remaining app runtime behaviors that treat `device_day_states` as live truth
-3. Keep command rows only for delivery/observability
-4. Make app/device UI confirmation depend on new snapshot revision, not just command-row status
-5. Keep firmware local-first and networking out of the normal interaction loop
+2. Project stale snapshots onto the current logical day in one shared, testable board helper
+3. Remove remaining app runtime behaviors that treat `device_day_states` as live truth
+4. Keep command rows only for delivery/observability
+5. Make app/device UI confirmation depend on new snapshot revision, not just command-row status
+6. Keep firmware local-first and networking out of the normal interaction loop
 
 ## Non-Goals
 - No full audit/event sourcing for v1

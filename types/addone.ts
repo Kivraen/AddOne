@@ -57,6 +57,9 @@ export interface AddOneDevice {
   firmwareVersion: string;
   days: boolean[][];
   dateGrid?: string[][];
+  logicalToday: string;
+  isProjectedBeyondSnapshot: boolean;
+  needsSnapshotRefresh: boolean;
   today: TodayPointer;
 }
 
@@ -70,6 +73,7 @@ export interface SharedBoard {
   paletteId: string;
   days: boolean[][];
   dateGrid?: string[][];
+  logicalToday: string;
   today: TodayPointer;
 }
 

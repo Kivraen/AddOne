@@ -12,9 +12,11 @@ ButtonInput::~ButtonInput() {
 void ButtonInput::begin() {
   pinMode(Config::kButtonPin, INPUT_PULLUP);
   taskENTER_CRITICAL(&pressMux_);
+  pendingLongHold_ = false;
   pendingPressCount_ = 0;
   taskEXIT_CRITICAL(&pressMux_);
   const bool pressed = digitalRead(Config::kButtonPin) == LOW;
+  longHoldReported_ = false;
   lastRawPressed_ = pressed;
   stablePressed_ = pressed;
   lastRawChangeAtMs_ = millis();
@@ -23,6 +25,14 @@ void ButtonInput::begin() {
   if (!pollTaskHandle_) {
     xTaskCreatePinnedToCore(pollTaskEntry_, "addone_btn", 3072, this, 2, &pollTaskHandle_, 1);
   }
+}
+
+bool ButtonInput::consumeLongHold() {
+  taskENTER_CRITICAL(&pressMux_);
+  const bool hasPending = pendingLongHold_;
+  pendingLongHold_ = false;
+  taskEXIT_CRITICAL(&pressMux_);
+  return hasPending;
 }
 
 bool ButtonInput::consumeShortPress() {
@@ -62,17 +72,30 @@ void ButtonInput::pollTask_() {
       stablePressed_ = rawPressed;
       if (stablePressed_) {
         pressStartedAtMs_ = nowMs;
+        longHoldReported_ = false;
       } else if (pressStartedAtMs_ != 0) {
         const unsigned long pressDurationMs = nowMs - pressStartedAtMs_;
         pressStartedAtMs_ = 0;
-        if (pressDurationMs >= Config::kButtonDebounceMs) {
+        if (!longHoldReported_ && pressDurationMs >= Config::kButtonDebounceMs) {
           taskENTER_CRITICAL(&pressMux_);
           if (pendingPressCount_ < 255) {
             pendingPressCount_++;
           }
           taskEXIT_CRITICAL(&pressMux_);
         }
+        longHoldReported_ = false;
       }
+    }
+
+    if (stablePressed_ && pressStartedAtMs_ != 0 && !longHoldReported_ && nowMs - pressStartedAtMs_ >= Config::kRecoveryHoldMs) {
+      longHoldReported_ = true;
+      taskENTER_CRITICAL(&pressMux_);
+      pendingLongHold_ = true;
+      taskEXIT_CRITICAL(&pressMux_);
+    }
+
+    if (!stablePressed_ && pressStartedAtMs_ == 0) {
+      longHoldReported_ = false;
     }
 
     vTaskDelay(pdMS_TO_TICKS(5));

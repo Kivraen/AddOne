@@ -17,6 +17,7 @@ import { withAlpha } from "@/lib/color";
 import { getDeviceAccentColor } from "@/lib/device-accent";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
+import { formatWeekdayFromLocalDate } from "@/lib/runtime-board-projection";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice } from "@/types/addone";
 
@@ -71,6 +72,14 @@ function boardStatus(device: AddOneDevice) {
       color: theme.colors.accentAmber,
       railKey: "offline",
       railMessage: "Offline. Open Recovery to reconnect.",
+    };
+  }
+
+  if (device.needsSnapshotRefresh) {
+    return {
+      color: theme.colors.accentAmber,
+      railKey: "verifying",
+      railMessage: "Verifying the current board…",
     };
   }
 
@@ -262,7 +271,7 @@ export function HomeScreen() {
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
-  const { isApplyingToday, toggleToday } = useDeviceActions();
+  const { isApplyingToday, refreshRuntimeSnapshot, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
   const clearBoardEditorOpen = useAppUiStore((state) => state.clearBoardEditorOpen);
@@ -270,6 +279,8 @@ export function HomeScreen() {
   const [boardStageWidth, setBoardStageWidth] = useState(0);
   const todayActionLockRef = useRef(false);
   const [todayActionInFlight, setTodayActionInFlight] = useState(false);
+  const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
+  const staleRefreshKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!pendingBoardEditorOpen || !activeDevice?.isLive) {
@@ -287,6 +298,38 @@ export function HomeScreen() {
 
     return withPendingTodayState(activeDevice, activePendingTodayState);
   }, [activeDevice, activePendingTodayState]);
+
+  useEffect(() => {
+    if (!activeDevice?.isLive || !activeDevice.needsSnapshotRefresh) {
+      staleRefreshKeyRef.current = null;
+      setStaleRefreshInFlight(false);
+      return;
+    }
+
+    const refreshKey = `${activeDevice.id}:${activeDevice.logicalToday}:${activeDevice.lastSnapshotAt ?? ""}:${activeDevice.runtimeRevision}`;
+    if (staleRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    staleRefreshKeyRef.current = refreshKey;
+    setStaleRefreshInFlight(true);
+
+    void refreshRuntimeSnapshot(activeDevice.id)
+      .catch((error) => {
+        console.warn("Failed to refresh stale runtime snapshot on home", error);
+      })
+      .finally(() => {
+        setStaleRefreshInFlight(false);
+      });
+  }, [
+    activeDevice?.id,
+    activeDevice?.isLive,
+    activeDevice?.lastSnapshotAt,
+    activeDevice?.logicalToday,
+    activeDevice?.needsSnapshotRefresh,
+    activeDevice?.runtimeRevision,
+    refreshRuntimeSnapshot,
+  ]);
 
   const palette = useMemo(
     () => (effectiveDevice ? getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette) : null),
@@ -413,7 +456,7 @@ export function HomeScreen() {
   const device = effectiveDevice;
   const stats = visibleBoardStats(device);
   const status = boardStatus(device);
-  const todayWeekday = new Date().toLocaleDateString("en-US", { weekday: "long" });
+  const todayWeekday = formatWeekdayFromLocalDate(device.logicalToday);
   const currentWeekCompleted = device.days[device.today.weekIndex]
     .slice(0, device.today.dayIndex + 1)
     .filter(Boolean).length;
@@ -422,7 +465,7 @@ export function HomeScreen() {
   const homeBottomInset = theme.layout.tabScrollBottom;
   const contentMinHeight = Math.max(0, height - insets.top - homeBottomInset - theme.layout.scrollTop);
   const homeBoardAvailableWidth = Math.max(0, Math.min((boardStageWidth || width - 40) - boardFrameInsetX * 2, 760));
-  const isTodayToggleLocked = todayActionInFlight || activePendingTodayState !== undefined;
+  const isTodayToggleLocked = staleRefreshInFlight || todayActionInFlight || activePendingTodayState !== undefined;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
   const todayState = boardButtonState(device, buttonIsApplying, isTodayToggleLocked);
   const dividerColor = withAlpha(theme.colors.textPrimary, 0.08);

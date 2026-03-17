@@ -8,6 +8,7 @@
 namespace {
 const CRGB kWifiReadyColor = CRGB(199, 144, 74);
 const CRGB kWifiConnectedColor = CRGB(143, 211, 106);
+const CRGB kTimeErrorColor = CRGB(228, 110, 88);
 constexpr uint8_t kDigitRows = 5;
 constexpr uint8_t kDigitCols = 3;
 constexpr uint8_t kClockTopRow = 1;
@@ -200,13 +201,69 @@ void BoardRenderer::renderReward(const DeviceSettingsState& settings,
   FastLED.show();
 }
 
-void BoardRenderer::renderSetupState(bool apRunning, bool wifiConnected, uint8_t brightness) {
-  clear_();
-  if (wifiConnected) {
-    setPixel_(3, 10, kWifiConnectedColor);
-  } else if (apRunning) {
-    setPixel_(3, 10, kWifiReadyColor);
+void BoardRenderer::drawWifiGlyph_(const CRGB& color) {
+  const uint8_t pixels[][2] = {
+      {1, 10},
+      {2, 8}, {2, 9}, {2, 10}, {2, 11}, {2, 12},
+      {3, 7}, {3, 13},
+      {4, 6}, {4, 8}, {4, 12}, {4, 14},
+      {5, 7}, {5, 9}, {5, 11}, {5, 13},
+      {6, 10},
+  };
+
+  for (const auto& pixel : pixels) {
+    setPixel_(pixel[0], pixel[1], color);
   }
+}
+
+void BoardRenderer::drawExclamationGlyph_(const CRGB& color) {
+  for (uint8_t row = 1; row <= 4; ++row) {
+    setPixel_(row, 10, color);
+  }
+  setPixel_(6, 10, color);
+  setPixel_(4, 9, color);
+  setPixel_(4, 11, color);
+}
+
+void BoardRenderer::renderRecoveryState(bool apRunning, bool wifiConnected, uint8_t brightness) {
+  clear_();
+
+  drawWifiGlyph_(wifiConnected ? kWifiConnectedColor : kWifiReadyColor);
+
+  if (apRunning) {
+    setPixel_(1, 4, kWifiReadyColor);
+    setPixel_(2, 4, kWifiReadyColor);
+  }
+
+  if (wifiConnected) {
+    setPixel_(5, 16, kWifiConnectedColor);
+    setPixel_(6, 17, kWifiConnectedColor);
+    setPixel_(4, 18, kWifiConnectedColor);
+    setPixel_(5, 18, kWifiConnectedColor);
+  }
+
+  FastLED.setBrightness(brightness);
+  FastLED.show();
+}
+
+void BoardRenderer::renderTimeErrorState(bool apRunning, bool wifiConnected, uint8_t brightness) {
+  clear_();
+  drawExclamationGlyph_(kTimeErrorColor);
+
+  const CRGB wifiColor = wifiConnected ? kWifiConnectedColor : kWifiReadyColor;
+  setPixel_(1, 15, wifiColor);
+  setPixel_(2, 14, wifiColor);
+  setPixel_(2, 16, wifiColor);
+  setPixel_(3, 13, wifiColor);
+  setPixel_(3, 17, wifiColor);
+  setPixel_(4, 15, wifiColor);
+
+  if (apRunning) {
+    setPixel_(6, 2, kWifiReadyColor);
+    setPixel_(6, 3, kWifiReadyColor);
+    setPixel_(6, 4, kWifiReadyColor);
+  }
+
   FastLED.setBrightness(brightness);
   FastLED.show();
 }

@@ -10,9 +10,9 @@ import {
   HistoryDraftUpdate,
   SharedBoard,
   SyncState,
-  WeekStart,
 } from "@/types/addone";
-import { Database, Enums, Json, Tables, TablesUpdate } from "@/lib/supabase/database.types";
+import { buildRuntimeBoardProjection, normalizeWeekStart } from "@/lib/runtime-board-projection";
+import { Database, Json, Tables, TablesUpdate } from "@/lib/supabase/database.types";
 import { getSupabaseClient } from "@/lib/supabase";
 
 type DeviceRow = Tables<"devices"> & {
@@ -109,144 +109,12 @@ function deriveSyncState(device: DeviceRow): SyncState {
   return "offline";
 }
 
-function normalizeWeekStart(weekStart: WeekStart): Exclude<WeekStart, "locale"> {
-  if (weekStart === "sunday") {
-    return "sunday";
-  }
-
-  return "monday";
-}
-
-function getWeekStartOffset(weekStart: WeekStart): 0 | 1 {
-  if (normalizeWeekStart(weekStart) === "monday") {
-    return 1;
-  }
-
-  return 0;
-}
-
-function toUtcDate(localDate: string) {
-  return new Date(`${localDate}T00:00:00.000Z`);
-}
-
-function toLocalDateString(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(localDate: string, offset: number) {
-  const next = toUtcDate(localDate);
-  next.setUTCDate(next.getUTCDate() + offset);
-  return toLocalDateString(next);
-}
-
-function diffDays(fromDate: string, toDate: string) {
-  return Math.round((toUtcDate(toDate).getTime() - toUtcDate(fromDate).getTime()) / 86_400_000);
-}
-
-function getTimeZoneParts(timezone: string, date = new Date()) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
-
-  const values = Object.fromEntries(
-    formatter
-      .formatToParts(date)
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value]),
-  );
-
-  return {
-    day: Number(values.day),
-    hour: Number(values.hour),
-    minute: Number(values.minute),
-    month: Number(values.month),
-    year: Number(values.year),
-  };
-}
-
-function getLogicalToday(timezone: string, resetTime: string) {
-  const parts = getTimeZoneParts(timezone);
-  let localDate = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
-  const [resetHourRaw, resetMinuteRaw] = stripSeconds(resetTime).split(":");
-  const resetHour = Number(resetHourRaw);
-  const resetMinute = Number(resetMinuteRaw);
-
-  if (parts.hour < resetHour || (parts.hour === resetHour && parts.minute < resetMinute)) {
-    localDate = addDays(localDate, -1);
-  }
-
-  return localDate;
-}
-
-function startOfWeek(localDate: string, weekStart: WeekStart) {
-  const date = toUtcDate(localDate);
-  const day = date.getUTCDay();
-  const weekStartDay = getWeekStartOffset(weekStart);
-  const delta = (day - weekStartDay + 7) % 7;
-  date.setUTCDate(date.getUTCDate() - delta);
-  return toLocalDateString(date);
-}
-
 function coercePalette(json: Json): Partial<BoardPalette> | undefined {
   if (!json || typeof json !== "object" || Array.isArray(json)) {
     return undefined;
   }
 
   return json as Partial<BoardPalette>;
-}
-
-function buildBoardFrame(device: Pick<DeviceRow, "day_reset_time" | "timezone" | "week_start">) {
-  const todayDate = getLogicalToday(device.timezone, device.day_reset_time);
-  const currentWeekStart = startOfWeek(todayDate, normalizeWeekStart(device.week_start));
-  const dateGrid = Array.from({ length: 21 }, (_, weekIndex) => {
-    const weekStartDate = addDays(currentWeekStart, weekIndex * -7);
-    return Array.from({ length: 7 }, (_, dayIndex) => addDays(weekStartDate, dayIndex));
-  });
-
-  return {
-    dateGrid,
-    todayDate,
-    todayDayIndex: diffDays(currentWeekStart, todayDate),
-  };
-}
-
-function buildEmptyDays(dateGrid: string[][]) {
-  return dateGrid.map((week) => week.map(() => false));
-}
-
-function buildBoardFrameFromSnapshot(snapshot: Pick<RuntimeSnapshotRow, "current_week_start" | "today_row">) {
-  const currentWeekStart = snapshot.current_week_start;
-  const dateGrid = Array.from({ length: 21 }, (_, weekIndex) => {
-    const weekStartDate = addDays(currentWeekStart, weekIndex * -7);
-    return Array.from({ length: 7 }, (_, dayIndex) => addDays(weekStartDate, dayIndex));
-  });
-
-  return {
-    dateGrid,
-    todayDayIndex: snapshot.today_row,
-  };
-}
-
-function parseSnapshotBoardDays(snapshot: Pick<RuntimeSnapshotRow, "board_days">) {
-  if (!Array.isArray(snapshot.board_days) || snapshot.board_days.length !== 21) {
-    return null;
-  }
-
-  const days = snapshot.board_days.map((week) => {
-    if (!Array.isArray(week) || week.length !== 7) {
-      return null;
-    }
-
-    return week.map((day) => Boolean(day));
-  });
-
-  return days.every(Boolean) ? (days as boolean[][]) : null;
 }
 
 function paletteIdForDevice(device: DeviceRow) {
@@ -260,12 +128,19 @@ function mapDeviceRowToAppDevice(input: {
   snapshot?: RuntimeSnapshotRow | null;
 }): AddOneDevice {
   const { currentUserName, device, membership, snapshot } = input;
-  const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
-  const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
-  const fallbackFrame = buildBoardFrame(device);
-  const dateGrid = snapshotFrame?.dateGrid ?? fallbackFrame.dateGrid;
-  const todayDayIndex = snapshotFrame?.todayDayIndex ?? fallbackFrame.todayDayIndex;
-  const days = snapshotDays ?? buildEmptyDays(dateGrid);
+  const normalizedWeekStart = normalizeWeekStart(device.week_start);
+  const projection = buildRuntimeBoardProjection({
+    resetTime: device.day_reset_time,
+    snapshot: snapshot
+      ? {
+          boardDays: snapshot.board_days,
+          currentWeekStart: snapshot.current_week_start,
+          todayRow: snapshot.today_row,
+        }
+      : null,
+    timezone: device.timezone,
+    weekStart: normalizedWeekStart,
+  });
 
   return {
     id: device.id,
@@ -276,7 +151,7 @@ function mapDeviceRowToAppDevice(input: {
     runtimeRevision: Number(snapshot?.revision ?? device.last_runtime_revision ?? 0),
     syncState: deriveSyncState(device),
     weeklyTarget: device.weekly_target,
-    weekStart: normalizeWeekStart(device.week_start),
+    weekStart: normalizedWeekStart,
     timezone: device.timezone,
     resetTime: stripSeconds(device.day_reset_time),
     nextResetLabel: nextResetLabel(device.day_reset_time),
@@ -290,12 +165,12 @@ function mapDeviceRowToAppDevice(input: {
     reminderEnabled: membership.reminder_enabled,
     reminderTime: stripSeconds(membership.reminder_time, "19:30"),
     firmwareVersion: device.firmware_version,
-    days,
-    dateGrid,
-    today: {
-      weekIndex: 0,
-      dayIndex: todayDayIndex,
-    },
+    days: projection.days,
+    dateGrid: projection.dateGrid,
+    logicalToday: projection.logicalToday,
+    isProjectedBeyondSnapshot: projection.isProjectedBeyondSnapshot,
+    needsSnapshotRefresh: projection.needsSnapshotRefresh,
+    today: projection.today,
   };
 }
 
@@ -305,11 +180,18 @@ function mapDeviceRowToSharedBoard(input: {
   snapshot?: RuntimeSnapshotRow | null;
 }): SharedBoard {
   const { device, ownerName, snapshot } = input;
-  const snapshotDays = snapshot ? parseSnapshotBoardDays(snapshot) : null;
-  const snapshotFrame = snapshot ? buildBoardFrameFromSnapshot(snapshot) : null;
-  const fallbackFrame = buildBoardFrame(device);
-  const dateGrid = snapshotFrame?.dateGrid ?? fallbackFrame.dateGrid;
-  const todayDayIndex = snapshotFrame?.todayDayIndex ?? fallbackFrame.todayDayIndex;
+  const projection = buildRuntimeBoardProjection({
+    resetTime: device.day_reset_time,
+    snapshot: snapshot
+      ? {
+          boardDays: snapshot.board_days,
+          currentWeekStart: snapshot.current_week_start,
+          todayRow: snapshot.today_row,
+        }
+      : null,
+    timezone: device.timezone,
+    weekStart: normalizeWeekStart(device.week_start),
+  });
 
   return {
     id: device.id,
@@ -319,12 +201,10 @@ function mapDeviceRowToSharedBoard(input: {
     syncState: deriveSyncState(device),
     weeklyTarget: device.weekly_target,
     paletteId: paletteIdForDevice(device),
-    days: snapshotDays ?? buildEmptyDays(dateGrid),
-    dateGrid,
-    today: {
-      weekIndex: 0,
-      dayIndex: todayDayIndex,
-    },
+    days: projection.days,
+    dateGrid: projection.dateGrid,
+    logicalToday: projection.logicalToday,
+    today: projection.today,
   };
 }
 

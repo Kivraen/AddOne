@@ -21,6 +21,14 @@ bool ProvisioningStore::hasPendingClaim() const {
   return hasClaim;
 }
 
+bool ProvisioningStore::isReadyForTracking() const {
+  Preferences prefs;
+  prefs.begin(kNamespace, true);
+  const bool ready = prefs.getBool(kReadyForTrackingKey, false);
+  prefs.end();
+  return ready;
+}
+
 bool ProvisioningStore::loadPendingClaim(ProvisioningContract::PendingClaim& outClaim) const {
   Preferences prefs;
   prefs.begin(kNamespace, true);
@@ -56,4 +64,11 @@ bool ProvisioningStore::savePendingClaim(const ProvisioningContract::PendingClai
   prefs.end();
 
   return okClaim && okProfile && okSession;
+}
+
+void ProvisioningStore::markReadyForTracking() {
+  Preferences prefs;
+  prefs.begin(kNamespace, false);
+  prefs.putBool(kReadyForTrackingKey, true);
+  prefs.end();
 }

@@ -22,6 +22,7 @@ enum class FirmwareState : uint8_t {
   SetupRecovery = 0,
   Tracking = 1,
   Reward = 2,
+  TimeInvalid = 3,
 };
 
 class FirmwareApp {
@@ -48,6 +49,7 @@ private:
 
   bool applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason);
   void beginWifiReconnect_();
+  bool bootReadyForTracking_() const;
   static void syncTaskEntry_(void* context);
   bool copyRuntimeSnapshotPayload_(String& boardDaysJson,
                                    String& settingsJson,
@@ -64,13 +66,20 @@ private:
   void enterState_(FirmwareState nextState);
   void flushPendingCommandAcks_();
   bool flushRuntimeSnapshot_();
+  bool hasAuthoritativeTime_() const;
   bool hasPendingAcks_();
+  void migrateReadyForTrackingFlag_();
   void pollCommands_();
   void processRealtimeCommands_();
+  bool prepareTrackerForCurrentTime_();
+  void resetWifiReconnectPolicy_();
   void syncTask_();
   void tickReward_();
   void tickSetupRecovery_();
   void tickTracking_();
+  void tickTimeInvalid_();
+  bool tickWifiReconnectPolicy_(bool allowRecoveryEscalation);
+  unsigned long wifiReconnectBackoffMs_(uint8_t attemptNumber) const;
   void markRuntimeSnapshotDirty_();
 
   BoardRenderer boardRenderer_{};
@@ -100,10 +109,13 @@ private:
   unsigned long lastHeartbeatAtMs_ = 0;
   unsigned long lastLocalInteractionAtMs_ = 0;
   unsigned long ignoreRecoveryCommandsUntilMs_ = 0;
+  unsigned long nextWifiReconnectAttemptAtMs_ = 0;
+  unsigned long wifiReconnectAttemptStartedAtMs_ = 0;
   bool recoveryRequestedAtBoot_ = false;
   bool recoveryRequestedAtRuntime_ = false;
   volatile bool runtimeSnapshotDirty_ = true;
-  bool wifiReconnectStarted_ = false;
-  bool waitingForApFallback_ = false;
-  unsigned long wifiReconnectStartedAtMs_ = 0;
+  bool lastWifiConnected_ = false;
+  bool wifiReconnectAttemptActive_ = false;
+  bool wifiReconnectExhausted_ = false;
+  uint8_t wifiReconnectAttemptCount_ = 0;
 };
