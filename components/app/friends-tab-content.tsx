@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { ScreenFrame } from "@/components/layout/screen-frame";
+import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 
@@ -8,10 +8,10 @@ interface FriendsTabContentProps {
   bottomInset?: number;
 }
 
-export function FriendsTabContent({ bottomInset = 120 }: FriendsTabContentProps) {
+export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }: FriendsTabContentProps) {
   return (
-    <ScreenFrame bottomInset={bottomInset} scroll>
-      <View style={{ gap: 18, paddingTop: 18, paddingBottom: 24 }}>
+    <ScreenScrollView bottomInset={bottomInset}>
+      <ScreenSection style={{ gap: 18 }}>
         <View style={{ gap: 6 }}>
           <Text
             style={{
@@ -31,7 +31,7 @@ export function FriendsTabContent({ bottomInset = 120 }: FriendsTabContentProps)
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Shared grids and friend activity will live here.
+            Shared grids and friend activity will live here once the core solo experience is fully locked.
           </Text>
         </View>
 
@@ -57,7 +57,30 @@ export function FriendsTabContent({ bottomInset = 120 }: FriendsTabContentProps)
             This page will show the other grids you care about without mixing them into your own habit screen.
           </Text>
         </GlassCard>
-      </View>
-    </ScreenFrame>
+
+        <GlassCard style={{ gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: theme.typography.label.fontSize,
+              lineHeight: theme.typography.label.lineHeight,
+            }}
+          >
+            Planned qualities
+          </Text>
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            Expect quiet activity summaries, intentional follows, and no noise bleeding into your own daily board.
+          </Text>
+        </GlassCard>
+      </ScreenSection>
+    </ScreenScrollView>
   );
 }

@@ -198,10 +198,7 @@ export function PixelGrid({
                 borderRadius: Math.max(4, Math.floor(cellSize * 0.28)),
                 backgroundColor: lit && treatment ? treatment.edgeFill : colors.fill,
                 overflow: "hidden" as const,
-                shadowColor: outerGlow,
-                shadowOpacity: lit ? 0.18 : 0,
-                shadowRadius: lit ? Math.max(4, Math.floor(cellSize * 0.28)) : 0,
-                shadowOffset: { width: 0, height: 0 },
+                boxShadow: lit ? `0px 0px ${Math.max(10, Math.floor(cellSize * 0.55))}px ${outerGlow}` : undefined,
               };
               const ledGlow = lit && treatment ? <LitPixelDiffuser cellSize={cellSize} fill={treatment.centerFill} /> : null;
 

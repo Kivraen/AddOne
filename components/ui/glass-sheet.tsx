@@ -48,7 +48,7 @@ export function GlassSheet({ children, subtitle, title, variant = "full" }: Glas
         onClose={() => router.back()}
         snapPoints={snapPoints}
       >
-        <View className="gap-2 px-5 pb-3 pt-1">
+        <View style={{ gap: 8, paddingHorizontal: 20, paddingBottom: 12, paddingTop: 4 }}>
           <Text
             style={{
               color: theme.colors.textPrimary,

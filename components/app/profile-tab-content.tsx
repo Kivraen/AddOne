@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
-import { ScreenFrame } from "@/components/layout/screen-frame";
+import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,13 +11,13 @@ interface ProfileTabContentProps {
   bottomInset?: number;
 }
 
-export function ProfileTabContent({ bottomInset = 120 }: ProfileTabContentProps) {
+export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }: ProfileTabContentProps) {
   const router = useRouter();
   const { mode, signOut, userEmail } = useAuth();
 
   return (
-    <ScreenFrame bottomInset={bottomInset} scroll>
-      <View style={{ gap: 18, paddingTop: 18, paddingBottom: 24 }}>
+    <ScreenScrollView bottomInset={bottomInset}>
+      <ScreenSection style={{ gap: 18 }}>
         <View style={{ gap: 6 }}>
           <Text
             style={{
@@ -37,7 +37,7 @@ export function ProfileTabContent({ bottomInset = 120 }: ProfileTabContentProps)
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            App-level account controls live here, separate from the current device.
+            Account controls live here, separate from the current device board and setup surfaces.
           </Text>
         </View>
 
@@ -64,6 +64,52 @@ export function ProfileTabContent({ bottomInset = 120 }: ProfileTabContentProps)
           >
             {mode === "demo" ? "Demo preview" : userEmail ?? "Email OTP session"}
           </Text>
+        </GlassCard>
+
+        <GlassCard style={{ gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: theme.typography.label.fontSize,
+              lineHeight: theme.typography.label.lineHeight,
+            }}
+          >
+            Device tools
+          </Text>
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            Manage the active board’s appearance, timing, and recovery flow from device settings.
+          </Text>
+          <Pressable
+            onPress={() => router.push("/settings")}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 48,
+              borderRadius: theme.radius.pill,
+              borderWidth: 1,
+              borderColor: theme.materials.panel.border,
+              backgroundColor: withAlpha(theme.colors.bgBase, 0.16),
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: theme.typography.label.fontSize,
+                lineHeight: theme.typography.label.lineHeight,
+              }}
+            >
+              Open device settings
+            </Text>
+          </Pressable>
         </GlassCard>
 
         {mode === "cloud" ? (
@@ -95,7 +141,7 @@ export function ProfileTabContent({ bottomInset = 120 }: ProfileTabContentProps)
             </Text>
           </Pressable>
         ) : null}
-      </View>
-    </ScreenFrame>
+      </ScreenSection>
+    </ScreenScrollView>
   );
 }

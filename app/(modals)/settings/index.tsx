@@ -47,6 +47,12 @@ export default function DeviceSettingsRootScreen() {
               onPress={() => router.push("/settings/device")}
               title="Device"
             />
+            <Divider />
+            <SettingsRow
+              detail="Correct earlier days only when the board needs a manual fix"
+              onPress={() => router.push("/history")}
+              title="History"
+            />
           </SettingsSurface>
         </>
       )}

@@ -1,17 +1,16 @@
 import { Redirect, Stack } from "expo-router";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
-import { ScreenFrame } from "@/components/layout/screen-frame";
+import { ScreenView } from "@/components/layout/screen-frame";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
-import { Text } from "react-native";
 
 export default function AppLayout() {
   const { mode, status } = useAuth();
 
   if (mode === "cloud" && status === "loading") {
     return (
-      <ScreenFrame>
+      <ScreenView contentMaxWidth={theme.layout.narrowContentWidth}>
         <View style={{ flex: 1, justifyContent: "center" }}>
           <Text
             style={{
@@ -25,7 +24,7 @@ export default function AppLayout() {
             Restoring your AddOne session…
           </Text>
         </View>
-      </ScreenFrame>
+      </ScreenView>
     );
   }
 
@@ -34,7 +33,7 @@ export default function AppLayout() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -43,6 +42,7 @@ export default function AppLayout() {
           contentStyle: { backgroundColor: theme.colors.bgBase },
         }}
       >
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="history" options={{ animation: "fade", contentStyle: { backgroundColor: theme.colors.bgBase } }} />
       </Stack>
     </View>

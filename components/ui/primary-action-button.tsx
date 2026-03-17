@@ -146,10 +146,7 @@ export function PrimaryActionButton({ activeColor, state, onPress, size = 94, st
           borderWidth: 1,
           borderColor: config.border,
           backgroundColor: config.background,
-          shadowColor: config.shadow,
-          shadowOpacity: config.shadow === "transparent" ? 0 : 0.7,
-          shadowRadius: config.shadow === "transparent" ? 0 : 16,
-          shadowOffset: { width: 0, height: 8 },
+          boxShadow: config.shadow === "transparent" ? undefined : `0px 14px 34px ${config.shadow}`,
         }}
       >
         {config.icon ? (

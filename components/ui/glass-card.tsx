@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { PropsWithChildren } from "react";
 import { StyleProp, View, ViewStyle } from "react-native";
@@ -11,25 +12,28 @@ interface GlassCardProps extends PropsWithChildren {
 
 export function GlassCard({ children, style }: GlassCardProps) {
   return (
-    <View
+    <BlurView
+      intensity={60}
       style={[
         {
           overflow: "hidden",
           borderRadius: theme.radius.card,
           borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-          backgroundColor: withAlpha(theme.colors.bgElevated, 0.92),
+          borderColor: theme.materials.panel.border,
+          backgroundColor: theme.materials.panel.fill,
+          boxShadow: theme.shadows.panel,
         },
         style,
       ]}
+      tint="systemMaterial"
     >
       <LinearGradient
-        colors={[withAlpha(theme.colors.textPrimary, 0.045), "transparent"]}
+        colors={[theme.materials.panel.highlight, "transparent"]}
         end={{ x: 1, y: 1 }}
         start={{ x: 0, y: 0 }}
         style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
       />
-      {children}
-    </View>
+      <View style={{ backgroundColor: withAlpha(theme.colors.bgBase, 0.06) }}>{children}</View>
+    </BlurView>
   );
 }

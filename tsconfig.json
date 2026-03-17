@@ -2,7 +2,6 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "jsxImportSource": "nativewind",
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -13,8 +12,12 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "nativewind-env.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "AddOne-Experiments",
+    "node_modules_sdk54_backup",
+    "tools"
   ]
 }

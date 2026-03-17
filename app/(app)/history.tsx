@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
-import { ScreenFrame } from "@/components/layout/screen-frame";
+import { ScreenSection, ScreenView } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
-import { IconButton } from "@/components/ui/icon-button";
 import { theme } from "@/constants/theme";
 import { useActiveDevice } from "@/hooks/use-active-device";
 import { useDeviceActions } from "@/hooks/use-devices";
@@ -66,8 +65,8 @@ function ActionButton({
         minHeight: 48,
         borderRadius: theme.radius.sheet,
         borderWidth: 1,
-        borderColor: secondary ? withAlpha(theme.colors.textPrimary, 0.12) : withAlpha(theme.colors.accentAmber, 0.18),
-        backgroundColor: secondary ? withAlpha(theme.colors.textPrimary, 0.06) : withAlpha(theme.colors.accentAmber, 0.14),
+        borderColor: secondary ? theme.materials.panel.border : withAlpha(theme.colors.accentAmber, 0.2),
+        backgroundColor: secondary ? withAlpha(theme.colors.bgBase, 0.16) : theme.colors.accentAmberSoft,
         opacity: disabled ? 0.45 : 1,
         paddingHorizontal: 14,
       }}
@@ -90,7 +89,6 @@ function ActionButton({
 }
 
 export default function HistoryScreen() {
-  const router = useRouter();
   const { height, width } = useWindowDimensions();
   const device = useActiveDevice();
   const {
@@ -176,10 +174,11 @@ export default function HistoryScreen() {
   const updates = useMemo(() => collectHistoryDraftUpdates(baseDevice, draftDevice), [baseDevice, draftDevice]);
   const busy = isSavingHistoryDraft;
   const gridAvailableWidth = Math.max(420, width - 48);
-  const gridAvailableHeight = Math.max(180, height - 214);
+  const gridAvailableHeight = Math.max(180, height - 240);
+  const saveDisabled = !device.isLive || busy || updates.length === 0;
 
   async function handleSave() {
-    if (!device.isLive || updates.length === 0) {
+    if (saveDisabled) {
       return;
     }
 
@@ -195,23 +194,38 @@ export default function HistoryScreen() {
   }
 
   return (
-    <ScreenFrame
-      header={
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 14, paddingBottom: 8 }}>
-          <IconButton icon="arrow-back-outline" onPress={() => router.back()} />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              Edit history
-            </Text>
+    <>
+      <Stack.Screen
+        options={{
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: theme.colors.bgBase },
+          headerTintColor: theme.colors.textPrimary,
+          headerTitle: device.name,
+          headerTitleStyle: {
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.title.fontFamily,
+            fontSize: theme.typography.title.fontSize,
+          },
+          headerRight: () => (
+            <Pressable disabled={saveDisabled} onPress={() => void handleSave()} style={{ opacity: saveDisabled ? 0.4 : 1 }}>
+              <Text
+                style={{
+                  color: saveDisabled ? theme.colors.textTertiary : theme.colors.accentAmber,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                }}
+              >
+                {busy ? "Saving…" : "Save"}
+              </Text>
+            </Pressable>
+          ),
+        }}
+      />
+
+      <ScreenView bottomInset={24} contentContainerStyle={{ gap: 16 }} contentMaxWidth={1600}>
+        {!device.isLive ? (
+          <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
             <Text
               style={{
                 color: theme.colors.textPrimary,
@@ -220,39 +234,22 @@ export default function HistoryScreen() {
                 lineHeight: theme.typography.title.lineHeight,
               }}
             >
-              {device.name}
+              History is unavailable
             </Text>
-          </View>
-        </View>
-      }
-    >
-      {!device.isLive ? (
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-            }}
-          >
-            History is unavailable
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.body.fontFamily,
-              fontSize: theme.typography.body.fontSize,
-              lineHeight: theme.typography.body.lineHeight,
-            }}
-          >
-            The device must be live before you can change past days.
-          </Text>
-        </GlassCard>
-      ) : (
-        <View style={{ flex: 1, gap: 12 }}>
-          {!isOrientationReady ? (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: theme.typography.body.fontSize,
+                lineHeight: theme.typography.body.lineHeight,
+              }}
+            >
+              The device must be live before you can change past days.
+            </Text>
+          </GlassCard>
+        ) : (
+          <View style={{ flex: 1, gap: 16 }}>
+            <ScreenSection style={{ gap: 6 }}>
               <Text
                 style={{
                   color: theme.colors.textTertiary,
@@ -263,22 +260,8 @@ export default function HistoryScreen() {
                   textTransform: "uppercase",
                 }}
               >
-                Preparing editor
+                Edit history
               </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                  textAlign: "center",
-                }}
-              >
-                Rotating the board for easier editing…
-              </Text>
-            </View>
-          ) : (
-            <>
               <Text
                 style={{
                   color: theme.colors.textSecondary,
@@ -289,108 +272,143 @@ export default function HistoryScreen() {
               >
                 Tap day cells to correct the board. The weekly row updates automatically.
               </Text>
+            </ScreenSection>
 
-              <GlassCard
-                style={{
-                  alignItems: "center",
-                  flex: 1,
-                  justifyContent: "center",
-                  paddingHorizontal: 12,
-                  paddingVertical: 14,
-                }}
-              >
-                <PixelGrid
-                  availableHeight={gridAvailableHeight}
-                  availableWidth={gridAvailableWidth}
-                  cells={buildBoardCells(draftDevice)}
-                  maxWidth={1600}
-                  mode="edit"
-                  onCellPress={(row, col) => {
-                    if (busy) {
-                      return;
-                    }
-
-                    setStatusError(null);
-                    setStatusMessage(null);
-                    setDraftDevice((current) => toggleHistoryCellLocal(current, row, col));
-                    setIsDirty(true);
+            {!isOrientationReady ? (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <Text
+                  style={{
+                    color: theme.colors.textTertiary,
+                    fontFamily: theme.typography.micro.fontFamily,
+                    fontSize: theme.typography.micro.fontSize,
+                    lineHeight: theme.typography.micro.lineHeight,
+                    letterSpacing: theme.typography.micro.letterSpacing,
+                    textTransform: "uppercase",
                   }}
-                  palette={palette}
-                  showFooterHint={false}
-                />
-              </GlassCard>
-
-              <View style={{ gap: 8 }}>
-                {isLoadingLiveBoard || isRefreshingRuntimeSnapshot ? (
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    Refreshing the live board…
-                  </Text>
-                ) : null}
-
-                {statusError ? (
-                  <Text
-                    style={{
-                      color: theme.colors.statusErrorMuted,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    {statusError}
-                  </Text>
-                ) : null}
-
-                {statusMessage ? (
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    {statusMessage}
-                  </Text>
-                ) : null}
+                >
+                  Preparing editor
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                    textAlign: "center",
+                  }}
+                >
+                  Rotating the board for easier editing…
+                </Text>
               </View>
+            ) : (
+              <>
+                <GlassCard
+                  style={{
+                    alignItems: "center",
+                    flex: 1,
+                    justifyContent: "center",
+                    paddingHorizontal: 12,
+                    paddingVertical: 14,
+                  }}
+                >
+                  <PixelGrid
+                    availableHeight={gridAvailableHeight}
+                    availableWidth={gridAvailableWidth}
+                    cells={buildBoardCells(draftDevice)}
+                    maxWidth={1600}
+                    mode="edit"
+                    onCellPress={(row, col) => {
+                      if (busy) {
+                        return;
+                      }
 
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <ActionButton
-                    disabled={busy || !isDirty}
-                    icon="refresh-outline"
-                    label="Reset"
-                    onPress={() => {
-                      setDraftDevice(baseDevice);
-                      setIsDirty(false);
                       setStatusError(null);
-                      setStatusMessage("Draft reset.");
+                      setStatusMessage(null);
+                      setDraftDevice((current) => toggleHistoryCellLocal(current, row, col));
+                      setIsDirty(true);
                     }}
-                    secondary
+                    palette={palette}
+                    showFooterHint={false}
                   />
+                </GlassCard>
+
+                <View style={{ gap: 8 }}>
+                  {isLoadingLiveBoard || isRefreshingRuntimeSnapshot ? (
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        fontFamily: theme.typography.body.fontFamily,
+                        fontSize: theme.typography.body.fontSize,
+                        lineHeight: theme.typography.body.lineHeight,
+                      }}
+                    >
+                      Refreshing the live board…
+                    </Text>
+                  ) : null}
+
+                  {statusError ? (
+                    <Text
+                      selectable
+                      style={{
+                        color: theme.colors.statusErrorMuted,
+                        fontFamily: theme.typography.body.fontFamily,
+                        fontSize: theme.typography.body.fontSize,
+                        lineHeight: theme.typography.body.lineHeight,
+                      }}
+                    >
+                      {statusError}
+                    </Text>
+                  ) : null}
+
+                  {statusMessage ? (
+                    <Text
+                      selectable
+                      style={{
+                        color: theme.colors.textSecondary,
+                        fontFamily: theme.typography.body.fontFamily,
+                        fontSize: theme.typography.body.fontSize,
+                        lineHeight: theme.typography.body.lineHeight,
+                      }}
+                    >
+                      {statusMessage}
+                    </Text>
+                  ) : null}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <ActionButton
-                    disabled={busy || updates.length === 0}
-                    icon="checkmark-outline"
-                    label={busy ? "Saving…" : "Save"}
-                    onPress={() => {
-                      void handleSave();
-                    }}
-                  />
+
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <ActionButton
+                      disabled={busy || !isDirty}
+                      icon="refresh-outline"
+                      label="Reset draft"
+                      onPress={() => {
+                        setDraftDevice(baseDevice);
+                        setIsDirty(false);
+                        setStatusError(null);
+                        setStatusMessage("Draft reset.");
+                      }}
+                      secondary
+                    />
+                  </View>
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        fontFamily: theme.typography.body.fontFamily,
+                        fontSize: 13,
+                        lineHeight: 18,
+                        textAlign: "right",
+                      }}
+                    >
+                      Save from the header when you’re done.
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            </>
-          )}
-        </View>
-      )}
-    </ScreenFrame>
+              </>
+            )}
+          </View>
+        )}
+      </ScreenView>
+    </>
   );
 }
