@@ -125,11 +125,13 @@ export default function DeviceSettingsLayout() {
   return (
     <Stack
       screenOptions={{
+        animation: "simple_push",
         contentStyle: { backgroundColor: theme.colors.bgBase },
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
         headerStyle: { backgroundColor: theme.colors.bgBase },
         headerTintColor: theme.colors.textPrimary,
+        headerTitleAlign: "left",
       }}
     />
   );

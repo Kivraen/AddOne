@@ -37,6 +37,13 @@ Andrii to A/B test when live. Do not pick one yet.
 - **Motion:** Slow. Heavy. Stone doesn't bounce. Like something with weight.
 - **Photography:** Device on desk, LED glowing in dim light. Viktor's hands. Process shots. No white backgrounds, no lifestyle models.
 
+### Product Accent Rule
+- In the app, accent color should follow the active device instead of staying globally fixed.
+- The source of truth for product accent is the active device board's `dayOn` color.
+- Use that accent for device-focused active chrome: the daily action, selected tab tint, active highlights, and similar emphasis tied to the current board.
+- Use brand amber only as the fallback when there is no active device context yet, or on global marketing/onboarding surfaces that are not representing a specific device.
+- If multiple accents appear on the same device-focused screen, they should resolve from that same active-device accent unless there is a strong functional reason not to.
+
 ---
 
 ## Copywriting Angles (Active)

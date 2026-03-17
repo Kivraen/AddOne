@@ -14,6 +14,7 @@ import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
+import { getDeviceAccentColor } from "@/lib/device-accent";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { useAppUiStore } from "@/store/app-ui-store";
@@ -291,6 +292,7 @@ export function HomeScreen() {
     () => (effectiveDevice ? getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette) : null),
     [effectiveDevice],
   );
+  const deviceAccentColor = useMemo(() => getDeviceAccentColor(effectiveDevice), [effectiveDevice]);
   const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
 
   function handleBoardStageLayout(event: LayoutChangeEvent) {
@@ -648,7 +650,7 @@ export function HomeScreen() {
 
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 20 }}>
           <PrimaryActionButton
-            activeColor={palette.dayOn}
+            activeColor={deviceAccentColor}
             onPress={() => {
               if (todayActionLockRef.current || isTodayToggleLocked) {
                 return;

@@ -196,6 +196,7 @@ export function DeviceSettingsScaffold({
   device,
   headerLeft,
   largeTitle = false,
+  showHeaderApply = true,
   subtitle,
   title,
 }: {
@@ -203,6 +204,7 @@ export function DeviceSettingsScaffold({
   device: AddOneDevice;
   headerLeft?: () => ReactNode;
   largeTitle?: boolean;
+  showHeaderApply?: boolean;
   subtitle?: string;
   title: string;
 }) {
@@ -236,15 +238,17 @@ export function DeviceSettingsScaffold({
             fontFamily: theme.typography.title.fontFamily,
             fontSize: theme.typography.title.fontSize,
           },
-          headerRight: () => (
-            <HeaderActionButton
-              disabled={!settings.canApply}
-              label={settings.isSavingSettings ? "Applying…" : "Apply"}
-              onPress={() => {
-                void settings.apply();
-              }}
-            />
-          ),
+          headerRight: showHeaderApply
+            ? () => (
+                <HeaderActionButton
+                  disabled={!settings.canApply}
+                  label={settings.isSavingSettings ? "Applying…" : "Apply"}
+                  onPress={() => {
+                    void settings.apply();
+                  }}
+                />
+              )
+            : undefined,
         }}
       />
     </>

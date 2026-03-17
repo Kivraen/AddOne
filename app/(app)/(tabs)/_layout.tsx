@@ -1,17 +1,20 @@
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { DynamicColorIOS } from "react-native";
 
-import { theme } from "@/constants/theme";
-
-const tintColor =
-  process.env.EXPO_OS === "ios"
-    ? DynamicColorIOS({
-        dark: theme.colors.accentAmber,
-        light: theme.colors.accentAmber,
-      })
-    : theme.colors.accentAmber;
+import { useDevices } from "@/hooks/use-devices";
+import { getDeviceAccentColor } from "@/lib/device-accent";
 
 export default function TabsLayout() {
+  const { activeDevice } = useDevices();
+  const accentColor = getDeviceAccentColor(activeDevice);
+  const tintColor =
+    process.env.EXPO_OS === "ios"
+      ? DynamicColorIOS({
+          dark: accentColor,
+          light: accentColor,
+        })
+      : accentColor;
+
   return (
     <NativeTabs minimizeBehavior="onScrollDown" tintColor={tintColor}>
       <NativeTabs.Trigger name="index">
