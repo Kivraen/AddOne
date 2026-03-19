@@ -84,9 +84,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
+  [B-009-stage-s3-friends-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-009-stage-s3-friends-plan-and-model-lock.md)
 - Current execution task:
-  [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md)
+  [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md)
 - Git durability note:
   the local branch has a GitHub remote configured but is currently ahead of origin, so the latest local coordination state is committed but not yet fully backed up remotely.
 
@@ -117,6 +117,10 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 1. Lock first-user beta scope.
 - audit and close the remaining UI gaps on the visible beta surfaces
 - lock the first-user profile identity model
+- create and accept a dedicated friends planning checkpoint before implementation:
+  - current beta target
+  - deferred social layers
+  - backend starting point and likely gaps
 - Define and implement the first-user beta `Friends` / sharing scope instead of treating it as placeholder UI:
   - deliberate linking between people
   - browsing friends' boards and progress
@@ -126,7 +130,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- finish onboarding and Wi-Fi recovery polish with native-flow quality
+- keep onboarding and Wi-Fi recovery polish as the final visible UI polish slice after the friends checkpoint
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 

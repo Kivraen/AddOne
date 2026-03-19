@@ -9,7 +9,7 @@ subsystem: app
 priority: high
 owner: Unassigned
 depends_on:
-  - T-005
+  - T-015
 owned_paths:
   - app/(app)
   - components/app
@@ -21,6 +21,7 @@ source_docs:
   - Docs/AddOne_Main_Plan.md
   - Docs/AddOne_V1_Canonical_Spec.md
   - Docs/AddOne_Backend_Model.md
+  - Docs/plans/friends-beta-plan.md
 success_gate: Strict gate
 report_path: Docs/agent-reports/2026-03-16-app-beta-friends-surface.md
 ---

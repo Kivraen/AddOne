@@ -9,7 +9,7 @@ subsystem: app
 priority: high
 owner: Unassigned
 depends_on:
-  - T-005
+  - T-001
 owned_paths:
   - app/(app)/onboarding
   - app/(app)/devices/[deviceId]/recovery.tsx
@@ -36,7 +36,7 @@ report_path: Docs/agent-reports/2026-03-19-s3-onboarding-and-wifi-recovery-polis
 Take onboarding from "real but still dense" to a clean beta-ready guided flow, and close any remaining Wi-Fi recovery polish that directly affects onboarding continuity or user confidence.
 
 ## Why Now
-The broad S3 visible-surface polish pass moved the main screen, routine/settings, appearance, and recovery forward substantially. The main remaining visible UI surface is onboarding, and it is still where pacing, copy, error handling, and step clarity carry the most user risk.
+The broad S3 visible-surface polish pass moved the main screen, routine/settings, appearance, and recovery forward substantially. The user wants onboarding and Wi-Fi recovery to remain the final visible UI polish slice, after the friends planning and friends implementation checkpoint are explicit.
 
 ## In Scope
 - Onboarding pacing, copy, and step-to-step clarity
