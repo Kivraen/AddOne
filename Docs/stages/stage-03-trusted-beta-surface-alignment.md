@@ -58,6 +58,6 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 ## Recommendation
 
-Continue [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), treat the timezone audit as accepted, then split the next timezone work into either:
-- a supported-zone picker and fallback messaging path for beta
-- or a firmware timezone-expansion path if broader support is required now
+Keep [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as the umbrella coordination task, treat the March 19 UI polish report as the current checkpoint, and promote onboarding into the next dedicated slice with [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md).
+
+In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
