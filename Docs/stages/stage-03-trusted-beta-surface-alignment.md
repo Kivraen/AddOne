@@ -61,10 +61,13 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
+- Repo-wide `typecheck` proof is currently polluted by duplicate settings files and the preserved corrupt-node_modules backup tree, so a narrow repo-health cleanup pass is allowed inside `S3`.
 
 ## Recommendation
 
 Keep [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as the umbrella coordination task, treat the March 19 UI polish report as the current checkpoint, and promote onboarding into the next dedicated slice with [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md).
+
+Use [T-014-repo-typecheck-noise-cleanup.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-014-repo-typecheck-noise-cleanup.md) as a narrow support pass so later UI acceptance can rely on repo-wide `typecheck` again.
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 

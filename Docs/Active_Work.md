@@ -13,6 +13,7 @@ The coordinator owns this file.
 - Next brief: [B-007-stage-s3-onboarding-and-recovery-polish.md](briefs/B-007-stage-s3-onboarding-and-recovery-polish.md)
 - Rule: only `S3` work should be actively delegated until the coordinator accepts, blocks, or revises the stage.
 - Scoped parallel track approved on March 18, 2026: timezone audit and timezone implementation work may run in parallel inside `S3` because they directly affect onboarding, settings, recovery, and device-behavior decisions.
+- Narrow repo-health support work is also allowed inside `S3` when it directly restores proof quality for the active UI stage.
 
 ## Workstream Trust
 
@@ -36,6 +37,7 @@ The coordinator owns this file.
 | T-004 | Truth cleanup after validation | docs | Backlog | Unassigned | T-001, T-002, T-003 | [T-004](tasks/T-004-truth-cleanup-after-validation.md) | — | Strict gate | Run after implementation and validation results are known. |
 | T-005 | Beta UI audit and scope lock | app | In Progress | Codex | — | [T-005](tasks/T-005-beta-ui-audit-and-scope-lock.md) | [Report](agent-reports/2026-03-19-s3-cumulative-ui-surface-report.md) | Strict gate | Accept the cumulative March 19 report as the resident-UI checkpoint, then finish the focused on-device sweep and move execution to onboarding with `T-008`. |
 | T-008 | Onboarding and Wi-Fi recovery polish batch | app | Brief Ready | Unassigned | T-005 | [T-008](tasks/T-008-onboarding-and-wifi-recovery-polish.md) | — | Strict gate | Start with [B-007](briefs/B-007-stage-s3-onboarding-and-recovery-polish.md) and treat onboarding as the main remaining visible UI surface. |
+| T-014 | Repo typecheck noise cleanup | repo | Brief Ready | Unassigned | T-005 | [T-014](tasks/T-014-repo-typecheck-noise-cleanup.md) | — | Strict gate | Use [B-008](briefs/B-008-stage-s3-typecheck-noise-cleanup.md) to remove duplicate-file and backup-tree noise so later UI acceptance can rely on repo-wide `typecheck` again. |
 | T-013 | Challenge groups and shared board model | app | Backlog | Unassigned | T-001 | [T-013](tasks/T-013-challenge-groups-and-shared-board-model.md) | — | Strict gate | Keep as a post-beta planning task so the first-beta friends implementation does not block shared-goal groups later. |
 | T-006 | Timezone model and universal flow audit | cross-platform | Closed | Hubble | — | [T-006](tasks/T-006-timezone-model-and-universal-flow-audit.md) | [Report](agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) | Strict gate | Accepted. Next decide whether beta uses a supported-zone timezone picker or whether firmware timezone support must expand first. |
 | T-011 | Beta timezone capability and picker baseline | cross-platform | In Progress | Ptolemy | T-006 | [T-011](tasks/T-011-beta-timezone-capability-and-picker-baseline.md) | [Report](agent-reports/2026-03-18-beta-timezone-capability-and-picker-baseline.md) | Strict gate | Revise and retry with [B-006](briefs/B-006-stage-s3-timezone-revision-pass.md): restore or explicitly relocate reset-time editing, complete live manual UI proof for onboarding/settings/recovery, and resubmit. |
