@@ -16,6 +16,8 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - Timezone behavior across onboarding, settings, recovery, runtime projection, and firmware is reduced to an explicit model or a bounded blocker set.
 - The first-user beta profile model is explicitly locked or reduced to a bounded decision set.
 - The first-user beta friends and connection model is explicitly locked enough to implement without inventing architecture mid-task.
+- The first-user beta social floor is explicitly bounded so `Friends` is more than passive viewing but not an accidental full messaging product.
+- The future challenge-group direction is preserved in durable docs so beta implementation does not block it.
 - Every UI execution task in this stage explicitly requires the `building-native-ui` skill.
 
 ## Required Proof
@@ -52,6 +54,10 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 ## Open Risks / Blockers
 
 - The exact first-user sharing shape still has contradictory ideas around connection model and what the beta should expose first.
+- The exact first-beta engagement lane still needs a final coordinator lock:
+  - lightweight reactions only
+  - or a small activity feed plus lightweight reactions
+  - or another equally bounded social floor
 - The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
@@ -61,3 +67,5 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 Keep [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as the umbrella coordination task, treat the March 19 UI polish report as the current checkpoint, and promote onboarding into the next dedicated slice with [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md).
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
+
+After onboarding is calmer, move to [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) to lock and implement the first-beta social floor, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.

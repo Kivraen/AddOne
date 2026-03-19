@@ -117,7 +117,14 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 1. Lock first-user beta scope.
 - audit and close the remaining UI gaps on the visible beta surfaces
 - lock the first-user profile identity model
-- Define and implement the first-user beta `Friends` / sharing scope instead of treating it as placeholder UI.
+- Define and implement the first-user beta `Friends` / sharing scope instead of treating it as placeholder UI:
+  - deliberate linking between people
+  - browsing friends' boards and progress
+  - one bounded lightweight social lane for beta
+- Preserve the post-beta challenge-group direction so the beta social implementation does not block:
+  - shared-goal groups
+  - aggregated group boards
+  - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
 - finish onboarding and Wi-Fi recovery polish with native-flow quality
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
@@ -158,7 +165,10 @@ Owns:
 - UI tasks in this area must use `.agents/skills/building-native-ui/SKILL.md`
 
 Primary goals:
-- implement the planned `Friends` / sharing surface and remove only truly out-of-scope beta UI
+- implement the planned `Friends` / sharing surface:
+  - connection flow
+  - friend-board browsing
+  - bounded beta social lane
 - reconcile inline history editor vs dedicated route
 - polish onboarding and recovery copy and states after validation findings
 

@@ -30,6 +30,21 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - User sets a `weekly target` from `1-7`.
 - Current runtime week-start is locked to `Monday` until app and firmware both support another explicit mode without parity risk.
 - Timezone stays fixed until changed manually.
+- Device timezone remains the canonical schedule and reset timezone.
+- Any future viewer or display timezone must stay separate from the device timezone control.
+- Beta timezone support is intentionally bounded to:
+  - `UTC`
+  - `America/Los_Angeles`
+  - `America/Denver`
+  - `America/Phoenix`
+  - `America/Chicago`
+  - `America/New_York`
+  - `America/Anchorage`
+  - `Pacific/Honolulu`
+  - `Europe/Warsaw`
+  - `Europe/Kyiv`
+- Beta also allows an advanced `fixed UTC offset` mode in `15-minute` increments.
+- Fixed UTC offsets are not regional timezones and do not auto-adjust for daylight saving time.
 - Day reset defaults to midnight local, with user-configurable reset time.
 - No formal skip/pause state in v1.
 - History editing changes daily cells only; weekly success/fail always auto-recomputes.
@@ -54,7 +69,12 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - The app requires sign-in.
 - Current app auth flow is `email OTP`.
 - Future auth can add Google or password-based login later without changing the data model.
-- `Friends` / sharing is now a planned beta workstream rather than a surface to hide, but the exact first-user scope still needs to be locked before shipping.
+- `Friends` / sharing is now a planned beta workstream rather than a surface to hide.
+- First-user beta should include:
+  - deliberate person-to-person linking
+  - browsing friends' boards and recent progress
+  - one bounded lightweight social lane, not only passive viewing
+- Deeper comments, full messaging, and shared-goal challenge groups are future-facing unless explicitly pulled into scope later.
 - Ownership model for first-user v1 is `single owner, one device`.
 
 ## Future Domain And Branding
@@ -113,14 +133,15 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
   7. backend binds the device to the signed-in user when the device redeems the claim
   8. app confirms ownership and collects onboarding settings:
      - weekly target
-     - timezone from phone by default
+     - timezone from phone by default, with an explicit fallback to a fixed UTC offset when the phone's regional timezone is valid but not yet in the beta device list
      - palette
   9. app lands on the board
 - v1 does **not** rely on LAN discovery as the primary claim or onboarding mechanism.
 - LAN discovery can exist later as a support or nearby-maintenance convenience, but not as the first-boot dependency.
 - The first AP step should collect only what is necessary to get the device online.
 - Defaults:
-  - timezone from phone during onboarding
+  - timezone from phone during onboarding when the phone timezone is in the beta-supported device list
+  - otherwise use the phone's current fixed UTC offset and explain that it will not auto-adjust for daylight saving time until broader regional support ships
   - reset time = midnight
   - brightness = auto-adjust enabled
 
@@ -165,12 +186,12 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - `overlay.scrim`: `rgba(0,0,0,0.45)`
 
 ## Board And Reward Color Model
-- Default day color: `#F5F1E8`
-- Default week success: `#8FD36A`
-- Default week fail: `#A55449`
+- Default day color: `#FFFFFF`
+- Default week success: `#4DFF00`
+- Default week fail: `#FF2D00`
 - Default socket: `#141414`
 - Default socket edge: `#1F1F1F`
-- Consumer-facing presets: `Classic`, `Amber`, `Ice`, `Rose`
+- Consumer-facing presets: `Classic`, `Amber`, `Ice`, `Geek`
 - Device-side colors are customizable.
 - App shell colors are not themeable in v1.
 
@@ -243,6 +264,7 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 ## Known Gaps
 - App navigation still needs a first-user beta cleanup pass:
   - turn the `Friends` tab from placeholder UI into the intended beta sharing flow
+  - lock the first-beta social floor for `Friends` so the surface is more than passive viewing but less than a full messaging product
   - reconcile the leftover dedicated `/history` route with the currently surfaced inline board editor so the shipped UX and docs match
 - Onboarding and recovery now use the device-side Wi-Fi scan list with hidden-network manual fallback, but they still need continued polish against real devices and real routers.
 - Nearby AP maintenance currently covers setup and Wi-Fi recovery only, which is the intended first-user v1 scope.
@@ -255,6 +277,7 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 1. Lock the first-user beta surface:
    - define the first-user beta `Friends` / sharing scope
    - replace the current `Friends` placeholder UI with the intended product flow
+   - keep the first-beta social layer bounded and explicitly defer deeper messaging and shared-goal challenges unless reprioritized
    - choose one history-editing entry path and remove the stale alternative from the shipped surface
    - keep rewards, reminders, and multi-device UX hidden unless explicitly brought into scope
 2. Revalidate the current runtime path on real hardware as a locked baseline:
