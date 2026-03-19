@@ -41,4 +41,4 @@ Make the hosted beta stack and supporting docs coherent enough that real-device 
 
 ## Recommendation
 
-Dispatch [B-001-stage-s1-validation-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-001-stage-s1-validation-baseline.md) next.
+Queued behind the active UI-completion stage unless the user reprioritizes infra validation back to the front.

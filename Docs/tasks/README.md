@@ -20,6 +20,7 @@ Required frontmatter:
 Recommended frontmatter for staged work:
 - `stage_id`
 - `stage_name`
+- `required_skills`
 
 Required sections:
 - `Objective`

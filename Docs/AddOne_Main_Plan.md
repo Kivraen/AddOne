@@ -59,34 +59,34 @@ Those files are duplicate worktree snapshots and should not be treated as the cu
 ## Current Phase
 - AddOne is in `post-architecture, pre-beta validation`.
 - The stage-coordinator system is now active.
-- The current active stage is `S1: Validation Baseline Ready`.
+- The current active stage is `S3: Beta UI Completion And Social Shape`.
 - The core app, backend, realtime gateway, and firmware v2 foundations are now real.
 - The remaining work is mostly:
+  - beta UI completion and social-shape lock
   - always-on beta environment bring-up
   - real-device and router validation
-  - first-user beta scope cleanup
   - release hardening
   - doc cleanup that reflects the current codebase
 
 ## Stage Map
 
 - `S0: Coordination Bootstrap` -> accepted
-- `S1: Validation Baseline Ready` -> active
+- `S1: Validation Baseline Ready` -> pending
 - `S2: Trusted Real-Device Validation` -> pending
-- `S3: Trusted Beta Surface Alignment` -> pending
+- `S3: Beta UI Completion And Social Shape` -> active
 - `S4: Beta Hardening And Durable Release Memory` -> pending
 
-See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md) for the live stage map and [stage-01-validation-baseline-ready.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-01-validation-baseline-ready.md) for the current gate.
+See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md) for the live stage map and [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md) for the current gate.
 
 ## Current Active Stage
 
-- `S1: Validation Baseline Ready`
+- `S3: Beta UI Completion And Social Shape`
 - Goal:
-  make the hosted beta path coherent enough that real-device validation can start without infra ambiguity.
+  lock the visible beta app surface, the first-user profile model, and the beta friends shape before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-001-stage-s1-validation-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-001-stage-s1-validation-baseline.md)
+  [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
 - Current execution task:
-  [T-002-hosted-beta-bring-up.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-002-hosted-beta-bring-up.md)
+  [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md)
 - Git durability note:
   the local branch has a GitHub remote configured but is currently ahead of origin, so the latest local coordination state is committed but not yet fully backed up remotely.
 
@@ -115,8 +115,11 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 
 ## Main Plan
 1. Lock first-user beta scope.
+- audit and close the remaining UI gaps on the visible beta surfaces
+- lock the first-user profile identity model
 - Define and implement the first-user beta `Friends` / sharing scope instead of treating it as placeholder UI.
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
+- finish onboarding and Wi-Fi recovery polish with native-flow quality
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 
 2. Bring the hosted beta stack fully online.
@@ -151,6 +154,7 @@ Owns:
 - `app/`
 - `components/`
 - `hooks/`
+- UI tasks in this area must use `.agents/skills/building-native-ui/SKILL.md`
 
 Primary goals:
 - implement the planned `Friends` / sharing surface and remove only truly out-of-scope beta UI

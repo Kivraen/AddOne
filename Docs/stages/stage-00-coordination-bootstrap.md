@@ -30,7 +30,7 @@ Establish durable stage-based coordination inside the repo so future agents can 
 ## Evidence
 
 - Stage coordination docs created on March 18, 2026.
-- Active stage set to `S1: Validation Baseline Ready`.
+- Initial active stage set to `S1: Validation Baseline Ready`, then later reprioritized as the stage system adapted to user direction.
 - First copy-paste brief created for hosted beta baseline work.
 
 ## Open Risks / Blockers

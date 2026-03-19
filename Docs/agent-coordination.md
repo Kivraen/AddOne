@@ -30,6 +30,12 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - Workers may update scoped implementation files and scoped product or engineering docs named in the brief.
 - Workers do not advance a stage by themselves.
 
+## UI Work Rule
+
+- Every UI-facing task must explicitly require the `building-native-ui` skill in `.agents/skills/building-native-ui/SKILL.md`.
+- UI briefs should bias toward native Expo Router patterns, safe-area-correct scroll roots, native tabs conventions, and restrained black-glass styling that fits the existing AddOne shell.
+- Do not accept UI work that ignores the current visual direction or regresses the native navigation structure.
+
 ## Default Coordinator Loop
 
 1. Confirm the active stage and the next execution task that belongs to it.
@@ -49,7 +55,7 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - `S0 Coordination Bootstrap` -> [T-000-project-dashboard-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-000-project-dashboard-foundation.md)
 - `S1 Validation Baseline Ready` -> [T-002-hosted-beta-bring-up.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-002-hosted-beta-bring-up.md)
 - `S2 Trusted Real-Device Validation` -> [T-003-real-device-validation-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-003-real-device-validation-pass.md)
-- `S3 Trusted Beta Surface Alignment` -> [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md)
+- `S3 Beta UI Completion And Social Shape` -> [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) and later UI implementation batches
 - `S4 Beta Hardening And Durable Release Memory` -> [T-004-truth-cleanup-after-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-004-truth-cleanup-after-validation.md)
 
 ## Required Brief Contents

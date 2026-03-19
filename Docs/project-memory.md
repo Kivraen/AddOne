@@ -21,6 +21,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Worker-facing execution tasks remain under [Docs/tasks](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks).
 - Worker reports remain under [Docs/agent-reports](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports).
 - `origin` is configured as the GitHub remote for this repo.
+- UI work in this repo must use the `building-native-ui` skill in `.agents/skills/building-native-ui/SKILL.md`.
 
 ## Accepted Coordination Decisions
 
@@ -42,19 +43,23 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The realtime gateway exists and mirrors queued commands plus device-side runtime/presence events.
 - The `Friends` tab is still visible placeholder UI even though the backend already has sharing primitives.
 - Hosted beta documentation and config shape exist, but the full hosted baseline is not yet trusted enough to unblock real-device validation without ambiguity.
+- The current profile surface is still just the email or demo session and a sign-out action.
+- The backend profile model currently exposes `profiles.display_name` rather than a richer username or first/last-name shape.
 
 ## Current Active Stage
 
-- `S1: Validation Baseline Ready`
-- Stage note: [stage-01-validation-baseline-ready.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-01-validation-baseline-ready.md)
-- Next brief: [B-001-stage-s1-validation-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-001-stage-s1-validation-baseline.md)
-- First execution task: [T-002-hosted-beta-bring-up.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-002-hosted-beta-bring-up.md)
+- `S3: Beta UI Completion And Social Shape`
+- Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
+- Next brief: [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
+- First execution task: [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md)
 
 ## Current Blockers
 
-- The hosted beta path is still not explicit enough to trust as the baseline for the real-device validation stage.
-- Sharing is visibly placeholder in the app, but it is not the current active stage because infra ambiguity is the bigger proof blocker.
-- Release hardening and final truth cleanup depend on accepted validation evidence first.
+- The main screen and settings still need a coordinated polish pass rather than isolated fixes.
+- Onboarding and Wi-Fi recovery need a durable issue log and polish plan before implementation gets split.
+- The profile identity model is not locked yet.
+- The friends beta shape still has contradictory ideas and no accepted first-user connection model yet.
+- Release hardening and validation stages now depend on this UI lock pass being explicit enough to hand off cleanly.
 - GitHub is not yet a full backup of the current local branch state because `codex/ui-skin-main-screen` is ahead of origin.
 
 ## Fresh Agent Read Order

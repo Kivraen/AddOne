@@ -3,6 +3,9 @@
 You are working in:
 `<repo-path>`
 
+Required skill(s):
+- `<skill path or skill name>`
+
 Read first:
 - `<master-plan-path>`
 - `<project-memory-path>`

@@ -1,41 +1,57 @@
-# Stage S3: Trusted Beta Surface Alignment
+# Stage S3: Beta UI Completion And Social Shape
 
 ## Status
 
-`pending`
+`active`
 
 ## Goal
 
-Make the visible beta app surface match the intended shipped scope so user-facing experience and product truth are aligned.
+Lock the visible beta app surface so the main screen, settings, onboarding, Wi-Fi recovery, profile, and friends flow all move toward one intentional shipped beta experience instead of a mostly-finished collection of surfaces.
 
 ## Success Metrics
 
-- The visible `Friends` tab is no longer placeholder UI.
-- The shipped history-editing path is singular and documented clearly enough that app behavior and docs do not drift.
-- The app surface is verified with typecheck and manual UI evidence against the existing backend contract.
+- A durable UI issue log exists and is kept current as the stage evolves.
+- The current main-screen and settings polish gaps are explicitly tracked and split into implementable batches.
+- Onboarding and Wi-Fi recovery have a clear polish and verification plan.
+- The first-user beta profile model is explicitly locked or reduced to a bounded decision set.
+- The first-user beta friends and connection model is explicitly locked enough to implement without inventing architecture mid-task.
+- Every UI execution task in this stage explicitly requires the `building-native-ui` skill.
 
 ## Required Proof
 
-- Updated app files and scoped docs for the sharing surface and history path.
-- Manual UI evidence for loading, empty, populated, and error states where relevant.
-- Verification that the implementation uses the existing sharing backend contract or records a concrete blocker if not.
+- Updated durable docs covering:
+  - current UI gaps
+  - profile-model decision space
+  - friends beta decision space
+  - the next implementation batches
+- Copy-paste briefs for the next UI tasks after the audit and scope-lock pass.
+- For accepted implementation tasks inside this stage:
+  - manual UI evidence
+  - typecheck proof
+  - scoped doc updates
+  - confirmation that the existing backend contract is reused where appropriate or a blocker is named explicitly.
 
 ## Non-Negotiables
 
-- Do not leave placeholder user-facing beta surfaces in place if the stage is accepted.
-- Do not invent a second sharing model if the current backend contract is sufficient.
-- Keep scope to the beta surface and the docs needed to describe it.
+- Do not treat a 90%-done surface as good enough for beta if the remaining 10% contains real user-facing confusion.
+- Do not let the `Friends` tab remain undefined or placeholder by the time this stage is accepted.
+- Do not invent a second sharing or profile model if the existing backend contract can support the first-user beta shape.
+- Do not skip the `building-native-ui` skill on UI tasks in this stage.
+- Keep one active stage only; infra validation remains queued behind this UI lock pass unless the user reprioritizes again.
 
 ## Evidence
 
-- Backend sharing helpers already exist in `lib/supabase/addone-repository.ts`.
 - `Friends` is currently visible placeholder UI in `components/app/friends-tab-content.tsx`.
+- `Profile` currently shows only the email or demo session plus sign-out in `components/app/profile-tab-content.tsx`.
+- Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
+- A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 
 ## Open Risks / Blockers
 
-- Realtime invalidation for sharing views may still need a follow-up after the first implementation pass.
-- The exact first-user sharing shape may still need minor scope refinement after `S2`.
+- The exact first-user sharing shape still has contradictory ideas around connection model and what the beta should expose first.
+- The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
+- Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 
 ## Recommendation
 
-Dispatch after `S2` unless the user explicitly reprioritizes the visible app surface sooner.
+Start with [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), then split the implementation into narrow UI briefs.

@@ -5,16 +5,16 @@ Last updated: March 18, 2026
 ## Current Stage Map
 
 - `S0: Coordination Bootstrap` — `accepted`
-- `S1: Validation Baseline Ready` — `active`
+- `S1: Validation Baseline Ready` — `pending`
 - `S2: Trusted Real-Device Validation` — `pending`
-- `S3: Trusted Beta Surface Alignment` — `pending`
+- `S3: Beta UI Completion And Social Shape` — `active`
 - `S4: Beta Hardening And Durable Release Memory` — `pending`
 
 ## Active Stage
 
-- `S1: Validation Baseline Ready`
-- Goal: make the hosted beta path coherent enough that real-device validation can start without infra ambiguity.
-- Next brief: [B-001-stage-s1-validation-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-001-stage-s1-validation-baseline.md)
+- `S3: Beta UI Completion And Social Shape`
+- Goal: lock the visible beta product surface, capture the real UI gaps, and split the next implementation work into clean batches for home/settings polish, onboarding/recovery polish, profile identity, and friends beta scope.
+- Next brief: [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
 
 ## Stage Notes
 
@@ -27,8 +27,9 @@ Last updated: March 18, 2026
 ## Notes
 
 - Only one stage is active at a time unless the user explicitly asks for a parallel track.
-- `T-002` is the current execution task because it unlocks proof for later validation work more directly than the visible sharing placeholder does.
-- `T-001` remains planned and important, but it is intentionally queued behind the hosted baseline proof stage.
+- Stage order is adaptive. The active stage changed on March 18, 2026 because the user reprioritized finishing the beta UI surface before more infra-only proof work.
+- `T-005` is the current stage-entry task because the UI work still needs a durable issue log and several product decisions locked before it should be split into execution agents.
+- `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`
   - `revise and retry`

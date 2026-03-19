@@ -8,9 +8,9 @@ AddOne is a device-first habit tracker built as:
 
 ## Current Phase
 - validation and beta hardening
-- current active stage: `S1: Validation Baseline Ready`
+- current active stage: `S3: Beta UI Completion And Social Shape`
 - the core app, firmware, schema, onboarding, recovery, and realtime path exist in this repo
-- the main remaining work is real-device validation, onboarding/recovery polish, beta bring-up, and trimming out-of-scope UI
+- the main remaining work is UI completion, onboarding/recovery polish, profile and friends shape lock, beta bring-up, and real-device validation
 
 ## Repo Map
 - `app/`, `components/`, `hooks/`, `lib/`, `providers/`, `store/`: Expo app

@@ -2,11 +2,14 @@
 id: T-001
 title: Beta Friends surface
 stage_id: S3
-stage_name: Trusted Beta Surface Alignment
+stage_name: Beta UI Completion And Social Shape
+required_skills:
+  - .agents/skills/building-native-ui/SKILL.md
 subsystem: app
 priority: high
 owner: Unassigned
-depends_on: []
+depends_on:
+  - T-005
 owned_paths:
   - app/(app)
   - components/app
@@ -26,7 +29,7 @@ report_path: Docs/agent-reports/2026-03-16-app-beta-friends-surface.md
 Replace the placeholder `Friends` tab with the first real beta sharing flow.
 
 ## Why Now
-`Friends` is already visible in the product shell. Leaving it as placeholder UI makes the current app state confusing and breaks trust in the beta surface.
+`Friends` is already visible in the product shell. Leaving it as placeholder UI makes the current app state confusing and breaks trust in the beta surface, but it should start only after the UI audit locks the first-user connection model clearly enough to implement.
 
 ## In Scope
 - Turn the `Friends` tab into a real sharing surface using the existing sharing schema and repository helpers.
