@@ -13,6 +13,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - A durable UI issue log exists and is kept current as the stage evolves.
 - The current main-screen and settings polish gaps are explicitly tracked and split into implementable batches.
 - Onboarding and Wi-Fi recovery have a clear polish and verification plan.
+- Timezone behavior across onboarding, settings, recovery, runtime projection, and firmware is reduced to an explicit model or a bounded blocker set.
 - The first-user beta profile model is explicitly locked or reduced to a bounded decision set.
 - The first-user beta friends and connection model is explicitly locked enough to implement without inventing architecture mid-task.
 - Every UI execution task in this stage explicitly requires the `building-native-ui` skill.
@@ -44,6 +45,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - `Friends` is currently visible placeholder UI in `components/app/friends-tab-content.tsx`.
 - `Profile` currently shows only the email or demo session plus sign-out in `components/app/profile-tab-content.tsx`.
 - Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
+- Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 
 ## Open Risks / Blockers
@@ -51,7 +53,8 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - The exact first-user sharing shape still has contradictory ideas around connection model and what the beta should expose first.
 - The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
+- Firmware currently supports only a limited set of timezone mappings, so "universal timezone support" may require explicit implementation work or a constrained beta policy.
 
 ## Recommendation
 
-Start with [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), then split the implementation into narrow UI briefs.
+Continue [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), run a scoped timezone audit before locking onboarding/settings behavior, then split the remaining implementation into narrow UI briefs.

@@ -24,6 +24,10 @@ Use it to capture:
 - The main screen and settings are close, but they still need a coordinated polish pass instead of one-off tweaks.
 - The dedicated `/history` route still exists while the inline board editor from device settings is the more surfaced path.
 - The shipped beta surface still needs a small-issues sweep around hierarchy, interaction clarity, and what belongs to the board context versus account context.
+- The rotating dashboard note above the main button should stay fixed-height in its collapsed state so message changes never shift the primary action; future expansion should promote that area into a larger information surface instead of reflowing the home control.
+- Settings apply controls should read as compact material actions inside the shell, not oversized CTA pills; header and in-card apply states should share restrained sizing and typography.
+- Settings should resolve successful Apply quietly; transient success copy under the header is not needed for the current beta surface, and only errors should interrupt the layout.
+- Routine settings should separate habit, cadence, and time concerns more clearly; the weekly target uses a small bounded range and should stay compact instead of using an oversized picker treatment.
 
 ### Onboarding
 
@@ -42,6 +46,31 @@ Use it to capture:
   - how reconnect progress is communicated
   - what happens when the AP is not reachable
   - what the post-recovery success state should feel like
+
+### Time zones and calendar behavior
+
+- Timezone behavior already exists across onboarding, settings, recovery, runtime projection, and firmware, but the beta model is not explicit enough yet.
+- Current app-side reality:
+  - onboarding defaults the device timezone from the phone
+  - recovery defaults bootstrap timezone from the current device timezone or the phone timezone
+  - routine settings still use a raw IANA text input plus a `Use phone timezone` shortcut
+- Current product decision still needed:
+  - whether the device should always keep its own canonical timezone for reset and schedule behavior
+  - whether "view in another timezone" is a separate reader preference instead of the same device setting
+  - how timezone selection should work in the app:
+    - searchable picker/list
+    - raw text fallback or not
+    - unsupported-zone handling
+- Current firmware reality:
+  - the firmware only maps `UTC`, `Etc/UTC`, `America/Los_Angeles`, `America/Denver`, `America/Chicago`, and `America/New_York`
+  - that means the current stack is not universal yet even though the app stores arbitrary IANA timezone strings
+- We need a deliberate audit of:
+  - default-from-phone behavior
+  - explicit override behavior
+  - DST correctness
+  - list-of-choice UX
+  - app -> backend -> realtime -> firmware sync
+  - unsupported-zone fallback and messaging
 
 ### Profile and identity
 
@@ -85,7 +114,13 @@ Use it to capture:
 - Decide the first-user beta identity model for profile and friend-facing display.
 - Decide the first-user beta meaning of `Friends`.
 - Decide the real shipped history-editing entry path.
+- Decide the beta timezone model:
+  - device timezone versus viewer timezone
+  - default behavior
+  - manual override behavior
+  - unsupported-zone behavior
 - Decide the first implementation batch order across:
+  - timezone model and universal flow audit
   - main screen and settings polish
   - onboarding and Wi-Fi recovery polish
   - profile identity
@@ -93,7 +128,8 @@ Use it to capture:
 
 ## Next Split Candidates
 
-- `T-006` main screen and settings polish batch
-- `T-007` onboarding and Wi-Fi recovery polish batch
-- `T-008` profile identity model and account surface batch
-- `T-009` friends beta surface and connection flow batch
+- `T-006` timezone model and universal flow audit
+- `T-007` main screen and settings polish batch
+- `T-008` onboarding and Wi-Fi recovery polish batch
+- `T-009` profile identity model and account surface batch
+- `T-010` friends beta surface and connection flow batch
