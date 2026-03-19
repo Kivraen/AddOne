@@ -15,10 +15,12 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The repo already uses `Docs/` as its durable doc root.
 - The stage-coordinator convention's lowercase `docs/` paths map to `Docs/` in this repo so we do not create a second coordination tree on case-insensitive filesystems.
 - The canonical master plan remains [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md).
+- Git reliability rules live in [git-operations.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/git-operations.md).
 - The live execution queue remains [Active_Work.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/Active_Work.md).
 - Stage memory now lives under [Docs/stages](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages).
 - Worker-facing execution tasks remain under [Docs/tasks](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks).
 - Worker reports remain under [Docs/agent-reports](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports).
+- `origin` is configured as the GitHub remote for this repo.
 
 ## Accepted Coordination Decisions
 
@@ -27,7 +29,10 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Do not advance a stage without explicit coordinator review and acceptance.
 - Workers do not update project memory, the stage register, or the master plan directly.
 - The coordinator updates the source-of-truth docs after reviewing each report.
+- Treat repo docs plus git history as one memory system.
 - Important accepted coordination state should be committed without mixing in unrelated dirty files.
+- Accepted durable checkpoints should be pushed when appropriate because a GitHub remote exists for this repo.
+- Before risky redesigns, broad refactors, or overnight stopping points, prefer checkpoint commits and optional tags.
 
 ## Current Repo Reality
 
@@ -50,6 +55,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The hosted beta path is still not explicit enough to trust as the baseline for the real-device validation stage.
 - Sharing is visibly placeholder in the app, but it is not the current active stage because infra ambiguity is the bigger proof blocker.
 - Release hardening and final truth cleanup depend on accepted validation evidence first.
+- GitHub is not yet a full backup of the current local branch state because `codex/ui-skin-main-screen` is ahead of origin.
 
 ## Fresh Agent Read Order
 
@@ -57,8 +63,9 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 2. [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md)
 3. The current active stage note
 4. [agent-coordination.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-coordination.md)
-5. The assigned task brief
-6. Only the scoped product, contract, and implementation docs named in that brief
+5. [git-operations.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/git-operations.md)
+6. The assigned task brief
+7. Only the scoped product, contract, and implementation docs named in that brief
 
 ## Recovery Rules
 
@@ -66,3 +73,4 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - If a report lacks the required proof, the outcome is `revise and retry`, not `accepted`.
 - If a stage depends on secrets, infrastructure, or accounts outside the repo, record the dependency explicitly and mark the work `blocked` if proof cannot be completed.
 - Prefer updating durable docs over relying on coordinator chat memory.
+- If accepted state is committed but not pushed, record the backup gap explicitly until it is resolved.

@@ -140,6 +140,29 @@ function parseTopLevelNumberedItems(text) {
     .map((line) => stripMarkdown(line.replace(/^\d+\.\s+/, "")));
 }
 
+function extractLevelTwoSection(content, title) {
+  const lines = content.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim() === `## ${title}`);
+
+  if (startIndex === -1) {
+    return "";
+  }
+
+  const collected = [];
+
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (/^##\s+/.test(line)) {
+      break;
+    }
+
+    collected.push(line);
+  }
+
+  return collected.join("\n").trim();
+}
+
 function parseSections(content) {
   const lines = content.split(/\r?\n/);
   const sections = new Map();
@@ -474,7 +497,7 @@ async function parseMainPlan(filePath, warnings) {
   const { title, sections } = parseSections(content);
   const currentPhase = parseBullets(sections.get("Current Phase") ?? "");
   const workstreamSummary = parseTopLevelNumberedItems(sections.get("Main Plan") ?? "");
-  const sourceOfTruthLinks = extractMarkdownLinks(sections.get("Source Of Truth Map") ?? "", path.dirname(filePath));
+  const sourceOfTruthLinks = extractMarkdownLinks(extractLevelTwoSection(content, "Source Of Truth Map"), path.dirname(filePath));
 
   if (currentPhase.length === 0) {
     warnings.push("Docs/AddOne_Main_Plan.md: missing `Current Phase` bullets");

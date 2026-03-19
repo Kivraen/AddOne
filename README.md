@@ -25,6 +25,7 @@ AddOne is a device-first habit tracker built as:
 ## Start Here
 - [Master plan](Docs/AddOne_Main_Plan.md)
 - [Project memory](Docs/project-memory.md)
+- [Git operations](Docs/git-operations.md)
 - [Stage register](Docs/stages/stage-register.md)
 - [Agent coordination](Docs/agent-coordination.md)
 - [Active work](Docs/Active_Work.md)
@@ -38,5 +39,6 @@ AddOne is a device-first habit tracker built as:
 - Treat `Docs/AddOne_V1_Canonical_Spec.md` as product truth.
 - Treat `Docs/AddOne_Main_Plan.md` as execution truth.
 - Treat `Docs/stages/stage-register.md` as the live stage gate.
+- Treat `Docs/git-operations.md` as the durable git and GitHub reliability guide.
 - Keep one active stage at a time unless the user explicitly opens a parallel track.
 - Treat `.claude/worktrees/**` as duplicate worktree snapshots, not current source-of-truth docs.

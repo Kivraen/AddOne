@@ -8,6 +8,7 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 
 - [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md): canonical master plan and project phase narrative
 - [project-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/project-memory.md): stable facts and accepted coordination decisions
+- [git-operations.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/git-operations.md): git and GitHub reliability rules plus current backup status
 - [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md): current stage map and active stage pointer
 - Current active stage note under [Docs/stages](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages)
 - [Active_Work.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/Active_Work.md): live execution queue
@@ -18,8 +19,10 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 
 - One active stage at a time unless the user explicitly opens a parallel track.
 - Stages are outcome gates. Tasks are execution units inside a stage.
+- Treat repo docs and git history as one memory system.
 - Only the coordinator updates:
   - `Docs/project-memory.md`
+  - `Docs/git-operations.md`
   - `Docs/stages/stage-register.md`
   - stage note status and recommendation
   - `Docs/AddOne_Main_Plan.md`
@@ -39,6 +42,7 @@ This file defines how AddOne uses the coordinator-led stage workflow.
    - `blocked`
 6. Update project memory, stage notes, the stage register, and the active-work registry.
 7. Commit accepted or materially updated coordination state without mixing unrelated changes.
+8. Push the durable checkpoint if the remote is available, or record why it is not pushed yet.
 
 ## Stage To Task Mapping
 
@@ -58,6 +62,7 @@ Every delegated brief must include:
 - exact success metrics
 - required proof
 - non-negotiables
+- active stage note path
 - scoped files and docs
 - report format
 
@@ -82,9 +87,12 @@ If the report is stored under `Docs/agent-reports`, keep the existing frontmatte
 - `blocked`: the work cannot finish without an external dependency or a new coordinator decision
 
 Do not advance a stage on implementation claims alone.
+If a remote exists, acceptance should also consider whether the durable checkpoint has been pushed or whether the reason it is not pushed is recorded.
 
 ## Commit Policy
 
 - Commit important accepted coordination state and accepted implementation state so git becomes durable project memory.
 - Keep coordination commits scoped.
 - Never absorb unrelated dirty files into a stage acceptance commit.
+- Push accepted durable checkpoints when appropriate because this repo has a GitHub remote.
+- Before risky multi-file changes or overnight stopping points, prefer checkpoint commits and optional tags.

@@ -6,6 +6,7 @@ You are working in:
 Read first:
 - [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md)
 - [project-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/project-memory.md)
+- [git-operations.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/git-operations.md)
 - [agent-coordination.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-coordination.md)
 - [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md)
 - [stage-01-validation-baseline-ready.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-01-validation-baseline-ready.md)
@@ -52,6 +53,7 @@ Scope:
   - release hardening
 
 Documentation requirement:
+- Treat [stage-01-validation-baseline-ready.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-01-validation-baseline-ready.md) as the acceptance gate for this work.
 - Update only the scoped infra and beta docs or config files needed for this brief.
 - Do not update `Docs/project-memory.md`, `Docs/stages/stage-register.md`, or the master plan directly.
 - Return a short report. The coordinator will review it and update the stage state.

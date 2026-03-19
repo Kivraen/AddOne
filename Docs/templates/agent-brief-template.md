@@ -6,6 +6,7 @@ You are working in:
 Read first:
 - `<master-plan-path>`
 - `<project-memory-path>`
+- `<git-operations-path>`
 - `<agent-coordination-path>`
 - `<stage-register-path>`
 - `<active-stage-note-path>`
@@ -34,6 +35,7 @@ Scope:
 - Out of scope: `<excluded work>`
 
 Documentation requirement:
+- Treat `<active-stage-note-path>` as the coordinator acceptance gate for this work.
 - Update only the scoped implementation and product docs named in the brief.
 - Do not update project memory, the stage register, or the master plan directly.
 

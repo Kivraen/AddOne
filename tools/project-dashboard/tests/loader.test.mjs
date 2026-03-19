@@ -143,6 +143,7 @@ test("loader returns a valid empty model when no tasks exist", async () => {
   assert.equal(data.activeTask, null);
   assert.equal(data.blockers.length, 0);
   assert.equal(data.mainPlan.currentPhase.length, 2);
+  assert.equal(data.mainPlan.sourceOfTruthLinks.length, 2);
 });
 
 test("loader reads one task with no reports", async () => {
