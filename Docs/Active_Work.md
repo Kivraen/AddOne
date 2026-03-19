@@ -12,7 +12,7 @@ The coordinator owns this file.
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](stages/stage-03-trusted-beta-surface-alignment.md)
 - Next brief: [B-002-stage-s3-ui-audit-and-lock.md](briefs/B-002-stage-s3-ui-audit-and-lock.md)
 - Rule: only `S3` work should be actively delegated until the coordinator accepts, blocks, or revises the stage.
-- Scoped parallel track approved on March 18, 2026: timezone audit work may run in parallel inside `S3` because it directly affects onboarding, settings, recovery, and device-behavior decisions.
+- Scoped parallel track approved on March 18, 2026: timezone audit and timezone implementation work may run in parallel inside `S3` because they directly affect onboarding, settings, recovery, and device-behavior decisions.
 
 ## Workstream Trust
 
@@ -36,4 +36,4 @@ The coordinator owns this file.
 | T-004 | Truth cleanup after validation | docs | Backlog | Unassigned | T-001, T-002, T-003 | [T-004](tasks/T-004-truth-cleanup-after-validation.md) | — | Strict gate | Run after implementation and validation results are known. |
 | T-005 | Beta UI audit and scope lock | app | In Progress | Codex | — | [T-005](tasks/T-005-beta-ui-audit-and-scope-lock.md) | — | Strict gate | Keep expanding the issue log, then split the first implementation batch for timezone, profile, onboarding/recovery, and friends. |
 | T-006 | Timezone model and universal flow audit | cross-platform | Closed | Hubble | — | [T-006](tasks/T-006-timezone-model-and-universal-flow-audit.md) | [Report](agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) | Strict gate | Accepted. Next decide whether beta uses a supported-zone timezone picker or whether firmware timezone support must expand first. |
-| T-011 | Beta timezone capability and picker baseline | cross-platform | Brief Ready | Unassigned | T-006 | [T-011](tasks/T-011-beta-timezone-capability-and-picker-baseline.md) | — | Strict gate | Delegate this to a dedicated cross-platform agent if timezone work becomes the next active S3 implementation slice. |
+| T-011 | Beta timezone capability and picker baseline | cross-platform | In Progress | Ptolemy | T-006 | [T-011](tasks/T-011-beta-timezone-capability-and-picker-baseline.md) | — | Strict gate | Review the implementation against the timezone audit and stage gate, then decide whether broader firmware timezone expansion still needs a follow-up task. |
