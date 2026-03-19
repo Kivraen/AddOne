@@ -20,28 +20,31 @@ Stage:
 `S3: Beta UI Completion And Social Shape`
 
 Goal:
-`Ship a beta-safe timezone flow so the device defaults from the phone, can be changed later, supports the US baseline plus Warsaw and Kyiv, and does not pretend unsupported device timezones already work.`
+`Ship a beta-safe timezone flow so the device defaults from the phone, can be changed later, supports the US baseline plus Warsaw and Kyiv, and can optionally expose an advanced fixed UTC offset mode without pretending unsupported device timezones already work.`
 
 Success metrics:
 - Device timezone remains the canonical scheduling/reset timezone.
 - Onboarding, routine settings, and recovery all use one coherent picker-based timezone flow.
 - The beta clearly supports the US baseline plus `Europe/Warsaw` and `Europe/Kyiv`.
 - Unsupported but valid IANA zones are handled honestly and explicitly.
+- If advanced mode is shipped, fixed UTC offsets are supported as a clearly separate no-DST option.
 
 Required proof:
 - Typecheck proof.
 - Manual proof for onboarding, settings, and recovery timezone flows.
 - Proof that at least one supported US timezone, `Europe/Warsaw`, and `Europe/Kyiv` work end to end.
+- If advanced mode is shipped, proof that at least one positive and one negative fixed UTC offset work end to end.
 - A durable report written to `Docs/agent-reports/2026-03-18-beta-timezone-capability-and-picker-baseline.md`.
 
 Non-negotiables:
 - Do not merge viewer/display timezone into the device timezone setting.
 - Do not keep raw timezone text as the primary beta UX.
 - Do not imply universal on-device support if firmware still has a narrower supported set.
+- Do not present fixed UTC offsets as equivalent to regional DST-aware timezones.
 - Do not update `Docs/project-memory.md`, `Docs/stages/stage-register.md`, `Docs/AddOne_Main_Plan.md`, or `Docs/Active_Work.md` directly.
 
 Scope:
-- In scope: timezone capability model, picker/search UX, supported-zone baseline, onboarding/settings/recovery integration, and the minimum firmware support needed to honor the beta zone list.
+- In scope: timezone capability model, picker/search UX, supported-zone baseline, optional advanced fixed-offset mode, onboarding/settings/recovery integration, and the minimum firmware support needed to honor the beta zone list.
 - Out of scope: viewer/display timezone feature, unrelated UI polish, and a broad worldwide timezone guarantee if that requires a larger follow-up slice.
 
 Documentation requirement:

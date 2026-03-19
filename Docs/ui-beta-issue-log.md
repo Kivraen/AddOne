@@ -74,6 +74,10 @@ Use it to capture:
   - any future viewer/display timezone stays separate
   - raw text should not be the primary beta UX
   - next implementation should use a searchable picker with explicit support/fallback rules
+  - an advanced fixed-UTC-offset mode is acceptable if it is clearly labeled as:
+    - fixed offset only
+    - no daylight-saving auto-adjust
+    - not the same as a regional timezone like `Europe/Warsaw`
 
 ### Profile and identity
 
