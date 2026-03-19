@@ -27,7 +27,6 @@ Use it to capture:
 - The rotating dashboard note above the main button should stay fixed-height in its collapsed state so message changes never shift the primary action; future expansion should promote that area into a larger information surface instead of reflowing the home control.
 - Settings apply controls should read as compact material actions inside the shell, not oversized CTA pills; header and in-card apply states should share restrained sizing and typography.
 - Settings should resolve successful Apply quietly; transient success copy under the header is not needed for the current beta surface, and only errors should interrupt the layout.
-- Routine settings should separate habit, cadence, and time concerns more clearly; the weekly target uses a small bounded range and should stay compact instead of using an oversized picker treatment.
 
 ### Onboarding
 
@@ -55,15 +54,12 @@ Use it to capture:
   - recovery defaults bootstrap timezone from the current device timezone or the phone timezone
   - routine settings still use a raw IANA text input plus a `Use phone timezone` shortcut
 - Current product decision still needed:
-  - whether the device should always keep its own canonical timezone for reset and schedule behavior
-  - whether "view in another timezone" is a separate reader preference instead of the same device setting
-  - how timezone selection should work in the app:
-    - searchable picker/list
-    - raw text fallback or not
-    - unsupported-zone handling
+  - whether the device should always keep its own canonical timezone for reset and schedule behavior while any "view in another timezone" control stays separate
+  - whether the beta timezone chooser should be a supported-zone list with an explicit unsupported-zone fallback instead of a raw text field
+  - how phone-default behavior should react when the phone timezone is not in the firmware-supported zone list
 - Current firmware reality:
   - the firmware only maps `UTC`, `Etc/UTC`, `America/Los_Angeles`, `America/Denver`, `America/Chicago`, and `America/New_York`
-  - that means the current stack is not universal yet even though the app stores arbitrary IANA timezone strings
+  - unsupported values fall back to the firmware's default Los Angeles POSIX rules on-device, so the current stack is not universal yet even though the app stores arbitrary IANA timezone strings
 - We need a deliberate audit of:
   - default-from-phone behavior
   - explicit override behavior

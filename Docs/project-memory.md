@@ -45,6 +45,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Hosted beta documentation and config shape exist, but the full hosted baseline is not yet trusted enough to unblock real-device validation without ambiguity.
 - The current profile surface is still just the email or demo session and a sign-out action.
 - The backend profile model currently exposes `profiles.display_name` rather than a richer username or first/last-name shape.
+- The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
 
 ## Current Active Stage
 
@@ -59,6 +60,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Onboarding and Wi-Fi recovery need a durable issue log and polish plan before implementation gets split.
 - The profile identity model is not locked yet.
 - The friends beta shape still has contradictory ideas and no accepted first-user connection model yet.
+- The beta timezone policy is not locked yet: we still need to choose between a supported-zone picker with explicit fallback messaging or broader firmware timezone support.
 - Release hardening and validation stages now depend on this UI lock pass being explicit enough to hand off cleanly.
 - GitHub is not yet a full backup of the current local branch state because `codex/ui-skin-main-screen` is ahead of origin.
 

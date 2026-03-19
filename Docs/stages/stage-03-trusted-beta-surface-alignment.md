@@ -46,6 +46,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - `Profile` currently shows only the email or demo session plus sign-out in `components/app/profile-tab-content.tsx`.
 - Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
 - Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
+- The accepted timezone audit in [2026-03-18-timezone-model-and-universal-flow-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) confirms that device timezone is the canonical scheduling setting, any future viewer/display timezone must stay separate, and unsupported zones currently fall back to Los Angeles rules on-device.
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 
 ## Open Risks / Blockers
@@ -53,8 +54,10 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - The exact first-user sharing shape still has contradictory ideas around connection model and what the beta should expose first.
 - The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
-- Firmware currently supports only a limited set of timezone mappings, so "universal timezone support" may require explicit implementation work or a constrained beta policy.
+- Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
 
 ## Recommendation
 
-Continue [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), run a scoped timezone audit before locking onboarding/settings behavior, then split the remaining implementation into narrow UI briefs.
+Continue [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), treat the timezone audit as accepted, then split the next timezone work into either:
+- a supported-zone picker and fallback messaging path for beta
+- or a firmware timezone-expansion path if broader support is required now

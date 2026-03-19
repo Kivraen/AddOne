@@ -82,7 +82,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal:
-  lock the visible beta app surface, the first-user profile model, and the beta friends shape before the work is split into narrow implementation tasks.
+  lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
   [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
 - Current execution task:
@@ -120,6 +120,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Define and implement the first-user beta `Friends` / sharing scope instead of treating it as placeholder UI.
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
 - finish onboarding and Wi-Fi recovery polish with native-flow quality
+- lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 
 2. Bring the hosted beta stack fully online.
