@@ -27,6 +27,8 @@ Use it to capture:
 - The rotating dashboard note above the main button should stay fixed-height in its collapsed state so message changes never shift the primary action; future expansion should promote that area into a larger information surface instead of reflowing the home control.
 - Settings apply controls should read as compact material actions inside the shell, not oversized CTA pills; header and in-card apply states should share restrained sizing and typography.
 - Settings should resolve successful Apply quietly; transient success copy under the header is not needed for the current beta surface, and only errors should interrupt the layout.
+- Compact native pickers on settings pages should sit in clean rows without extra dark field chrome; any companion text should match the picker's own presentation instead of conflicting with it.
+- The `Routine` page no longer needs a visible reset-time control in the current beta sweep, but this now conflicts with the canonical spec still describing reset time as user-configurable; we need to explicitly lock whether beta should hide the control only or fully collapse the product/runtime model to midnight-only behavior.
 
 ### Onboarding
 
@@ -67,6 +69,11 @@ Use it to capture:
   - list-of-choice UX
   - app -> backend -> realtime -> firmware sync
   - unsupported-zone fallback and messaging
+- Accepted policy direction after `T-006`:
+  - device timezone stays canonical for scheduling and reset behavior
+  - any future viewer/display timezone stays separate
+  - raw text should not be the primary beta UX
+  - next implementation should use a searchable picker with explicit support/fallback rules
 
 ### Profile and identity
 
@@ -125,6 +132,8 @@ Use it to capture:
 ## Next Split Candidates
 
 - `T-006` timezone model and universal flow audit
+- `T-011` beta timezone capability and picker baseline
+- `T-012` broader firmware timezone expansion if we want support beyond the initial beta zone list
 - `T-007` main screen and settings polish batch
 - `T-008` onboarding and Wi-Fi recovery polish batch
 - `T-009` profile identity model and account surface batch
