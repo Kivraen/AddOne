@@ -15,6 +15,7 @@ Use it to capture:
 - Every UI task in this stage must use `.agents/skills/building-native-ui/SKILL.md`.
 - Keep issue notes lightweight, explicit, and easy to turn into task briefs.
 - Split execution only after the issue or decision is explicit enough that an agent can finish and report clearly.
+- The reusable resident UI-agent brief lives in [B-003-stage-s3-resident-ui-agent.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-003-stage-s3-resident-ui-agent.md).
 
 ## Issue Buckets
 
