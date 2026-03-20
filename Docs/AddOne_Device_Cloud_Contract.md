@@ -1,13 +1,13 @@
 # AddOne Device Cloud Contract
 
-Last locked: March 9, 2026
+Last locked: March 16, 2026
 
 This document defines the v1 contract between:
 - the mobile app during onboarding
 - the device firmware during setup and steady-state sync
 - the Supabase backend
 
-This is the current target contract. Some parts are implemented in staging already, and some still need firmware to consume them.
+This is the current target contract. Most of it now exists in this repo and staging/beta infrastructure. The remaining work is end-to-end hardware validation, beta bring-up, and custom reward asset sync.
 
 For the local AP HTTP contract, see [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
 For the low-latency device delivery lane, see [AddOne_Device_Realtime_Transport.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md).
@@ -187,9 +187,10 @@ Purpose:
 - Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
 - Firmware v2 now also applies `apply_device_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
 - A dedicated realtime transport contract now exists for MQTT-based online command delivery, with fallback polling retained for reliability.
+- The gateway now handles MQTT command publish plus MQTT ack, presence, day-event, and runtime-snapshot forwarding back into the existing Supabase RPC surface.
 - Runtime snapshots should now use the same realtime lane whenever possible:
   - `device -> MQTT -> gateway -> upload_device_runtime_snapshot(...)`
   - direct device -> Supabase HTTP snapshot upload is fallback only
 - `device_runtime_snapshots` must be in the `supabase_realtime` publication or the app can miss live device-confirmed state and fall back to polling.
 - The remaining firmware gap is custom reward asset sync and end-to-end hardware validation.
-- Developer staging tools currently simulate claim redemption from the app until firmware is ready.
+- Developer testing helpers still exist for manual staging checks, but firmware now owns the intended claim / heartbeat / snapshot runtime path.

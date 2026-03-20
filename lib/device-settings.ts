@@ -1,5 +1,7 @@
 import { paletteById } from "@/constants/palettes";
 import { getMergedPalette } from "@/lib/board";
+import { getDeviceTimezoneStatus } from "@/lib/device-timezone";
+import { MINIMUM_GOAL_MAX_LENGTH, normalizeMinimumGoalForSave } from "@/lib/habit-details";
 import { AddOneDevice, BoardPalette, DeviceSettingsPatch } from "@/types/addone";
 
 export type EditablePaletteRole = "off" | "on" | "weekSuccess" | "weekFail";
@@ -17,6 +19,7 @@ export interface DeviceSettingsDraft {
   brightness: number;
   customPalette: Partial<BoardPalette>;
   habitName: string;
+  minimumGoal: string;
   paletteId: string;
   resetTime: string;
   timezone: string;
@@ -26,6 +29,7 @@ export interface DeviceSettingsDraft {
 export interface DeviceSettingsDraftValidation {
   brightness?: string;
   habitName?: string;
+  minimumGoal?: string;
   resetTime?: string;
   timezone?: string;
   isValid: boolean;
@@ -100,12 +104,13 @@ export function sanitizeCustomPalette(customPalette?: Partial<BoardPalette>) {
   return sanitized;
 }
 
-export function createSettingsDraftFromDevice(device: AddOneDevice): DeviceSettingsDraft {
+export function createSettingsDraftFromDevice(device: AddOneDevice, minimumGoal = ""): DeviceSettingsDraft {
   return {
     autoBrightness: device.autoBrightness,
     brightness: device.brightness,
     customPalette: sanitizeCustomPalette(device.customPalette),
     habitName: device.name,
+    minimumGoal,
     paletteId: paletteById[device.paletteId] ? device.paletteId : "classic",
     resetTime: device.resetTime,
     timezone: device.timezone,
@@ -119,6 +124,7 @@ export function normalizeDraft(draft: DeviceSettingsDraft): DeviceSettingsDraft 
     brightness: Math.max(0, Math.min(100, Math.round(draft.brightness))),
     customPalette: sanitizeCustomPalette(draft.customPalette),
     habitName: draft.habitName,
+    minimumGoal: draft.minimumGoal,
     paletteId: paletteById[draft.paletteId] ? draft.paletteId : "classic",
     resetTime: draft.resetTime,
     timezone: draft.timezone,
@@ -132,8 +138,13 @@ export function validateSettingsDraft(draft: DeviceSettingsDraft): DeviceSetting
     errors.habitName = "Enter a habit name.";
   }
 
-  if (!draft.timezone.trim()) {
-    errors.timezone = "Enter a timezone.";
+  if (draft.minimumGoal.length > MINIMUM_GOAL_MAX_LENGTH) {
+    errors.minimumGoal = `Keep the minimum under ${MINIMUM_GOAL_MAX_LENGTH} characters.`;
+  }
+
+  const timezoneStatus = getDeviceTimezoneStatus(draft.timezone);
+  if (timezoneStatus.kind === "unknown") {
+    errors.timezone = "Choose a supported regional timezone or a fixed UTC offset.";
   }
 
   if (!/^\d{2}:\d{2}$/.test(draft.resetTime)) {
@@ -166,6 +177,7 @@ export function areSettingsDraftsEqual(left: DeviceSettingsDraft, right: DeviceS
     left.autoBrightness === right.autoBrightness &&
     left.brightness === right.brightness &&
     left.habitName === right.habitName &&
+    normalizeMinimumGoalForSave(left.minimumGoal) === normalizeMinimumGoalForSave(right.minimumGoal) &&
     left.paletteId === right.paletteId &&
     left.resetTime === right.resetTime &&
     left.timezone === right.timezone &&
@@ -197,8 +209,8 @@ export function buildSettingsPatchFromDraft(base: DeviceSettingsDraft, draft: De
     patch.palette_preset = draft.paletteId;
   }
 
-  if (!areCustomPalettesEqual(base.customPalette, draft.customPalette)) {
-    patch.palette_custom = sanitizeCustomPalette(draft.customPalette);
+  if (draft.paletteId !== base.paletteId || !areCustomPalettesEqual(base.customPalette, draft.customPalette)) {
+    patch.palette_custom = buildResolvedPaletteCustom(draft.paletteId, draft.customPalette);
     if (patch.palette_preset === undefined) {
       patch.palette_preset = draft.paletteId;
     }
@@ -217,24 +229,36 @@ export function buildSettingsPatchFromDraft(base: DeviceSettingsDraft, draft: De
 
 export function buildDraftSummary(draft: DeviceSettingsDraft) {
   const palette = getMergedPalette(draft.paletteId, draft.customPalette);
-  const isCustom = Object.keys(sanitizeCustomPalette(draft.customPalette)).length > 0;
   const trimmedHabitName = draft.habitName.trim() || "Untitled";
+  const trimmedMinimumGoal = normalizeMinimumGoalForSave(draft.minimumGoal);
   const weeklyTargetLabel = draft.weeklyTarget === 1 ? "1 day each week" : `${draft.weeklyTarget} days each week`;
+  const timezoneStatus = getDeviceTimezoneStatus(draft.timezone);
 
   return {
     appearance: {
       brightness: draft.autoBrightness ? "Auto brightness" : `Brightness ${draft.brightness}%`,
-      colors: [palette.socketEdge, palette.dayOn, palette.weekSuccess, palette.weekFail],
-      paletteLabel: isCustom ? `${paletteById[draft.paletteId]?.name ?? "Classic"} + Custom` : paletteById[draft.paletteId]?.name ?? "Classic",
+      colors: [palette.dayOn, palette.weekSuccess, palette.weekFail],
+      paletteLabel: paletteById[draft.paletteId]?.name ?? "Classic",
     },
-    habit: `${trimmedHabitName} · ${draft.weeklyTarget} days`,
-    routine: `${trimmedHabitName} · ${weeklyTargetLabel} · ${draft.resetTime}`,
-    time: `${draft.timezone} · ${draft.resetTime}`,
+    habit: trimmedMinimumGoal ? `${trimmedHabitName} · ${trimmedMinimumGoal}` : `${trimmedHabitName} · ${draft.weeklyTarget} days`,
+    routine: [trimmedHabitName, weeklyTargetLabel, trimmedMinimumGoal].filter(Boolean).join(" · "),
+    time: `${timezoneStatus.label} · ${draft.resetTime}`,
   };
 }
 
 export function getDraftPalette(draft: DeviceSettingsDraft) {
   return getMergedPalette(draft.paletteId, draft.customPalette);
+}
+
+export function buildResolvedPaletteCustom(paletteId: string, customPalette?: Partial<BoardPalette>) {
+  const palette = getMergedPalette(paletteId, customPalette);
+  return sanitizeCustomPalette({
+    dayOn: palette.dayOn,
+    socket: palette.socket,
+    socketEdge: palette.socketEdge,
+    weekFail: palette.weekFail,
+    weekSuccess: palette.weekSuccess,
+  });
 }
 
 export function getEditablePaletteRoleLabel(role: EditablePaletteRole) {
@@ -321,6 +345,13 @@ export function setEditablePaletteRoleColor(draft: DeviceSettingsDraft, role: Ed
 
 export function resetEditablePaletteRoleToPreset(draft: DeviceSettingsDraft, role: EditablePaletteRole): DeviceSettingsDraft {
   return setEditablePaletteRoleColor(draft, role, getEditablePaletteRoleColor({ ...draft, customPalette: {} }, role));
+}
+
+export function resetPaletteToPreset(draft: DeviceSettingsDraft): DeviceSettingsDraft {
+  return {
+    ...normalizeDraft(draft),
+    customPalette: buildResolvedPaletteCustom(draft.paletteId),
+  };
 }
 
 export function rgbToHex(red: number, green: number, blue: number) {

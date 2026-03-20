@@ -146,6 +146,8 @@ function mapDeviceRowToAppDevice(input: {
     id: device.id,
     isLive: deviceSeemsOnline(device),
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
+    lastSeenAt: device.last_seen_at,
+    lastSyncAt: device.last_sync_at,
     name: device.name,
     ownerName: currentUserName,
     runtimeRevision: Number(snapshot?.revision ?? device.last_runtime_revision ?? 0),
@@ -504,6 +506,18 @@ export async function markDeviceOnboardingWaiting(sessionId: string) {
 
   return mapDeviceOnboardingSessionRow(
     assertData(error, data as DeviceOnboardingSessionRow, "Failed to mark the onboarding session as waiting for device."),
+  );
+}
+
+export async function cancelDeviceOnboardingSession(sessionId: string, reason?: string | null) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("cancel_device_onboarding_session", {
+    p_reason: reason ?? null,
+    p_session_id: sessionId,
+  });
+
+  return mapDeviceOnboardingSessionRow(
+    assertData(error, data as DeviceOnboardingSessionRow, "Failed to cancel the onboarding session."),
   );
 }
 

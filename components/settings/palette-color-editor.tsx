@@ -6,7 +6,9 @@ import { PixelGrid } from "@/components/board/pixel-grid";
 import {
   SettingsDivider,
   SettingsFieldLabel,
+  SETTINGS_HEADER_GAP,
   SettingsNote,
+  SETTINGS_PAGE_GAP,
   SettingsSectionTitle,
   SettingsSurface,
 } from "@/components/settings/device-settings-scaffold";
@@ -20,12 +22,20 @@ import {
   getEditablePaletteRoleColor,
   getEditablePaletteRoleLabel,
   normalizeHexColor,
-  resetEditablePaletteRoleToPreset,
+  resetPaletteToPreset,
   setEditablePaletteRoleColor,
 } from "@/lib/device-settings";
 import { withAlpha } from "@/lib/color";
 import { usePaletteHistoryStore } from "@/store/palette-history-store";
 import { AddOneDevice, BoardPalette } from "@/types/addone";
+
+const COLOR_CARD_INNER_GAP = 16;
+const COLOR_FIELD_LABEL_GAP = 10;
+const COLOR_FIELD_TOP_SPACE = 12;
+const COLOR_SUBSECTION_TOP_SPACE = 16;
+const COLOR_HUE_BOTTOM_SPACE = 10;
+const COLOR_ACTION_DIVIDER_TOP_SPACE = 18;
+const COLOR_ACTION_DIVIDER_GAP = 16;
 
 function PreviewBoard({ device, palette }: { device: AddOneDevice; palette: BoardPalette }) {
   const { width } = useWindowDimensions();
@@ -40,8 +50,8 @@ function PreviewBoard({ device, palette }: { device: AddOneDevice; palette: Boar
   }
 
   return (
-    <SettingsSurface style={{ gap: 24, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 }}>
-      <View style={{ paddingBottom: 2 }}>
+    <SettingsSurface style={{ paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 }}>
+      <View style={{ gap: SETTINGS_HEADER_GAP }}>
         <SettingsSectionTitle>Live preview</SettingsSectionTitle>
       </View>
       <View
@@ -55,8 +65,8 @@ function PreviewBoard({ device, palette }: { device: AddOneDevice; palette: Boar
           borderColor: withAlpha(theme.colors.textPrimary, 0.06),
           backgroundColor: palette.socket,
           paddingHorizontal: 16,
-          paddingTop: 14,
-          paddingBottom: 12,
+          paddingTop: 16,
+          paddingBottom: 14,
         }}
       >
         <PixelGrid
@@ -94,7 +104,7 @@ function QuickSwatches({
   );
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: COLOR_FIELD_LABEL_GAP, paddingTop: COLOR_SUBSECTION_TOP_SPACE }}>
       <SettingsFieldLabel>Quick colors</SettingsFieldLabel>
 
       <View
@@ -134,16 +144,18 @@ export function PaletteColorEditor({
   draft,
   device,
   onChangeRoleColor,
-  onResetRole,
+  onResetPalette,
   onSelectRole,
+  paletteLabel,
 }: {
   activeRole: EditablePaletteRole;
   appliedDraft: DeviceSettingsDraft;
   draft: DeviceSettingsDraft;
   device: AddOneDevice;
   onChangeRoleColor: (role: EditablePaletteRole, color: string) => void;
-  onResetRole: (role: EditablePaletteRole) => void;
+  onResetPalette: () => void;
   onSelectRole: (role: EditablePaletteRole) => void;
+  paletteLabel: string;
 }) {
   const [liveDraft, setLiveDraft] = useState<DeviceSettingsDraft | null>(null);
   const editorDraft = liveDraft ?? draft;
@@ -182,12 +194,12 @@ export function PaletteColorEditor({
     return normalized;
   }
 
-  function resetRoleLocally(role: EditablePaletteRole) {
-    setLiveDraft((current) => resetEditablePaletteRoleToPreset(current ?? draft, role));
+  function resetPaletteLocally() {
+    setLiveDraft((current) => resetPaletteToPreset(current ?? draft));
   }
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: SETTINGS_PAGE_GAP }}>
       <PreviewBoard
         device={{
           ...device,
@@ -197,35 +209,36 @@ export function PaletteColorEditor({
         palette={draftPalette}
       />
 
-      <SettingsSurface style={{ gap: 10, paddingVertical: 8 }}>
-        <View style={{ gap: 4 }}>
+      <SettingsSurface>
+        <View style={{ gap: SETTINGS_HEADER_GAP }}>
           <SettingsFieldLabel>Board colors</SettingsFieldLabel>
-          <SettingsNote>Pick the part of the board you want to edit, then fine-tune it below.</SettingsNote>
+          <SettingsNote>Pick a color to edit.</SettingsNote>
         </View>
-        <SettingsDivider />
 
-        {(["off", "on", "weekSuccess", "weekFail"] as EditablePaletteRole[]).map((role, index, list) => {
-          const color = getEditablePaletteRoleColor(editorDraft, role);
-          const selected = role === activeRole;
+        <View style={{ gap: 12 }}>
+          {(["on", "weekSuccess", "weekFail"] as EditablePaletteRole[]).map((role) => {
+            const color = getEditablePaletteRoleColor(editorDraft, role);
+            const selected = role === activeRole;
 
-          return (
-            <View key={role}>
+            return (
               <Pressable
+                key={role}
                 onPress={() => onSelectRole(role)}
                 style={{
-                  minHeight: 52,
+                  minHeight: 56,
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: 12,
                   borderRadius: theme.radius.card,
                   borderWidth: 1,
-                  borderColor: selected ? withAlpha(theme.colors.textPrimary, 0.12) : "transparent",
-                  backgroundColor: selected ? withAlpha(theme.colors.textPrimary, 0.06) : "transparent",
-                  paddingHorizontal: 10,
+                  borderColor: selected ? withAlpha(theme.colors.textPrimary, 0.12) : withAlpha(theme.colors.textPrimary, 0.06),
+                  backgroundColor: selected ? withAlpha(theme.colors.textPrimary, 0.06) : withAlpha(theme.colors.bgBase, 0.34),
+                  paddingHorizontal: 12,
+                  paddingVertical: 12,
                 }}
               >
-                <View style={{ gap: 2 }}>
+                <View style={{ gap: 3 }}>
                   <SettingsFieldLabel>{getEditablePaletteRoleLabel(role)}</SettingsFieldLabel>
                   <SettingsNote>{color}</SettingsNote>
                 </View>
@@ -241,17 +254,14 @@ export function PaletteColorEditor({
                   }}
                 />
               </Pressable>
-              {index < list.length - 1 ? (
-                <View style={{ marginVertical: 4, height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.06) }} />
-              ) : null}
-            </View>
-          );
-        })}
+            );
+          })}
+        </View>
       </SettingsSurface>
 
-      <SettingsSurface>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+      <SettingsSurface style={{ paddingVertical: 20 }}>
+        <View style={{ gap: SETTINGS_HEADER_GAP }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View
               style={{
                 width: 28,
@@ -262,98 +272,75 @@ export function PaletteColorEditor({
                 backgroundColor: activeColor,
               }}
             />
-            <View style={{ flex: 1, gap: 2 }}>
-              <SettingsFieldLabel>{getEditablePaletteRoleLabel(activeRole)}</SettingsFieldLabel>
-              <SettingsNote>Drag across the palette, then use hue and hex to dial the color in.</SettingsNote>
-            </View>
+            <SettingsFieldLabel>{getEditablePaletteRoleLabel(activeRole)}</SettingsFieldLabel>
           </View>
 
-          <Pressable
-            onPress={() => {
-              resetRoleLocally(activeRole);
-              onResetRole(activeRole);
-            }}
-            style={{
-              minHeight: 36,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: theme.radius.pill,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-              paddingHorizontal: 12,
-            }}
-          >
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: 12,
-                lineHeight: 16,
-              }}
-            >
-              Reset
-            </Text>
-          </Pressable>
+          <SettingsNote>Adjust with palette, hue, or hex.</SettingsNote>
         </View>
 
-        <ColorPicker
-          adaptSpectrum
-          boundedThumb
-          onChangeJS={(colors) => {
-            isPickerInteractingRef.current = true;
-            applyRoleColorLocally(activeRole, colors.hex.toUpperCase());
-          }}
-          onCompleteJS={(colors) => {
-            isPickerInteractingRef.current = false;
-            const normalized = applyRoleColorLocally(activeRole, colors.hex.toUpperCase());
-            if (!normalized) {
-              return;
-            }
+        <SettingsDivider />
 
-            setPickerValue(normalized);
-            onChangeRoleColor(activeRole, normalized);
-          }}
-          style={{ gap: 14 }}
-          thumbAnimationDuration={0}
-          thumbScaleAnimationDuration={120}
-          thumbSize={26}
-          value={pickerValue}
-        >
-          <Panel1
-            style={{
-              width: "100%",
-              height: 220,
-              borderRadius: theme.radius.sheet,
+        <View style={{ gap: COLOR_CARD_INNER_GAP, paddingTop: 16 }}>
+          <ColorPicker
+            adaptSpectrum
+            boundedThumb
+            onChangeJS={(colors) => {
+              isPickerInteractingRef.current = true;
+              applyRoleColorLocally(activeRole, colors.hex.toUpperCase());
             }}
-          />
-          <View style={{ gap: 6 }}>
-            <SettingsFieldLabel>Hue</SettingsFieldLabel>
-            <HueSlider
+            onCompleteJS={(colors) => {
+              isPickerInteractingRef.current = false;
+              const normalized = applyRoleColorLocally(activeRole, colors.hex.toUpperCase());
+              if (!normalized) {
+                return;
+              }
+
+              setPickerValue(normalized);
+              onChangeRoleColor(activeRole, normalized);
+            }}
+            style={{ gap: COLOR_CARD_INNER_GAP }}
+            thumbAnimationDuration={0}
+            thumbScaleAnimationDuration={120}
+            thumbSize={26}
+            value={pickerValue}
+          >
+            <Panel1
               style={{
-                borderRadius: theme.radius.pill,
                 width: "100%",
+                height: 220,
+                borderRadius: theme.radius.sheet,
               }}
             />
-          </View>
-        </ColorPicker>
+            <View style={{ gap: COLOR_FIELD_LABEL_GAP, paddingTop: COLOR_FIELD_TOP_SPACE, paddingBottom: COLOR_HUE_BOTTOM_SPACE }}>
+              <SettingsFieldLabel>Hue</SettingsFieldLabel>
+              <HueSlider
+                style={{
+                  borderRadius: theme.radius.pill,
+                  width: "100%",
+                }}
+              />
+            </View>
+          </ColorPicker>
+        </View>
 
-        <QuickSwatches
-          activeColor={activeColor}
-          appliedColor={appliedColor}
-          activeRole={activeRole}
-          onChange={(next) => {
-            const normalized = applyRoleColorLocally(activeRole, next);
-            if (!normalized) {
-              return;
-            }
+        <View style={{ gap: COLOR_CARD_INNER_GAP }}>
+          <QuickSwatches
+            activeColor={activeColor}
+            appliedColor={appliedColor}
+            activeRole={activeRole}
+            onChange={(next) => {
+              const normalized = applyRoleColorLocally(activeRole, next);
+              if (!normalized) {
+                return;
+              }
 
-            setPickerValue(normalized);
-            onChangeRoleColor(activeRole, normalized);
-          }}
-        />
+              setPickerValue(normalized);
+              onChangeRoleColor(activeRole, normalized);
+            }}
+          />
+        </View>
 
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: COLOR_FIELD_LABEL_GAP, paddingTop: COLOR_SUBSECTION_TOP_SPACE }}>
           <SettingsFieldLabel>Hex</SettingsFieldLabel>
           <TextInput
             autoCapitalize="characters"
@@ -383,6 +370,38 @@ export function PaletteColorEditor({
             }}
             value={hexInput}
           />
+        </View>
+
+        <View style={{ gap: COLOR_ACTION_DIVIDER_GAP, paddingTop: COLOR_ACTION_DIVIDER_TOP_SPACE }}>
+          <SettingsDivider />
+
+          <Pressable
+            onPress={() => {
+              resetPaletteLocally();
+              onResetPalette();
+            }}
+            style={{
+              minHeight: 46,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: theme.radius.sheet,
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+              backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+              paddingHorizontal: 16,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: theme.typography.label.fontSize,
+                lineHeight: theme.typography.label.lineHeight,
+              }}
+            >
+              {`Reset ${paletteLabel}`}
+            </Text>
+          </Pressable>
         </View>
       </SettingsSurface>
     </View>

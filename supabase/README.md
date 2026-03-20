@@ -1,45 +1,62 @@
 # AddOne Supabase Layout
 
-This folder holds the AddOne cloud schema for the new product backend.
+This folder holds the live AddOne cloud schema for the app, firmware, and runtime mirror behavior.
 
-Project strategy:
-- `legacy-prototype`: keep the existing distributed prototype devices on their current backend
-- `addone-development`: local/dev app and firmware validation backend
-- `addone-beta`: clean pre-launch validation backend
-- `addone-production`: real AddOne launch backend
+## Project Strategy
+
+- `legacy-prototype`: keep older distributed prototype devices on their existing backend
+- `addone-development`: future clean development backend
+- `addone-beta`: future clean pre-launch validation backend
+- `addone-production`: launch backend
 
 Current temporary decision:
-- the hosted Supabase project `AddOne` is the active beta backend for now
-- a distinct `addone-beta` project is deferred until there is another project slot or an upgraded Supabase plan
+- the hosted Supabase project `AddOne` (`sqhzaayqacmgxseiqihs`) is the active beta backend for now
+- a distinct `addone-beta` project is deferred until there is another project slot or an upgraded plan
 
-Rules:
-- Do not point new AddOne app code at the legacy prototype project.
-- Do not reuse the legacy schema as the AddOne production schema.
-- Migrate old devices selectively later, through an explicit import path.
+## Current Schema Direction
 
-Initial migration:
+The current schema is built around the device-authoritative runtime model:
+- ownership, auth, onboarding sessions, and device metadata live in Supabase
+- app-originated changes become queued commands
+- the physical device is the runtime authority for board state and device-affecting settings
+- `device_runtime_snapshots` are the primary cloud mirror for app/runtime reads
+- `device_day_states` remains a derived compatibility/read model, not the primary runtime truth
+
+## Key Migrations
+
+Core foundation:
 - `migrations/20260308113000_init_addone_schema.sql`
 
-What this migration sets up:
-- user profiles
-- devices
-- owner/viewer memberships
-- share codes and share requests
-- reward artwork metadata
-- day-state event log plus current day-state snapshot
-- queued device commands
-- core RPC helpers for claiming devices, sharing, day-event writes, and command queueing
-- row-level security policies for app access
+Onboarding and cloud sync:
+- `migrations/20260308153000_add_device_onboarding_sessions.sql`
+- `migrations/20260308170000_add_device_cloud_sync_contract.sql`
 
-How to apply once a target environment exists:
-1. Create the `addone-development`, `addone-beta`, or `addone-production` Supabase project.
-2. Apply the SQL in the Supabase SQL editor or via the Supabase CLI migration flow.
-3. Set the app env vars from that staging project:
-   - `EXPO_PUBLIC_SUPABASE_URL`
-   - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-4. After the schema is live, generate typed database types and replace the mock device store with query-backed repositories.
+Runtime-authority rebuild:
+- `migrations/20260309104500_device_authoritative_runtime.sql`
+- `migrations/20260309150000_runtime_authority_rebuild.sql`
+- `migrations/20260309162000_enable_runtime_snapshot_realtime.sql`
 
-Important data boundary:
-- Wi-Fi passwords and device-local secrets do not belong in Supabase.
-- The cloud stores device metadata, ownership, history, rewards metadata, and queued commands.
-- The physical device remains authoritative for its local loop when offline, but cloud history uses timestamped day-state events for reconciliation.
+Later runtime/settings support:
+- `migrations/20260309171000_add_wifi_recovery_command.sql`
+- `migrations/20260315194000_add_palette_custom_to_runtime_snapshots.sql`
+
+## Current Repo Status
+
+- typed database types already exist in `lib/supabase/database.types.ts`
+- the app already reads owned devices from Supabase
+- the app already uses onboarding-session RPCs and runtime/device command RPCs
+- the schema already supports runtime snapshots, history drafts, live settings apply, and Wi-Fi recovery commands
+- sharing, rewards, and reminders still exist in schema for future phases, but first-user v1 should keep those surfaces hidden
+
+## Data Boundary
+
+- Wi-Fi passwords do not belong in Supabase
+- raw device-local secrets do not belong in Supabase
+- Supabase stores ownership, metadata, queued commands, onboarding sessions, and the mirrored latest runtime snapshot
+- when the device and cloud disagree, the device snapshot is the healing path
+
+## Current Next Steps
+
+1. Validate the hosted beta environment end-to-end with real device snapshots and command delivery.
+2. Keep the docs in `Docs/` aligned with any schema or RPC changes.
+3. Create the dedicated beta Supabase project when account capacity allows, then regenerate `lib/supabase/database.types.ts`.

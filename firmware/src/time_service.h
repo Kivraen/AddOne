@@ -20,9 +20,10 @@ public:
   void update(bool wifiConnected);
 
 private:
-  void applyTimezone_(const char* timezoneIana);
+  void applyTimezone_(const char* timezoneValue);
   bool loadRtcToSystem_();
-  static const char* posixTimezoneForIana_(const char* timezoneIana);
+  static bool parseFixedOffsetTimezone_(const char* timezoneValue, int16_t& outOffsetMinutes);
+  static bool posixTimezoneForValue_(const char* timezoneValue, char* outValue, size_t outValueSize);
   static bool saneUtc_(time_t utc);
   void syncRtcFromSystem_();
   void startNtpSync_();

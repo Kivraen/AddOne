@@ -5,7 +5,7 @@ This is the fallback deployment shape if we decide to self-host more of beta our
 Preferred beta setup stays:
 - managed MQTT broker
 - small hosted gateway service
-- dedicated beta Supabase project
+- current hosted `AddOne` Supabase project as beta for now
 - EAS internal app builds
 
 Use this VPS stack only if we explicitly want the broker and gateway under our own server management.

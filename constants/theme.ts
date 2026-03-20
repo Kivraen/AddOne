@@ -32,11 +32,11 @@ export const theme = {
     40: 40,
   },
   radius: {
-    sm: 10,
-    card: 18,
-    sheet: 24,
-    pill: 20,
-    hero: 30,
+    sm: 8,
+    card: 15,
+    sheet: 14,
+    pill: 16,
+    hero: 22,
     full: 999,
   },
   layout: {
@@ -63,11 +63,11 @@ export const theme = {
   },
   materials: {
     panel: {
-      fill: "rgba(17,21,27,0.78)",
-      fillStrong: "rgba(17,21,27,0.92)",
+      fill: "#121212",
+      fillStrong: "#121212",
       border: "rgba(244,245,247,0.08)",
       borderStrong: "rgba(244,245,247,0.12)",
-      highlight: "rgba(255,255,255,0.05)",
+      highlight: "transparent",
     },
   },
   shadows: {

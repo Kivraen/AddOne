@@ -8,13 +8,16 @@ import {
   buildSettingsPatchFromDraft,
   createSettingsDraftFromDevice,
   getDraftPalette,
+  normalizeDraft,
   validateSettingsDraft,
 } from "@/lib/device-settings";
+import { normalizeMinimumGoalForSave } from "@/lib/habit-details";
+import { useDeviceHabitMetadataStore } from "@/store/device-habit-metadata-store";
 import { useDeviceSettingsDraftStore } from "@/store/device-settings-draft-store";
 import { usePaletteHistoryStore } from "@/store/palette-history-store";
 import { AddOneDevice } from "@/types/addone";
 
-function deviceSettingsSourceKey(device: AddOneDevice) {
+function deviceSettingsSourceKey(device: AddOneDevice, minimumGoal: string) {
   return [
     device.id,
     device.runtimeRevision,
@@ -27,11 +30,14 @@ function deviceSettingsSourceKey(device: AddOneDevice) {
     device.resetTime,
     device.autoBrightness,
     device.brightness,
+    normalizeMinimumGoalForSave(minimumGoal),
   ].join(":");
 }
 
 export function useDeviceSettingsDraft(device: AddOneDevice) {
   const { applySettingsDraft, isSavingSettings } = useDeviceActions();
+  const currentMinimumGoal = useDeviceHabitMetadataStore((state) => state.minimumGoalByDeviceId[device.id] ?? "");
+  const setMinimumGoal = useDeviceHabitMetadataStore((state) => state.setMinimumGoal);
   const rememberAppliedPalette = usePaletteHistoryStore((state) => state.rememberAppliedPalette);
   const {
     baseDraft,
@@ -39,6 +45,7 @@ export function useDeviceSettingsDraft(device: AddOneDevice) {
     draft,
     initializeFromDevice,
     markCommitted,
+    resetPalette,
     resetToBase,
     setColorRole,
     resetColorRole,
@@ -51,43 +58,48 @@ export function useDeviceSettingsDraft(device: AddOneDevice) {
     statusMessage,
     syncFromDeviceIfClean,
   } = useDeviceSettingsDraftStore();
-  const currentSourceKey = deviceSettingsSourceKey(device);
+  const currentSourceKey = deviceSettingsSourceKey(device, currentMinimumGoal);
 
   useEffect(() => {
     if (!draft || !baseDraft) {
-      initializeFromDevice(device, currentSourceKey);
+      initializeFromDevice(device, currentSourceKey, currentMinimumGoal);
       return;
     }
 
-    syncFromDeviceIfClean(device, currentSourceKey);
-  }, [baseDraft, currentSourceKey, device, draft, initializeFromDevice, syncFromDeviceIfClean]);
+    syncFromDeviceIfClean(device, currentSourceKey, currentMinimumGoal);
+  }, [baseDraft, currentMinimumGoal, currentSourceKey, device, draft, initializeFromDevice, syncFromDeviceIfClean]);
 
-  const resolvedBaseDraft = baseDraft ?? createSettingsDraftFromDevice(device);
+  const resolvedBaseDraft = baseDraft ?? createSettingsDraftFromDevice(device, currentMinimumGoal);
   const resolvedDraft = draft ?? resolvedBaseDraft;
   const validation = useMemo(() => validateSettingsDraft(resolvedDraft), [resolvedDraft]);
   const patch = useMemo(
     () => buildSettingsPatchFromDraft(resolvedBaseDraft, resolvedDraft),
     [resolvedBaseDraft, resolvedDraft],
   );
+  const minimumGoalDirty = normalizeMinimumGoalForSave(resolvedBaseDraft.minimumGoal) !== normalizeMinimumGoalForSave(resolvedDraft.minimumGoal);
   const isDirty = !areSettingsDraftsEqual(resolvedBaseDraft, resolvedDraft);
   const previewPalette = useMemo(() => getDraftPalette(resolvedDraft), [resolvedDraft]);
   const summary = useMemo(() => buildDraftSummary(resolvedDraft), [resolvedDraft]);
-  const canApply = device.isLive && validation.isValid && !!patch && !isSavingSettings;
+  const canApply = validation.isValid && !isSavingSettings && (patch ? device.isLive : minimumGoalDirty);
 
   const apply = async () => {
-    if (!patch) {
+    if (!patch && !minimumGoalDirty) {
       return false;
     }
 
     try {
       setStatusError(null);
       setStatusMessage(null);
-      await applySettingsDraft(patch, device.id);
+      if (patch) {
+        await applySettingsDraft(patch, device.id);
+      }
+      if (minimumGoalDirty) {
+        setMinimumGoal(device.id, resolvedDraft.minimumGoal);
+      }
       markCommitted(currentSourceKey);
-      if (patch.palette_custom !== undefined || patch.palette_preset !== undefined) {
+      if (patch?.palette_custom !== undefined || patch?.palette_preset !== undefined) {
         rememberAppliedPalette(resolvedDraft);
       }
-      setStatusMessage("Applied on the device.");
       return true;
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : "Failed to apply settings.");
@@ -101,11 +113,12 @@ export function useDeviceSettingsDraft(device: AddOneDevice) {
     canApply,
     clearDraft,
     device,
-    draft: resolvedDraft,
+    draft: normalizeDraft(resolvedDraft),
     isDirty,
     isSavingSettings,
     patch,
     previewPalette,
+    resetPalette,
     resetColorRole,
     resetToBase,
     setColorRole,

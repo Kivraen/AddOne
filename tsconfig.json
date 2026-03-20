@@ -17,6 +17,7 @@
   ],
   "exclude": [
     "AddOne-Experiments",
+    "node_modules_corrupt_backup_20260318",
     "node_modules_sdk54_backup",
     "tools"
   ]

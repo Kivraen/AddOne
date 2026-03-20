@@ -7,6 +7,9 @@ import {
   DeviceSettingsScaffold,
   SettingsDivider,
   SettingsFieldLabel,
+  SETTINGS_FIELD_GAP,
+  SETTINGS_HEADER_GAP,
+  SettingsListSurface,
   SettingsNote,
   SettingsRow,
   SettingsSectionTitle,
@@ -16,6 +19,8 @@ import {
 import { theme } from "@/constants/theme";
 import { withAlpha } from "@/lib/color";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
+
+const OVERVIEW_SECTION_GAP = 12;
 
 function DraftActionButton({
   disabled = false,
@@ -35,15 +40,16 @@ function DraftActionButton({
       disabled={disabled}
       onPress={onPress}
       style={{
-        minHeight: 42,
+        minHeight: 40,
         alignItems: "center",
         justifyContent: "center",
         borderRadius: theme.radius.pill,
+        borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: isPrimary ? withAlpha(theme.colors.accentAmber, 0.22) : withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: isPrimary ? withAlpha(theme.colors.accentAmber, 0.14) : withAlpha(theme.colors.bgBase, 0.34),
+        borderColor: isPrimary ? withAlpha(theme.colors.accentAmber, 0.18) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: isPrimary ? withAlpha(theme.colors.accentAmber, 0.1) : withAlpha(theme.colors.textPrimary, 0.04),
         opacity: disabled ? 0.45 : 1,
-        paddingHorizontal: 16,
+        paddingHorizontal: 14,
       }}
     >
       <Text
@@ -96,12 +102,12 @@ export default function DeviceSettingsOverviewRoute() {
       {(settings) => (
         <>
           {settings.isDirty ? (
-            <SettingsSurface style={{ gap: 12 }}>
-              <View style={{ gap: 4 }}>
+            <SettingsSurface>
+              <View style={{ gap: SETTINGS_HEADER_GAP }}>
                 <SettingsFieldLabel>Unapplied changes</SettingsFieldLabel>
-                <SettingsNote>Review, apply, or discard your device changes before leaving settings.</SettingsNote>
+                <SettingsNote>Apply or discard changes before you leave settings.</SettingsNote>
               </View>
-              <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: SETTINGS_FIELD_GAP + 2 }}>
                 <View style={{ flex: 1 }}>
                   <DraftActionButton
                     disabled={settings.isSavingSettings}
@@ -123,9 +129,9 @@ export default function DeviceSettingsOverviewRoute() {
             </SettingsSurface>
           ) : null}
 
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: OVERVIEW_SECTION_GAP }}>
             <SettingsSectionTitle>Configuration</SettingsSectionTitle>
-            <SettingsSurface style={{ paddingVertical: 8 }}>
+            <SettingsListSurface>
               <SettingsRow
                 detail={settings.summary.routine}
                 onPress={() => router.push(deviceSettingsSectionPath(device.id, "routine"))}
@@ -138,28 +144,28 @@ export default function DeviceSettingsOverviewRoute() {
                 title="Appearance"
                 trailing={<SettingsSwatchStrip colors={settings.summary.appearance.colors} />}
               />
-            </SettingsSurface>
+            </SettingsListSurface>
           </View>
 
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: OVERVIEW_SECTION_GAP }}>
             <SettingsSectionTitle>Tools</SettingsSectionTitle>
-            <SettingsSurface style={{ paddingVertical: 8 }}>
+            <SettingsListSurface>
               <SettingsRow
                 detail={
                   device.isLive
-                    ? "Open AddOne recovery Wi-Fi when setup or reconnection is needed"
-                    : "Reconnect this offline device through AddOne recovery Wi-Fi"
+                    ? "Use recovery Wi-Fi when reconnection is needed"
+                    : "Reconnect this board with recovery Wi-Fi"
                 }
                 onPress={() => router.push(deviceRecoveryPath(device.id))}
                 title="Recovery"
               />
               <SettingsDivider />
               <SettingsRow
-                detail="Correct earlier days only when this board needs a manual fix"
+                detail="Edit earlier days only when a manual fix is needed"
                 onPress={() => router.push(deviceHistoryPath(device.id))}
                 title="History"
               />
-            </SettingsSurface>
+            </SettingsListSurface>
           </View>
         </>
       )}

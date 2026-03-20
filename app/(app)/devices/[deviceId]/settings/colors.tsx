@@ -10,7 +10,7 @@ export default function DeviceSettingsColorsRoute() {
   const [activeRole, setActiveRole] = useState<EditablePaletteRole>("on");
 
   return (
-    <DeviceSettingsScaffold device={device} title="Colors">
+    <DeviceSettingsScaffold device={device} title="Edit palette">
       {(settings) => (
         <PaletteColorEditor
           activeRole={activeRole}
@@ -18,8 +18,9 @@ export default function DeviceSettingsColorsRoute() {
           draft={settings.draft}
           device={settings.device}
           onChangeRoleColor={settings.setColorRole}
-          onResetRole={settings.resetColorRole}
+          onResetPalette={settings.resetPalette}
           onSelectRole={setActiveRole}
+          paletteLabel={settings.summary.appearance.paletteLabel}
         />
       )}
     </DeviceSettingsScaffold>

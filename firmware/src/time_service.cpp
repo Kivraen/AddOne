@@ -1,11 +1,31 @@
 #include "time_service.h"
 
+#include <ctype.h>
 #include <sys/time.h>
 #include <time.h>
 
 #include "config.h"
 
 namespace {
+struct TimezoneMapping {
+  const char* value;
+  const char* posix;
+};
+
+constexpr TimezoneMapping kSupportedTimezones[] = {
+    {"UTC", "UTC0"},
+    {"Etc/UTC", "UTC0"},
+    {"America/Los_Angeles", "PST8PDT,M3.2.0/2,M11.1.0/2"},
+    {"America/Denver", "MST7MDT,M3.2.0/2,M11.1.0/2"},
+    {"America/Phoenix", "MST7"},
+    {"America/Chicago", "CST6CDT,M3.2.0/2,M11.1.0/2"},
+    {"America/New_York", "EST5EDT,M3.2.0/2,M11.1.0/2"},
+    {"America/Anchorage", "AKST9AKDT,M3.2.0/2,M11.1.0/2"},
+    {"Pacific/Honolulu", "HST10"},
+    {"Europe/Warsaw", "CET-1CEST,M3.5.0/2,M10.5.0/3"},
+    {"Europe/Kyiv", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+};
+
 time_t currentLocalEpoch() {
   time_t now = time(nullptr);
   tm localTime{};
@@ -133,36 +153,88 @@ bool TimeService::nowLogical(tm& outLocalTime) const {
   return localtime_r(&shiftedEpoch, &outLocalTime) != nullptr;
 }
 
-void TimeService::applyTimezone_(const char* timezoneIana) {
-  const char* posixTz = posixTimezoneForIana_(timezoneIana);
+void TimeService::applyTimezone_(const char* timezoneValue) {
+  char posixTz[48];
+  if (!posixTimezoneForValue_(timezoneValue, posixTz, sizeof(posixTz))) {
+    strncpy(posixTz, Config::kDefaultTimezonePosix, sizeof(posixTz) - 1);
+    posixTz[sizeof(posixTz) - 1] = '\0';
+  }
   setenv("TZ", posixTz, 1);
   tzset();
-  strncpy(activeTimezoneIana_, timezoneIana ? timezoneIana : Config::kDefaultTimezoneIana, sizeof(activeTimezoneIana_) - 1);
+  const char* activeTimezone = (timezoneValue && timezoneValue[0] != '\0') ? timezoneValue : Config::kDefaultTimezoneIana;
+  strncpy(activeTimezoneIana_, activeTimezone, sizeof(activeTimezoneIana_) - 1);
   activeTimezoneIana_[sizeof(activeTimezoneIana_) - 1] = '\0';
 }
 
-const char* TimeService::posixTimezoneForIana_(const char* timezoneIana) {
-  if (!timezoneIana || timezoneIana[0] == '\0') {
-    return Config::kDefaultTimezonePosix;
+bool TimeService::parseFixedOffsetTimezone_(const char* timezoneValue, int16_t& outOffsetMinutes) {
+  if (!timezoneValue || strncmp(timezoneValue, "UTC", 3) != 0) {
+    return false;
   }
 
-  if (strcmp(timezoneIana, "UTC") == 0 || strcmp(timezoneIana, "Etc/UTC") == 0) {
-    return "UTC0";
-  }
-  if (strcmp(timezoneIana, "America/Los_Angeles") == 0) {
-    return "PST8PDT,M3.2.0/2,M11.1.0/2";
-  }
-  if (strcmp(timezoneIana, "America/Denver") == 0) {
-    return "MST7MDT,M3.2.0/2,M11.1.0/2";
-  }
-  if (strcmp(timezoneIana, "America/Chicago") == 0) {
-    return "CST6CDT,M3.2.0/2,M11.1.0/2";
-  }
-  if (strcmp(timezoneIana, "America/New_York") == 0) {
-    return "EST5EDT,M3.2.0/2,M11.1.0/2";
+  const char sign = timezoneValue[3];
+  if (sign != '+' && sign != '-') {
+    return false;
   }
 
-  return Config::kDefaultTimezonePosix;
+  if (!isdigit(static_cast<unsigned char>(timezoneValue[4])) ||
+      !isdigit(static_cast<unsigned char>(timezoneValue[5])) ||
+      timezoneValue[6] != ':' ||
+      !isdigit(static_cast<unsigned char>(timezoneValue[7])) ||
+      !isdigit(static_cast<unsigned char>(timezoneValue[8])) ||
+      timezoneValue[9] != '\0') {
+    return false;
+  }
+
+  const int hours = (timezoneValue[4] - '0') * 10 + (timezoneValue[5] - '0');
+  const int minutes = (timezoneValue[7] - '0') * 10 + (timezoneValue[8] - '0');
+  if (minutes % 15 != 0) {
+    return false;
+  }
+
+  const int totalMinutes = hours * 60 + minutes;
+  if (totalMinutes > 14 * 60) {
+    return false;
+  }
+
+  const int signedOffsetMinutes = sign == '+' ? totalMinutes : totalMinutes * -1;
+  if (signedOffsetMinutes < -12 * 60 || signedOffsetMinutes > 14 * 60) {
+    return false;
+  }
+
+  outOffsetMinutes = static_cast<int16_t>(signedOffsetMinutes);
+  return true;
+}
+
+bool TimeService::posixTimezoneForValue_(const char* timezoneValue, char* outValue, size_t outValueSize) {
+  if (!outValue || outValueSize == 0) {
+    return false;
+  }
+
+  const char* normalizedTimezone = (timezoneValue && timezoneValue[0] != '\0') ? timezoneValue : Config::kDefaultTimezoneIana;
+  for (const TimezoneMapping& mapping : kSupportedTimezones) {
+    if (strcmp(normalizedTimezone, mapping.value) == 0) {
+      snprintf(outValue, outValueSize, "%s", mapping.posix);
+      return true;
+    }
+  }
+
+  int16_t offsetMinutes = 0;
+  if (!parseFixedOffsetTimezone_(normalizedTimezone, offsetMinutes)) {
+    return false;
+  }
+
+  const int posixOffsetMinutes = offsetMinutes * -1;
+  const char* sign = posixOffsetMinutes < 0 ? "-" : "";
+  const int absoluteMinutes = abs(posixOffsetMinutes);
+  const int absoluteHours = absoluteMinutes / 60;
+  const int remainderMinutes = absoluteMinutes % 60;
+
+  if (remainderMinutes == 0) {
+    snprintf(outValue, outValueSize, "UTC%s%d", sign, absoluteHours);
+  } else {
+    snprintf(outValue, outValueSize, "UTC%s%d:%02d", sign, absoluteHours, remainderMinutes);
+  }
+  return true;
 }
 
 bool TimeService::saneUtc_(time_t utc) {
@@ -170,7 +242,12 @@ bool TimeService::saneUtc_(time_t utc) {
 }
 
 void TimeService::startNtpSync_() {
-  configTzTime(posixTimezoneForIana_(activeTimezoneIana_),
+  char posixTz[48];
+  if (!posixTimezoneForValue_(activeTimezoneIana_, posixTz, sizeof(posixTz))) {
+    strncpy(posixTz, Config::kDefaultTimezonePosix, sizeof(posixTz) - 1);
+    posixTz[sizeof(posixTz) - 1] = '\0';
+  }
+  configTzTime(posixTz,
                Config::kNtpServer,
                Config::kNtpServer2,
                Config::kNtpServer3);

@@ -45,7 +45,45 @@ function diffDays(fromDate: string, toDate: string) {
   return Math.round((toUtcDate(toDate).getTime() - toUtcDate(fromDate).getTime()) / 86_400_000);
 }
 
+function parseFixedOffsetTimezone(timezone: string) {
+  const match = timezone.match(/^UTC([+-])(\d{2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, sign, hoursRaw, minutesRaw] = match;
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes % 15 !== 0) {
+    return null;
+  }
+
+  const totalMinutes = hours * 60 + minutes;
+  if (totalMinutes > 14 * 60) {
+    return null;
+  }
+
+  const offsetMinutes = sign === "+" ? totalMinutes : totalMinutes * -1;
+  if (offsetMinutes < -12 * 60 || offsetMinutes > 14 * 60) {
+    return null;
+  }
+
+  return offsetMinutes;
+}
+
 function getTimeZoneParts(timezone: string, date = new Date()) {
+  const fixedOffset = parseFixedOffsetTimezone(timezone);
+  if (fixedOffset !== null) {
+    const shifted = new Date(date.getTime() + fixedOffset * 60_000);
+    return {
+      day: shifted.getUTCDate(),
+      hour: shifted.getUTCHours(),
+      minute: shifted.getUTCMinutes(),
+      month: shifted.getUTCMonth() + 1,
+      year: shifted.getUTCFullYear(),
+    };
+  }
+
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",

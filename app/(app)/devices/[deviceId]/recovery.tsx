@@ -13,17 +13,19 @@ import { useDeviceAp } from "@/hooks/use-device-ap";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { describeProvisioningAttemptDebug } from "@/lib/ap-provisioning";
 import { withAlpha } from "@/lib/color";
-import { DeviceOnboardingSession } from "@/types/addone";
-
-function currentPhoneTimezone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
+import { deviceSettingsPath } from "@/lib/device-routes";
 
 const WIFI_RECONNECT_WARNING_MS = 15000;
+const RECOVERY_PAGE_GAP = 18;
+const RECOVERY_CARD_GAP = 18;
+const RECOVERY_HEADER_BOTTOM_SPACE = 18;
+const RECOVERY_COPY_GAP = 12;
+const RECOVERY_FIELD_GAP = 12;
+const RECOVERY_ACTION_ROW_GAP = 14;
+const RECOVERY_ACTION_SECTION_TOP_SPACE = 12;
+const RECOVERY_ACTION_SECTION_BOTTOM_SPACE = 10;
+const RECOVERY_META_TOP_SPACE = 22;
+const RECOVERY_CARD_PADDING_BOTTOM = 28;
 
 function formatExpirationLabel(expiresAt: string) {
   const diffMs = new Date(expiresAt).getTime() - Date.now();
@@ -34,63 +36,6 @@ function formatExpirationLabel(expiresAt: string) {
   }
 
   return `Session expires in ${diffMinutes} minutes`;
-}
-
-function statusLabel(session: DeviceOnboardingSession | null, apReady: boolean) {
-  if (!session) {
-    return "Not started";
-  }
-
-  if (session.isExpired || session.status === "expired") {
-    return "Expired";
-  }
-
-  if (session.status === "awaiting_cloud" && apReady) {
-    return "Ready for Wi‑Fi";
-  }
-
-  switch (session.status) {
-    case "awaiting_ap":
-      return "Ready for Wi‑Fi";
-    case "awaiting_cloud":
-      return "Connecting";
-    case "claimed":
-      return "Recovered";
-    case "cancelled":
-      return "Cancelled";
-    case "failed":
-      return "Failed";
-    default:
-      return session.status;
-  }
-}
-
-function statusTone(session: DeviceOnboardingSession | null) {
-  if (!session) {
-    return {
-      bg: withAlpha(theme.colors.textPrimary, 0.08),
-      fg: theme.colors.textSecondary,
-    };
-  }
-
-  if (session.isExpired || session.status === "expired" || session.status === "failed") {
-    return {
-      bg: withAlpha(theme.colors.statusErrorMuted, 0.18),
-      fg: theme.colors.statusErrorMuted,
-    };
-  }
-
-  if (session.status === "claimed") {
-    return {
-      bg: withAlpha(theme.colors.accentAmber, 0.18),
-      fg: theme.colors.textPrimary,
-    };
-  }
-
-  return {
-    bg: withAlpha(theme.colors.textPrimary, 0.08),
-    fg: theme.colors.textPrimary,
-  };
 }
 
 function ActionButton({
@@ -149,6 +94,37 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
+function BodyText({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textSecondary,
+        fontFamily: theme.typography.body.fontFamily,
+        fontSize: theme.typography.body.fontSize,
+        lineHeight: theme.typography.body.lineHeight,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function MetaText({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textTertiary,
+        fontFamily: theme.typography.label.fontFamily,
+        fontSize: theme.typography.label.fontSize,
+        lineHeight: theme.typography.label.lineHeight,
+        textAlign: "center",
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 function StepHeader({
   step,
   title,
@@ -157,7 +133,7 @@ function StepHeader({
   title: string;
 }) {
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 10 }}>
       <Text
         style={{
           color: theme.colors.textTertiary,
@@ -188,6 +164,7 @@ export default function DeviceRecoveryRoute() {
   const router = useRouter();
   const device = useRoutedDevice();
   const {
+    cancelSession,
     claimToken,
     clearLocalOnboardingSession,
     createSession,
@@ -239,7 +216,6 @@ export default function DeviceRecoveryRoute() {
 
   const liveSession = session;
   const recoveryCompleted = session?.status === "claimed";
-  const currentStatusTone = useMemo(() => statusTone(liveSession), [liveSession]);
   const showDraftForm =
     !!liveSession &&
     !liveSession.isExpired &&
@@ -403,9 +379,48 @@ export default function DeviceRecoveryRoute() {
     resetNetworks();
     await createSession({
       bootstrapDayResetTime: device.resetTime ? `${device.resetTime}:00` : "00:00:00",
-      bootstrapTimezone: device.timezone ?? currentPhoneTimezone(),
+      bootstrapTimezone: device.timezone,
       hardwareProfileHint: "addone-v1",
     });
+  }
+
+  async function handleCancelRecovery() {
+    if (!liveSession) {
+      if (router.canGoBack()) {
+        router.back();
+        return;
+      }
+
+      router.replace(deviceSettingsPath(device.id));
+      return;
+    }
+
+    setStatusError(null);
+    setStatusMessage(null);
+    setWaitingSinceMs(null);
+    setWaitingWarning(null);
+    setHasValidatedAp(false);
+    setIsAwaitingReconnectLocally(false);
+    clearDraft();
+    resetApInfo();
+    resetProvisioning();
+    resetNetworks();
+
+    try {
+      await cancelSession({
+        reason: "Recovery cancelled from the app.",
+        sessionId: liveSession.id,
+      });
+    } catch {
+      clearLocalOnboardingSession();
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace(deviceSettingsPath(device.id));
   }
 
   async function handleCheckDeviceAp() {
@@ -417,7 +432,7 @@ export default function DeviceRecoveryRoute() {
       const info = await checkAp();
       await scanNetworks();
       setHasValidatedAp(true);
-      setStatusMessage(`Connected to ${info.device_ap_ssid}. Choose your Wi‑Fi and reconnect.`);
+      setStatusMessage(`Connected to ${info.device_ap_ssid}. Choose Wi‑Fi and reconnect.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to reach the AddOne AP.";
 
@@ -425,7 +440,7 @@ export default function DeviceRecoveryRoute() {
         await scanNetworks();
         setHasValidatedAp(true);
         resetApInfo();
-        setStatusMessage(`Connected to ${deviceApSsid}. Choose your Wi‑Fi and reconnect.`);
+        setStatusMessage(`Connected to ${deviceApSsid}. Choose Wi‑Fi and reconnect.`);
         return;
       } catch {
         // If the phone is already on AddOne-XXXX but local probing is flaky, don't dead-end
@@ -436,7 +451,7 @@ export default function DeviceRecoveryRoute() {
         setHasValidatedAp(true);
         setManualWifiEntry(true);
         resetApInfo();
-        setStatusMessage(`If you're already on ${deviceApSsid}, type the Wi‑Fi name manually and continue.`);
+        setStatusMessage(`If you're already on ${deviceApSsid}, type the network name and continue.`);
         return;
       }
 
@@ -466,7 +481,7 @@ export default function DeviceRecoveryRoute() {
 
       setIsAwaitingReconnectLocally(true);
       setWaitingSinceMs(Date.now());
-      setStatusMessage("Connecting device to Wi‑Fi…");
+      setStatusMessage("Connecting to Wi‑Fi…");
       void markWaiting(liveSession.id).catch(() => {
         // The device can accept provisioning while the phone is still on AddOne-XXXX.
         // If the cloud update races with that handoff, keep waiting locally instead of
@@ -498,34 +513,25 @@ export default function DeviceRecoveryRoute() {
           visible={pickerVisible}
         />
 
-        <View style={{ gap: 16 }}>
-          <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-            <StepHeader step={step} title={step === 1 ? "Start recovery" : step === 2 ? "Join AddOne Wi‑Fi" : "Choose Wi‑Fi"} />
+        <View style={{ gap: RECOVERY_PAGE_GAP }}>
+          <GlassCard
+            style={{
+              gap: RECOVERY_CARD_GAP,
+              paddingBottom: RECOVERY_CARD_PADDING_BOTTOM,
+              paddingHorizontal: 16,
+              paddingTop: 20,
+            }}
+          >
+            <View style={{ paddingBottom: RECOVERY_HEADER_BOTTOM_SPACE }}>
+              <StepHeader step={step} title={step === 1 ? "Start recovery" : step === 2 ? "Join AddOne Wi‑Fi" : "Choose Wi‑Fi"} />
+            </View>
 
             {step === 1 ? (
               <>
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  Use recovery when the router or password changes. Ownership, history, and settings stay intact.
-                </Text>
-                {missingRecoveryClaimContext ? (
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    This phone needs a fresh local session before it can continue.
-                  </Text>
-                ) : null}
+                <View style={{ gap: RECOVERY_COPY_GAP }}>
+                  <BodyText>Use recovery when Wi‑Fi changes. History and settings stay intact.</BodyText>
+                  {missingRecoveryClaimContext ? <BodyText>Start a fresh session on this phone to continue.</BodyText> : null}
+                </View>
                 <ActionButton
                   disabled={isBusy}
                   label={isBusy ? "Starting…" : missingRecoveryClaimContext ? "Restart recovery" : "Start recovery"}
@@ -536,64 +542,48 @@ export default function DeviceRecoveryRoute() {
 
             {step >= 2 ? (
               <>
-                <View
-                  style={{
-                    alignSelf: "flex-start",
-                    borderRadius: theme.radius.pill,
-                    backgroundColor: currentStatusTone.bg,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: currentStatusTone.fg,
-                      fontFamily: theme.typography.micro.fontFamily,
-                      fontSize: theme.typography.micro.fontSize,
-                      lineHeight: theme.typography.micro.lineHeight,
-                      letterSpacing: theme.typography.micro.letterSpacing,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {statusLabel(liveSession, !!apReady)}
-                  </Text>
+                <View style={{ gap: RECOVERY_COPY_GAP }}>
+                  <BodyText>
+                    {showWifiForm
+                      ? "Choose the network and password to reconnect the board."
+                      : `Join \`${deviceApSsid}\` in Wi‑Fi settings, then return here.`}
+                  </BodyText>
                 </View>
 
-                {liveSession ? (
-                  <Text
+                {!showWifiForm ? (
+                  <View
                     style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
+                      gap: RECOVERY_COPY_GAP,
+                      paddingBottom: RECOVERY_ACTION_SECTION_BOTTOM_SPACE,
+                      paddingTop: RECOVERY_ACTION_SECTION_TOP_SPACE,
                     }}
                   >
-                    {formatExpirationLabel(liveSession.expiresAt)}
-                  </Text>
-                ) : null}
-
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  {showWifiForm
-                    ? "Choose the network, enter the password, then reconnect this device."
-                    : `Join \`${deviceApSsid}\` in Wi‑Fi settings, then come back and continue.`}
-                </Text>
-
-                {!showWifiForm ? (
-                  <ActionButton
-                    disabled={isCheckingAp || isScanningNetworks}
-                    label={isCheckingAp || isScanningNetworks ? "Checking…" : `I joined ${deviceApSsid}`}
-                    onPress={() => void handleCheckDeviceAp()}
-                  />
+                    <View style={{ flexDirection: "row", gap: RECOVERY_ACTION_ROW_GAP }}>
+                      <View style={{ flex: 1 }}>
+                        <ActionButton
+                          disabled={isCheckingAp || isScanningNetworks || isBusy}
+                          label={isCheckingAp || isScanningNetworks ? "Checking…" : "I joined Wi‑Fi"}
+                          onPress={() => void handleCheckDeviceAp()}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <ActionButton
+                          disabled={isBusy || isCheckingAp || isScanningNetworks}
+                          label="Cancel recovery"
+                          onPress={() => void handleCancelRecovery()}
+                          secondary
+                        />
+                      </View>
+                    </View>
+                    {liveSession ? (
+                      <View style={{ paddingTop: RECOVERY_META_TOP_SPACE }}>
+                        <MetaText>{formatExpirationLabel(liveSession.expiresAt)}</MetaText>
+                      </View>
+                    ) : null}
+                  </View>
                 ) : (
                   <>
-                    <View style={{ gap: 10 }}>
+                    <View style={{ gap: RECOVERY_FIELD_GAP }}>
                       <FieldLabel>Wi‑Fi network</FieldLabel>
                       {manualWifiEntry ? (
                         <TextInput
@@ -606,7 +596,7 @@ export default function DeviceRecoveryRoute() {
                             setStatusMessage(null);
                             setWaitingWarning(null);
                           }}
-                          placeholder="Type Wi‑Fi name"
+                          placeholder="Type network name"
                           placeholderTextColor={theme.colors.textTertiary}
                           style={{
                             borderRadius: theme.radius.sheet,
@@ -648,7 +638,7 @@ export default function DeviceRecoveryRoute() {
                               lineHeight: theme.typography.body.lineHeight,
                             }}
                           >
-                            {draft.wifiSsid || "Choose network"}
+                            {draft.wifiSsid || "Choose Wi‑Fi"}
                           </Text>
                           <Ionicons color={theme.colors.textSecondary} name="chevron-down-outline" size={18} />
                         </Pressable>
@@ -670,21 +660,10 @@ export default function DeviceRecoveryRoute() {
                             lineHeight: theme.typography.label.lineHeight,
                           }}
                         >
-                          {manualWifiEntry ? "Choose from scanned networks" : "Hidden network? Type it manually"}
+                          {manualWifiEntry ? "Choose scanned network" : "Type network manually"}
                         </Text>
                       </Pressable>
-                      {selectedNetwork ? (
-                        <Text
-                          style={{
-                            color: theme.colors.textSecondary,
-                            fontFamily: theme.typography.body.fontFamily,
-                            fontSize: theme.typography.body.fontSize,
-                            lineHeight: theme.typography.body.lineHeight,
-                          }}
-                        >
-                          {authModeLabel(selectedNetwork.authMode, selectedNetwork.secure)}
-                        </Text>
-                      ) : null}
+                      {selectedNetwork ? <BodyText>{authModeLabel(selectedNetwork.authMode, selectedNetwork.secure)}</BodyText> : null}
                       {validation.errors.wifiSsid ? (
                         <Text
                           style={{
@@ -699,7 +678,7 @@ export default function DeviceRecoveryRoute() {
                       ) : null}
                     </View>
 
-                    <View style={{ gap: 10 }}>
+                    <View style={{ gap: RECOVERY_FIELD_GAP }}>
                       <FieldLabel>Password</FieldLabel>
                       <View
                         style={{
@@ -768,42 +747,47 @@ export default function DeviceRecoveryRoute() {
                       ) : null}
                     </View>
 
-                    <ActionButton
-                      disabled={isSubmittingProvisioning || !preparedRequest || isAwaitingReconnect}
-                      label={isSubmittingProvisioning ? "Sending…" : isAwaitingReconnect ? "Connecting…" : waitingWarning ? "Try again" : "Connect"}
-                      onPress={() => void handleProvisionDeviceAp()}
-                    />
+                    <View
+                      style={{
+                        gap: RECOVERY_COPY_GAP,
+                        paddingBottom: RECOVERY_ACTION_SECTION_BOTTOM_SPACE,
+                        paddingTop: RECOVERY_ACTION_SECTION_TOP_SPACE,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", gap: RECOVERY_ACTION_ROW_GAP }}>
+                        <View style={{ flex: 1 }}>
+                          <ActionButton
+                            disabled={isSubmittingProvisioning || !preparedRequest || isAwaitingReconnect}
+                            label={isSubmittingProvisioning ? "Sending…" : isAwaitingReconnect ? "Connecting…" : waitingWarning ? "Try again" : "Connect"}
+                            onPress={() => void handleProvisionDeviceAp()}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <ActionButton
+                            disabled={isBusy || isSubmittingProvisioning}
+                            label="Cancel recovery"
+                            onPress={() => void handleCancelRecovery()}
+                            secondary
+                          />
+                        </View>
+                      </View>
+                      {liveSession ? (
+                        <View style={{ paddingTop: RECOVERY_META_TOP_SPACE }}>
+                          <MetaText>{formatExpirationLabel(liveSession.expiresAt)}</MetaText>
+                        </View>
+                      ) : null}
+                    </View>
 
                     {isAwaitingReconnect ? (
                       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                         <ActivityIndicator color={theme.colors.textPrimary} />
-                        <Text
-                          style={{
-                            color: theme.colors.textSecondary,
-                            fontFamily: theme.typography.body.fontFamily,
-                            fontSize: theme.typography.body.fontSize,
-                            lineHeight: theme.typography.body.lineHeight,
-                          }}
-                        >
-                          Trying to join Wi‑Fi…
-                        </Text>
+                        <BodyText>Trying to join Wi‑Fi…</BodyText>
                       </View>
                     ) : null}
                   </>
                 )}
 
-                {statusMessage ? (
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    {statusMessage}
-                  </Text>
-                ) : null}
+                {statusMessage ? <BodyText>{statusMessage}</BodyText> : null}
 
                 {renderedRecoveryError ? (
                   <Text

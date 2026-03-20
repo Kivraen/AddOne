@@ -1,11 +1,14 @@
 import { create } from "zustand";
 
 import {
+  areCustomPalettesEqual,
+  buildResolvedPaletteCustom,
   DeviceSettingsDraft,
   EditablePaletteRole,
   areSettingsDraftsEqual,
   createSettingsDraftFromDevice,
   normalizeDraft,
+  resetPaletteToPreset,
   resetEditablePaletteRoleToPreset,
   setEditablePaletteRoleColor,
 } from "@/lib/device-settings";
@@ -19,16 +22,17 @@ interface DeviceSettingsDraftState {
   statusError: string | null;
   statusMessage: string | null;
   clearDraft: () => void;
-  initializeFromDevice: (device: AddOneDevice, sourceKey: string) => void;
+  initializeFromDevice: (device: AddOneDevice, sourceKey: string, minimumGoal?: string) => void;
   markCommitted: (sourceKey?: string | null) => void;
   resetToBase: () => void;
   setColorRole: (role: EditablePaletteRole, color: string) => void;
   resetColorRole: (role: EditablePaletteRole) => void;
+  resetPalette: () => void;
   setDraftPatch: (patch: Partial<DeviceSettingsDraft>) => void;
   setPalettePreset: (paletteId: string) => void;
   setStatusError: (value: string | null) => void;
   setStatusMessage: (value: string | null) => void;
-  syncFromDeviceIfClean: (device: AddOneDevice, sourceKey: string) => void;
+  syncFromDeviceIfClean: (device: AddOneDevice, sourceKey: string, minimumGoal?: string) => void;
 }
 
 export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set, get) => ({
@@ -47,8 +51,8 @@ export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set
       statusError: null,
       statusMessage: null,
     }),
-  initializeFromDevice: (device, sourceKey) => {
-    const nextDraft = createSettingsDraftFromDevice(device);
+  initializeFromDevice: (device, sourceKey, minimumGoal = "") => {
+    const nextDraft = createSettingsDraftFromDevice(device, minimumGoal);
     set({
       baseDraft: nextDraft,
       deviceId: device.id,
@@ -88,6 +92,18 @@ export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set
         statusMessage: null,
       };
     }),
+  resetPalette: () =>
+    set((state) => {
+      if (!state.draft) {
+        return {};
+      }
+
+      return {
+        draft: resetPaletteToPreset(state.draft),
+        statusError: null,
+        statusMessage: null,
+      };
+    }),
   setColorRole: (role, color) =>
     set((state) => {
       if (!state.draft) {
@@ -107,17 +123,46 @@ export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set
       statusMessage: null,
     })),
   setPalettePreset: (paletteId) =>
-    set((state) => ({
-      draft: state.draft
-        ? {
+    set((state) => {
+      if (!state.draft) {
+        return {
+          draft: state.draft,
+          statusError: null,
+          statusMessage: null,
+        };
+      }
+
+      const nextCustomPalette = buildResolvedPaletteCustom(paletteId);
+
+      if (state.draft.paletteId === paletteId) {
+        if (areCustomPalettesEqual(state.draft.customPalette, nextCustomPalette)) {
+          return {
+            draft: state.draft,
+            statusError: null,
+            statusMessage: null,
+          };
+        }
+
+        return {
+          draft: {
             ...state.draft,
-            customPalette: {},
-            paletteId,
-          }
-        : state.draft,
-      statusError: null,
-      statusMessage: null,
-    })),
+            customPalette: nextCustomPalette,
+          },
+          statusError: null,
+          statusMessage: null,
+        };
+      }
+
+      return {
+        draft: {
+          ...state.draft,
+          customPalette: nextCustomPalette,
+          paletteId,
+        },
+        statusError: null,
+        statusMessage: null,
+      };
+    }),
   setStatusError: (value) =>
     set({
       statusError: value,
@@ -128,16 +173,16 @@ export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set
       statusError: value ? null : get().statusError,
       statusMessage: value,
     }),
-  syncFromDeviceIfClean: (device, sourceKey) => {
+  syncFromDeviceIfClean: (device, sourceKey, minimumGoal = "") => {
     const state = get();
     if (!state.baseDraft || !state.draft) {
-      state.initializeFromDevice(device, sourceKey);
+      state.initializeFromDevice(device, sourceKey, minimumGoal);
       return;
     }
 
     if (state.deviceId !== device.id) {
       if (areSettingsDraftsEqual(state.baseDraft, state.draft)) {
-        state.initializeFromDevice(device, sourceKey);
+        state.initializeFromDevice(device, sourceKey, minimumGoal);
       }
       return;
     }
@@ -150,6 +195,6 @@ export const useDeviceSettingsDraftStore = create<DeviceSettingsDraftState>((set
       return;
     }
 
-    state.initializeFromDevice(device, sourceKey);
+    state.initializeFromDevice(device, sourceKey, minimumGoal);
   },
 }));

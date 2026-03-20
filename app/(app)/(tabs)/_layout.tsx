@@ -1,12 +1,25 @@
 import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { useEffect, useRef } from "react";
 import { DynamicColorIOS } from "react-native";
 
+import { theme } from "@/constants/theme";
 import { useDevices } from "@/hooks/use-devices";
 import { getDeviceAccentColor } from "@/lib/device-accent";
 
 export default function TabsLayout() {
   const { activeDevice } = useDevices();
-  const accentColor = getDeviceAccentColor(activeDevice);
+  const lastKnownAccentColor = useRef<string | null>(null);
+  const resolvedAccentColor = activeDevice ? getDeviceAccentColor(activeDevice) : null;
+
+  useEffect(() => {
+    if (!resolvedAccentColor) {
+      return;
+    }
+
+    lastKnownAccentColor.current = resolvedAccentColor;
+  }, [resolvedAccentColor]);
+
+  const accentColor = resolvedAccentColor ?? lastKnownAccentColor.current ?? theme.colors.textPrimary;
   const tintColor =
     process.env.EXPO_OS === "ios"
       ? DynamicColorIOS({

@@ -1,6 +1,6 @@
 # AddOne Device AP Provisioning Contract
 
-Last locked: March 8, 2026
+Last locked: March 16, 2026
 
 This document defines the local first-boot / recovery contract between:
 - the AddOne mobile app while connected to the temporary device AP
@@ -163,7 +163,7 @@ Suggested failure categories:
 4. Validate and persist the AP payload.
 5. Exit AP mode and connect to the configured Wi-Fi.
 6. Redeem the claim in cloud using `redeem_device_onboarding_claim(...)`.
-7. Start normal `heartbeat + command pull + day-event push` behavior after claim.
+7. Start normal `heartbeat + realtime subscribe + fallback command poll + runtime snapshot push` behavior after claim.
 
 ## Current Implementation Status
 - The app now builds and validates the exact `POST /session` payload locally.
@@ -177,4 +177,5 @@ Suggested failure categories:
   - `POST /api/v1/provisioning/session`
 - Firmware v2 now persists pending claim context locally and starts STA connection from the submitted Wi-Fi payload.
 - Firmware v2 now hands off from AP provisioning into cloud claim redemption and first heartbeat plumbing.
-- Device command sync and day-event sync are the next firmware steps after this.
+- Firmware v2 now also includes steady-state command pull / ack, runtime snapshot upload, and MQTT realtime support on top of this provisioning flow.
+- The remaining work is real-device/router validation and onboarding/recovery UX polish, not missing transport plumbing.

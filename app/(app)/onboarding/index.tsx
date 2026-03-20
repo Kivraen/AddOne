@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 
 import { ScreenFrame } from "@/components/layout/screen-frame";
+import { DeviceTimezonePicker } from "@/components/settings/device-timezone-picker";
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { GlassCard } from "@/components/ui/glass-card";
 import { IconButton } from "@/components/ui/icon-button";
@@ -13,14 +14,21 @@ import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { useDeviceAp } from "@/hooks/use-device-ap";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { withAlpha } from "@/lib/color";
+import { readCurrentPhoneTimezone, resolvePhoneTimezoneForDevice } from "@/lib/device-timezone";
+import {
+  DEFAULT_HABIT_NAME,
+  HABIT_NAME_MAX_LENGTH,
+  MINIMUM_GOAL_MAX_LENGTH,
+  MINIMUM_GOAL_PLACEHOLDER,
+  normalizeHabitNameForSave,
+  normalizeMinimumGoalForSave,
+  resolveHabitNameDraft,
+} from "@/lib/habit-details";
+import { useDeviceHabitMetadataStore } from "@/store/device-habit-metadata-store";
 
-function currentPhoneTimezone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
+const ONBOARDING_PAGE_GAP = 18;
+const ONBOARDING_CARD_GAP = 18;
+const ONBOARDING_FIELD_GAP = 12;
 
 function formatExpirationLabel(expiresAt: string) {
   const diffMs = new Date(expiresAt).getTime() - Date.now();
@@ -89,6 +97,52 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
+function FieldCounter({ current, max }: { current: number; max: number }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textTertiary,
+        fontFamily: theme.typography.micro.fontFamily,
+        fontSize: theme.typography.micro.fontSize,
+        lineHeight: theme.typography.micro.lineHeight,
+        fontVariant: ["tabular-nums"],
+      }}
+    >
+      {current}/{max}
+    </Text>
+  );
+}
+
+function BodyText({ children, tone = "secondary" }: { children: string; tone?: "muted" | "secondary" }) {
+  return (
+    <Text
+      style={{
+        color: tone === "muted" ? theme.colors.textTertiary : theme.colors.textSecondary,
+        fontFamily: theme.typography.body.fontFamily,
+        fontSize: theme.typography.body.fontSize,
+        lineHeight: theme.typography.body.lineHeight,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function FieldNote({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textSecondary,
+        fontFamily: theme.typography.body.fontFamily,
+        fontSize: 13,
+        lineHeight: 18,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 function StepHeader({
   step,
   title,
@@ -125,13 +179,17 @@ function StepHeader({
 }
 
 function TextField({
+  autoCapitalize = "none",
   disabled = false,
+  maxLength,
   onChangeText,
   placeholder,
   secureTextEntry = false,
   value,
 }: {
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
   disabled?: boolean;
+  maxLength?: number;
   onChangeText: (value: string) => void;
   placeholder: string;
   secureTextEntry?: boolean;
@@ -139,9 +197,10 @@ function TextField({
 }) {
   return (
     <TextInput
-      autoCapitalize="none"
+      autoCapitalize={autoCapitalize}
       autoCorrect={false}
       editable={!disabled}
+      maxLength={maxLength}
       onChangeText={onChangeText}
       placeholder={placeholder}
       placeholderTextColor={theme.colors.textTertiary}
@@ -168,6 +227,10 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const { activeDevice } = useDevices();
   const { applySettingsDraft, isSavingSettings } = useDeviceActions();
+  const activeDeviceMinimumGoal = useDeviceHabitMetadataStore((state) =>
+    activeDevice?.id ? state.minimumGoalByDeviceId[activeDevice.id] ?? "" : "",
+  );
+  const setPersistedMinimumGoal = useDeviceHabitMetadataStore((state) => state.setMinimumGoal);
   const {
     claimToken,
     createSession,
@@ -204,23 +267,31 @@ export default function OnboardingScreen() {
     scanNetworks,
     submitProvisioning,
   } = useDeviceAp();
+  const phoneTimezone = useMemo(() => readCurrentPhoneTimezone(), []);
+  const phoneTimezoneResolution = useMemo(() => resolvePhoneTimezoneForDevice(phoneTimezone), [phoneTimezone]);
 
   const [pickerVisible, setPickerVisible] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
+  const [habitNameInput, setHabitNameInput] = useState(resolveHabitNameDraft(activeDevice?.name));
+  const [minimumGoalInput, setMinimumGoalInput] = useState(activeDeviceMinimumGoal);
   const [weeklyTarget, setWeeklyTarget] = useState(activeDevice?.weeklyTarget ?? 5);
-  const [timezoneInput, setTimezoneInput] = useState(currentPhoneTimezone());
+  const [timezoneInput, setTimezoneInput] = useState(phoneTimezoneResolution.resolvedValue);
   const [paletteId, setPaletteId] = useState(activeDevice?.paletteId ?? "classic");
+  const normalizedHabitName = normalizeHabitNameForSave(habitNameInput);
+  const normalizedMinimumGoal = normalizeMinimumGoalForSave(minimumGoalInput);
 
   useEffect(() => {
     if (!activeDevice || session?.status !== "claimed") {
       return;
     }
 
+    setHabitNameInput(resolveHabitNameDraft(activeDevice.name));
+    setMinimumGoalInput(activeDeviceMinimumGoal);
     setWeeklyTarget(activeDevice.weeklyTarget);
-    setTimezoneInput(activeDevice.timezone || currentPhoneTimezone());
+    setTimezoneInput(activeDevice.timezone || phoneTimezoneResolution.resolvedValue);
     setPaletteId(activeDevice.paletteId);
-  }, [activeDevice, session?.status]);
+  }, [activeDevice, activeDeviceMinimumGoal, phoneTimezoneResolution.resolvedValue, session?.status]);
 
   const sessionReadyForAp = session?.status === "awaiting_ap" && !session.isExpired && hasClaimToken;
   const claimedDeviceReady = session?.status === "claimed" && !!activeDevice && activeDevice.id === session.deviceId;
@@ -236,6 +307,7 @@ export default function OnboardingScreen() {
   const onboardingPatch =
     claimedDeviceReady && activeDevice
       ? {
+          ...(normalizedHabitName !== activeDevice.name ? { name: normalizedHabitName } : {}),
           ...(paletteId !== activeDevice.paletteId ? { palette_preset: paletteId } : {}),
           ...(timezoneInput.trim() !== activeDevice.timezone ? { timezone: timezoneInput.trim() } : {}),
           ...(weeklyTarget !== activeDevice.weeklyTarget ? { weekly_target: weeklyTarget } : {}),
@@ -248,7 +320,7 @@ export default function OnboardingScreen() {
     clearDraft();
     await createSession({
       bootstrapDayResetTime: "00:00:00",
-      bootstrapTimezone: currentPhoneTimezone(),
+      bootstrapTimezone: phoneTimezoneResolution.resolvedValue,
       hardwareProfileHint: "addone-v1",
     });
   }
@@ -262,7 +334,7 @@ export default function OnboardingScreen() {
       if (response.networks.length > 0) {
         setPickerVisible(true);
       }
-      setSetupMessage(`Connected to ${info.device_ap_ssid}. Choose your Wi‑Fi and continue.`);
+      setSetupMessage(`Connected to ${info.device_ap_ssid}. Choose Wi‑Fi and continue.`);
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Failed to reach the AddOne AP.");
     }
@@ -285,7 +357,7 @@ export default function OnboardingScreen() {
       }
 
       await markWaiting(session.id);
-      setSetupMessage("Connecting the device to your Wi‑Fi…");
+      setSetupMessage("Connecting to Wi‑Fi…");
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Failed to continue setup.");
     }
@@ -302,6 +374,7 @@ export default function OnboardingScreen() {
       if (onboardingPatch && Object.keys(onboardingPatch).length > 0) {
         await applySettingsDraft(onboardingPatch, activeDevice.id);
       }
+      setPersistedMinimumGoal(activeDevice.id, normalizedMinimumGoal);
       router.replace("/");
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Failed to finish setup.");
@@ -364,8 +437,8 @@ export default function OnboardingScreen() {
         visible={pickerVisible}
       />
 
-      <View style={{ gap: 16 }}>
-        <GlassCard style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
+      <View style={{ gap: ONBOARDING_PAGE_GAP }}>
+        <GlassCard style={{ gap: ONBOARDING_CARD_GAP, paddingHorizontal: 18, paddingVertical: 18 }}>
           <StepHeader
             step={step}
             title={
@@ -381,34 +454,16 @@ export default function OnboardingScreen() {
 
           {step === 1 ? (
             <>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                Start a local setup session, join the device Wi‑Fi, then connect AddOne to your home network.
-              </Text>
+              <BodyText>Start setup, join AddOne Wi‑Fi, then connect the board to your network.</BodyText>
               <ActionButton disabled={isBusy} label={isBusy ? "Starting…" : "Start setup"} onPress={() => void handleStartSession()} />
             </>
           ) : null}
 
           {step === 2 ? (
             <>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                In system Wi‑Fi settings, join `AddOne-XXXX`. Then return here, pick your home network, and enter the password.
-              </Text>
+              <BodyText>In Wi‑Fi settings, join `AddOne-XXXX`, then return here and choose your network.</BodyText>
 
-              <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: 12 }}>
                 <ActionButton
                   disabled={isCheckingAp || isScanningNetworks}
                   label={isCheckingAp || isScanningNetworks ? "Checking…" : "Check AddOne Wi‑Fi"}
@@ -422,9 +477,9 @@ export default function OnboardingScreen() {
                 />
               </View>
 
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                 <FieldLabel>Wi‑Fi network</FieldLabel>
-                <View style={{ flexDirection: "row", gap: 10 }}>
+                <View style={{ flexDirection: "row", gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <TextField
                       disabled={isSubmittingProvisioning}
@@ -465,7 +520,7 @@ export default function OnboardingScreen() {
                 ) : null}
               </View>
 
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                 <FieldLabel>Password</FieldLabel>
                 <TextField
                   disabled={isSubmittingProvisioning}
@@ -496,28 +551,10 @@ export default function OnboardingScreen() {
 
           {step === 3 ? (
             <>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: theme.typography.body.fontSize,
-                  lineHeight: theme.typography.body.lineHeight,
-                }}
-              >
-                The device is joining Wi‑Fi, claiming itself in cloud, and publishing its first live snapshot.
-              </Text>
+              <BodyText>The board is joining Wi‑Fi and publishing its first live snapshot.</BodyText>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                 <ActivityIndicator color={theme.colors.textPrimary} />
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  Waiting for the device…
-                </Text>
+                <BodyText>Waiting for the device…</BodyText>
               </View>
               <ActionButton
                 disabled={isPolling}
@@ -531,30 +568,44 @@ export default function OnboardingScreen() {
           {step === 4 ? (
             <>
               {!claimedDeviceReady || !activeDevice ? (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  Waiting for the first live device snapshot…
-                </Text>
+                <BodyText>Waiting for the first live device snapshot…</BodyText>
               ) : (
                 <>
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                    }}
-                  >
-                    Set the few things that matter now. Reset time stays at midnight and brightness stays on auto-adjust.
-                  </Text>
+                  <BodyText>Set what matters now. Reset stays at midnight and brightness stays on auto.</BodyText>
 
-                  <View style={{ gap: 10 }}>
+                  <View style={{ gap: ONBOARDING_FIELD_GAP }}>
+                    <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                      <FieldLabel>Habit name</FieldLabel>
+                      <FieldCounter current={habitNameInput.length} max={HABIT_NAME_MAX_LENGTH} />
+                    </View>
+                    <TextField
+                      autoCapitalize="words"
+                      disabled={isSavingSettings}
+                      maxLength={HABIT_NAME_MAX_LENGTH}
+                      onChangeText={setHabitNameInput}
+                      placeholder={DEFAULT_HABIT_NAME}
+                      value={habitNameInput}
+                    />
+                    <FieldNote>Leave the default if you want to decide later.</FieldNote>
+                  </View>
+
+                  <View style={{ gap: ONBOARDING_FIELD_GAP }}>
+                    <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                      <FieldLabel>Daily minimum</FieldLabel>
+                      <FieldCounter current={minimumGoalInput.length} max={MINIMUM_GOAL_MAX_LENGTH} />
+                    </View>
+                    <TextField
+                      autoCapitalize="sentences"
+                      disabled={isSavingSettings}
+                      maxLength={MINIMUM_GOAL_MAX_LENGTH}
+                      onChangeText={setMinimumGoalInput}
+                      placeholder={MINIMUM_GOAL_PLACEHOLDER}
+                      value={minimumGoalInput}
+                    />
+                    <FieldNote>Write the smallest version that still counts.</FieldNote>
+                  </View>
+
+                  <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                     <FieldLabel>Weekly target</FieldLabel>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
@@ -569,27 +620,24 @@ export default function OnboardingScreen() {
                     </View>
                   </View>
 
-                  <View style={{ gap: 10 }}>
-                    <FieldLabel>Timezone</FieldLabel>
-                    <TextField onChangeText={setTimezoneInput} placeholder="America/Los_Angeles" value={timezoneInput} />
-                    <View style={{ alignItems: "flex-start" }}>
-                      <ActionButton
-                        disabled={timezoneInput === currentPhoneTimezone()}
-                        label="Use phone timezone"
-                        onPress={() => setTimezoneInput(currentPhoneTimezone())}
-                        secondary
-                      />
-                    </View>
+                  <View style={{ gap: ONBOARDING_FIELD_GAP }}>
+                    <DeviceTimezonePicker
+                      description="Sets the board's local day and reset timing."
+                      disabled={isSavingSettings}
+                      onChange={setTimezoneInput}
+                      phoneTimezone={phoneTimezone}
+                      value={timezoneInput}
+                    />
                   </View>
 
-                  <View style={{ gap: 10 }}>
+                  <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                     <FieldLabel>Palette</FieldLabel>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       {[
                         { id: "classic", label: "Classic" },
                         { id: "amber", label: "Amber" },
                         { id: "ice", label: "Ice" },
-                        { id: "rose", label: "Rose" },
+                        { id: "rose", label: "Geek" },
                       ].map((palette) => (
                         <ChoicePill
                           key={palette.id}
@@ -613,43 +661,12 @@ export default function OnboardingScreen() {
           ) : null}
 
           {session ? (
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              {formatExpirationLabel(session.expiresAt)}
-            </Text>
+            <BodyText tone="muted">{formatExpirationLabel(session.expiresAt)}</BodyText>
           ) : null}
 
-          {setupMessage ? (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              {setupMessage}
-            </Text>
-          ) : null}
+          {setupMessage ? <BodyText>{setupMessage}</BodyText> : null}
 
-          {apInfo ? (
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Device AP: {apInfo.device_ap_ssid}
-            </Text>
-          ) : null}
+          {apInfo ? <BodyText tone="muted">{`Device AP: ${apInfo.device_ap_ssid}`}</BodyText> : null}
 
           {setupError || apInfoError || networksError || provisioningError || provisioningResponse?.message ? (
             <Text

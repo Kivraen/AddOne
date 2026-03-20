@@ -191,6 +191,14 @@ export function useDeviceActions() {
     await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user.id) });
   };
 
+  const refreshDevices = async () => {
+    if (mode !== "cloud") {
+      return;
+    }
+
+    await loadLatestDevices();
+  };
+
   const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
 
   const resolveFreshLiveDevice = async (deviceId?: string | null) => {
@@ -409,6 +417,7 @@ export function useDeviceActions() {
       isSavingSettings: false,
       isStartingWifiRecovery: false,
       requestWifiRecovery: async (_deviceId?: string) => undefined,
+      refreshDevices: async () => undefined,
       refreshRuntimeSnapshot: async () => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleToday: async (_deviceId?: string) => {
@@ -462,6 +471,7 @@ export function useDeviceActions() {
         requestId: makeClientEventId(),
       });
     },
+    refreshDevices,
     refreshRuntimeSnapshot,
     toggleHistoryCell: async () => undefined,
     toggleToday: async (deviceId?: string) => {
