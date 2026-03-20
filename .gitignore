@@ -5,6 +5,7 @@
 expo-env.d.ts
 # @end expo-cli
 .expo
+.codex-tmp
 .DS_Store
 node_modules
 .env
