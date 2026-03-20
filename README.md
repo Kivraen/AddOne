@@ -20,12 +20,12 @@ AddOne is a device-first habit tracker built as:
 - `supabase/`: schema and migrations
 - `deploy/beta-vps/`: optional self-hosted beta stack
 - `Docs/`: product, contract, runtime, and operations docs
-- `AddOne-Experiments/`: separate experiments / prototypes, not the main shipping app
 
 ## Start Here
 - [Master plan](Docs/AddOne_Main_Plan.md)
 - [Project memory](Docs/project-memory.md)
 - [Git operations](Docs/git-operations.md)
+- [Git simple guide](Docs/git-simple-guide.md)
 - [Stage register](Docs/stages/stage-register.md)
 - [Agent coordination](Docs/agent-coordination.md)
 - [Active work](Docs/Active_Work.md)

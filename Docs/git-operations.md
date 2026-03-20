@@ -1,59 +1,94 @@
 # AddOne Git Operations
 
-Last updated: March 18, 2026
+Last updated: March 20, 2026
 
-This file captures the git and GitHub reliability rules for AddOne's stage-coordinator workflow.
+This file records the real git and recovery state for AddOne so future agents do not have to reconstruct it from chat.
 
-## Memory Rule
+## Current Safe Repo
 
-- Treat repo docs and git history as one long-term memory system.
-- Durable coordination state is not complete until:
-  - the docs are updated
-  - the state is committed
-  - the committed state is pushed when a remote exists, or the reason it is not pushed is recorded here
-
-## Current Remote State
-
-- Remote configured:
-  - `origin -> https://github.com/Kivraen/AddOne.git`
+- Canonical working repo:
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
 - Current branch:
   - `codex/ui-skin-main-screen`
+- Current clean branch tip:
+  - `34156db` `codex: accept timezone audit and update stage memory`
 - Tracking branch:
   - `origin/codex/ui-skin-main-screen`
-- Remote sync status at last review:
-  - local branch is `ahead 7`
-- Latest durable coordination checkpoint commit:
-  - `b47d08a` `codex: establish stage coordination system`
+- Current working tree status:
+  - clean
 
-## Current Backup Gap
+## Recovery Reality
 
-- GitHub remote exists, but the current branch has local commits that are not yet pushed.
-- Until those commits are pushed, GitHub is not a full backup of the current coordination state.
+- The clean repo is healthy and should be used for ongoing work.
+- The quarantined repo still exists at:
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319`
+- That quarantined repo contains a local-only checkpoint:
+  - `4fe6c1c` `codex: checkpoint current product state`
+- `4fe6c1c` is ahead of `origin/codex/ui-skin-main-screen` and contains later UI and coordination changes that were never pushed to GitHub.
+- This is why the clean repo can be healthy but still look older than the latest local state remembered by the user.
 
-## Required Git Practice
+## What Went Wrong
 
-- After any accepted stage or important coordination update:
+- Real product work lived too long as local-only state.
+- Some accepted slices were recorded in docs and reports, but the matching code was not always pushed remotely.
+- At least one important repo/worktree operation was done before fully mapping which checkout held the latest state.
+- After the old repo showed git/object-store instability, recovery rebuilt a clean repo from the remote branch tip instead of the newest local-only branch tip.
+- Result:
+  - the clean repo is stable
+  - the old repo is quarantined
+  - the latest local-only checkpoint still needs explicit recovery if we want that exact newer UI state back in the clean repo
+
+## Plain Language Rules
+
+- `commit` means: save the current repo state into git history on the current branch.
+- `push` means: copy those commits to GitHub so they are backed up remotely.
+- `dirty` means: local file changes exist that are not committed yet.
+- `branch` means: a named line of history.
+- `worktree` means: another local checkout of the same git repo. It can hold newer work than the main folder if we are not careful.
+
+## Required Practice
+
+- After any accepted stage or important implementation slice:
   - update the relevant docs
-  - commit the state
-  - push it if the remote is available and pushing is appropriate
-- If the state is not pushed:
-  - record the reason explicitly in durable docs
-- Avoid force-push and avoid rewriting shared history unless the user explicitly asks.
-- Keep coordination commits scoped so they can be trusted as recovery points.
+  - commit the code and docs together when they belong to the same accepted slice
+  - push the commit if the remote is available
+- Do not treat a report-only checkpoint as a full save if the product code is still only in a dirty working tree.
+- Before merges, worktrees, repo renames, or recovery actions:
+  - run `git status --short --branch`
+  - confirm the exact repo path
+  - confirm the exact branch name
+  - confirm whether the current state is already pushed
+- Avoid force-push and history rewrites unless the user explicitly asks.
+- Keep local backup folders and temporary recovery clones outside the active repo root.
 
-## Checkpoint Guidance
+## User Behavior Rules
 
-- Before risky redesigns, broad refactors, or overnight stopping points:
-  - create a checkpoint commit
-  - create a tag if the user wants a named restore point
-  - push that checkpoint if the remote is available
-- Tags are especially useful before:
-  - large UI rewrites
-  - major firmware architecture changes
-  - schema or infra changes that affect multiple subsystems
+- Ask which repo path and branch we are on before any risky git action.
+- If the app looks right and feels like a checkpoint, ask for:
+  - a commit
+  - a push
+  - optionally a tag if you want a named restore point
+- It is okay to have a dirty tree while actively working on one slice.
+- It is not okay to leave large unexplained dirty state across:
+  - repo surgery
+  - worktree changes
+  - recovery
+  - overnight stopping points
+  - stage boundaries
+- If you hear `dirty`, think:
+  - "these changes exist only on this machine until we commit them"
+- If you hear `not pushed`, think:
+  - "GitHub does not have this yet"
 
-## Handoff Hygiene
+## Coordinator Rules
 
-- Keep the working tree clean before major handoff points whenever practical.
-- If decisions are discussed in chat or other external surfaces, summarize them back into repo docs.
-- Do not treat chat, PR comments, or issue comments as source of truth until the decision is reflected in `Docs/`.
+- Always say the active repo path and branch before deep implementation or git surgery.
+- Do not open new worktrees or rename repos until the active state is checkpointed.
+- If a repo shows git integrity symptoms, stop normal work, make a filesystem backup, and continue from a healthy clone.
+- If the clean repo was rebuilt from a remote tip, explicitly check whether a newer local-only branch or checkpoint existed in the old repo before declaring recovery complete.
+
+## Current Recovery Gap
+
+- The clean repo is safe for continued work.
+- The clean repo is not yet proven to contain the newer local-only checkpoint `4fe6c1c`.
+- Recovering `4fe6c1c` into the clean repo should be treated as a real follow-up task, not an assumption.
