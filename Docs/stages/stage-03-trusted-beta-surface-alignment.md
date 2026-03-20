@@ -53,21 +53,16 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 ## Open Risks / Blockers
 
-- The exact first-user sharing shape still has contradictory ideas around connection model and what the beta should expose first.
-- The exact first-beta engagement lane still needs a final coordinator lock:
-  - lightweight reactions only
-  - or a small activity feed plus lightweight reactions
-  - or another equally bounded social floor
 - The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
 
 ## Recommendation
 
-Keep [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as the umbrella coordination task, treat the March 19 UI polish report as the current checkpoint, and make [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) the next active slice.
+Keep [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as the umbrella coordination task, treat the March 19 UI polish report as the current checkpoint, and treat [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) as accepted.
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-After [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) is accepted, move to [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) to implement the first-beta social floor, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.
+Next, implement [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) to ship the first-beta sharing flow, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.

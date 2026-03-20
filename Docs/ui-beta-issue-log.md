@@ -1,6 +1,6 @@
 # AddOne Beta UI Issue Log
 
-Last updated: March 18, 2026
+Last updated: March 19, 2026
 
 This is the live issue and decision log for `S3: Beta UI Completion And Social Shape`.
 Use it to capture:
@@ -108,42 +108,58 @@ Use it to capture:
 - The current profile surface is only:
   - email or demo session state
   - sign out
-- Decision still needed for first-user beta identity shape:
-  - `display_name` only
-  - `username` only
-  - `first_name + last_name + username`
+- Beta auth should stay `email OTP`; we do not need a heavier auth system just to unlock the social layer.
+- `Friends` should be gated behind a friend-facing social profile rather than exposing raw email:
+  - required `display_name`
+  - required unique `username`
+  - optional `avatar`
+  - optional `first_name`
+  - optional `last_name`
+- Social profile completion should happen when the user first enters `Friends`, not during core device onboarding.
+- Friend-facing UI should use `display_name + @username`; email stays private and account-only.
 - Current backend reality:
   - the repo already has `profiles.display_name`
-  - no richer public identity model is locked yet
+  - the repo already has `profiles.avatar_url`
+  - the repo does not yet have a unique `username` field
+  - the username-backed social profile is planned, but not yet implemented
 
 ### Friends and social beta
 
 - `Friends` planning is now the next active product slice inside `S3`. Onboarding and Wi-Fi recovery polish are intentionally being held as the final visible UI polish slice after the friends checkpoint.
 - The `Friends` tab is visible, but it is still placeholder UI.
-- The backend already has sharing primitives:
-  - shared boards fetch
-  - share code rotation
-  - pending access requests
-  - approve / reject request
-  - viewer list
-- First beta should no longer be treated as "shared boards only" by default. The durable beta target is:
-  - link with other people deliberately
-  - browse between friends' boards and recent progress
-  - support at least one lightweight engagement lane around activity, not just passive viewing
-- The beta social layer still needs one explicit lock decision set:
-  - whether the initial engagement lane is:
-    - simple reactions / likes only
-    - an activity feed with lightweight reactions
-    - comments or threaded replies from day one
-  - how much per-day or per-check-in detail appears when browsing friends
-  - whether "friends" in first beta is:
-    - a private linked-circle model
-    - or a slightly broader viewer/follower model
-- Post-beta direction should already be preserved in the plan so the beta implementation does not block it:
+- The shared object in beta is the unit/grid, not a broad user-level social graph.
+- The first-beta sharing model is now:
+  - one active rotatable share code per device
+  - request access by code
+  - owner approval
+  - approved viewer access to that board
+- Beta should not use username search/discovery for sharing. Usernames are for identity, not public board discovery.
+- The initial beta `Friends` surface is now intentionally narrower:
+  - complete a social profile if needed
+  - share your board
+  - request another board by code
+  - review pending requests
+  - browse connected boards live when possible
+- Explicitly deferred from the first implementation slice:
+  - activity feed
+  - reactions
+  - comments
+  - push notifications
+- Future social should still be preserved in the direction:
+  - app-level activity log across connected boards
+  - reactions
+  - comments
+  - optional push notifications later
+- Post-beta challenge direction should still be preserved separately so the beta implementation does not block it:
   - challenge groups with a shared goal
   - a group board where day brightness reflects how many members completed the challenge that day
   - communication around the shared challenge
-- Do not build bespoke messaging infrastructure casually for beta. Prefer a reliable managed backend path and battle-tested Expo-compatible libraries when the communication stack is chosen explicitly.
+- Challenge guardrails already worth preserving now:
+  - challenge should be a separate product object from private board sharing
+  - challenge participation should start from join time, not rewrite prior personal history
+  - the personal board should remain the default device truth-view
+  - if challenge ever reaches the device, it should not silently override the personal board
+- Do not build bespoke messaging infrastructure casually for beta.
 
 ### Cross-cutting UI quality
 
@@ -156,12 +172,10 @@ Use it to capture:
 
 ## Immediate Decisions To Lock
 
-- Decide the first-user beta identity model for profile and friend-facing display.
-- Create and accept a dedicated friends planning checkpoint before implementation starts.
-- Decide the first-user beta meaning of `Friends`.
-- Decide the first-user beta social floor:
-  - linked-board browsing only
-  - or linked-board browsing plus a lightweight activity lane
+- Accept the dedicated friends planning checkpoint as the source of truth for profile-gated unit sharing.
+- Create the profile identity / social-profile gate task before the real Friends implementation task.
+- Keep username search out of beta sharing.
+- Keep future feed / reactions / comments out of the first Friends implementation slice.
 - Decide the real shipped history-editing entry path.
 - Decide the beta timezone model:
   - device timezone versus viewer timezone
@@ -182,7 +196,7 @@ Use it to capture:
 - `T-012` broader firmware timezone expansion if we want support beyond the initial beta zone list
 - `T-007` main screen and settings polish batch
 - `T-015` friends beta plan and model lock
-- `T-001` friends beta surface and social floor batch
 - `T-009` profile identity model and account surface batch
+- `T-001` friends beta surface and social floor batch
 - `T-013` challenge groups and shared board model
 - `T-008` onboarding and Wi-Fi recovery polish batch

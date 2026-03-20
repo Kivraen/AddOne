@@ -84,9 +84,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-009-stage-s3-friends-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-009-stage-s3-friends-plan-and-model-lock.md)
+  [B-010-stage-s3-profile-identity-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-010-stage-s3-profile-identity-and-account-surface.md)
 - Current execution task:
-  [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md)
+  [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md)
 - Git durability note:
   the local branch has a GitHub remote configured but is currently ahead of origin, so the latest local coordination state is committed but not yet fully backed up remotely.
 
@@ -121,6 +121,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - current beta target
   - deferred social layers
   - backend starting point and likely gaps
+- implement the friend-facing profile identity layer that `Friends` now depends on
 - Define and implement the first-user beta `Friends` / sharing scope instead of treating it as placeholder UI:
   - deliberate linking between people
   - browsing friends' boards and progress

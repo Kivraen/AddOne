@@ -23,6 +23,7 @@ source_docs:
   - Docs/AddOne_Main_Plan.md
   - Docs/AddOne_V1_Canonical_Spec.md
   - Docs/AddOne_Backend_Model.md
+  - Docs/plans/friends-beta-plan.md
   - Docs/ui-beta-issue-log.md
 success_gate: Strict gate
 report_path: Docs/agent-reports/2026-03-19-challenge-groups-and-shared-board-model.md
@@ -36,9 +37,21 @@ The user has already articulated a clear next-wave social concept: a group chall
 
 ## In Scope
 - Lock the product model for shared-goal challenges.
-- Define how challenge boards differ from private boards and friend-board browsing.
+- Define how challenge boards differ from:
+  - private personal boards
+  - friend-board browsing
 - Define the aggregated board rule where color intensity or brightness reflects completion count for the group.
+- Define the join rule:
+  - challenge participation starts from the moment a user joins
+  - prior personal board history does not silently backfill the challenge
+- Define the per-user rule:
+  - each participant still keeps their own weekly success / fail outcome
+- Define the overlay rule:
+  - the current user's own completion stays the strongest / full-intensity state
+  - other participants' completion can tint otherwise empty days
+- Decide whether challenge should remain app-first or ever reach the device surface, without assuming it overrides the personal board by default.
 - Define what communication belongs around a challenge group.
+- Bound how challenge membership fits a `single-habit` product if users can theoretically join more than one challenge.
 - Bound the data/model implications so future execution can use reliable managed infrastructure rather than bespoke chat systems.
 
 ## Out of Scope
@@ -53,6 +66,7 @@ The user has already articulated a clear next-wave social concept: a group chall
   - private boards
   - friend-board browsing
   - shared-goal challenge boards
+- Preserve the rule that the personal board remains the default truth-view unless a future explicit challenge mode is accepted.
 - Bound the likely backend and UI implications without overcommitting to an implementation too early.
 
 ## Verification Required
@@ -66,3 +80,5 @@ The user has already articulated a clear next-wave social concept: a group chall
 ## Open Risks
 - The eventual communication stack should prefer managed, reliable primitives rather than a custom realtime chat system built prematurely.
 - The final aggregated-board visual language will need careful design validation once the feature is actually in scope.
+- If challenge ever overrides the personal board too aggressively, it could break the quiet device-first ritual that defines AddOne.
+- Multiple simultaneous challenges could pull the product away from its `single-habit` focus unless the rule is kept very explicit.

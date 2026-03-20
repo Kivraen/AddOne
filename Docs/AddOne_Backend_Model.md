@@ -1,6 +1,6 @@
 # AddOne Backend Model
 
-Last locked: March 9, 2026
+Last locked: March 19, 2026
 
 This document defines the first real cloud data model for AddOne.
 It follows the canonical v1 product spec and assumes:
@@ -8,7 +8,7 @@ It follows the canonical v1 product spec and assumes:
 - legacy prototype backend stays separate
 - AddOne uses its own staging and production Supabase projects
 - first-user v1 active product surface is `single owner, one device`
-- sharing, rewards, and reminders may still exist in schema for future phases, but they are not active first-user v1 product requirements
+- sharing schema already exists and may become active during the beta sharing workstream; rewards and reminders remain future-phase unless explicitly pulled in
 
 For the firmware-facing RPC and provisioning handshake, see [AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md) and [AddOne_Device_AP_Provisioning_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md).
 For low-latency online device delivery, see [AddOne_Device_Realtime_Transport.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md).
@@ -32,17 +32,29 @@ Temporary beta decision:
 - The relational model still allows Google or password auth later because all tables anchor to `auth.users.id`.
 - Branded auth email and redirect configuration can move to `addone.studio` later without changing the relational model.
 - For Supabase-hosted email OTP, the current email template must include `{{ .Token }}` rather than a magic-link-only `{{ .ConfirmationURL }}` flow.
+- Beta social identity should live in `public.profiles`, not inside auth itself.
+- Email stays the auth credential, not the friend-facing identity label.
 
 ## Core Data Model
 
 ### `profiles`
 Purpose:
 - stores display metadata for authenticated users
+- acts as the friend-facing social profile layer used by `Friends`
 
 Key fields:
 - `user_id`
 - `display_name`
 - `avatar_url`
+
+Likely next beta social-profile extension:
+- `username` unique and required before `Friends` unlocks
+- `first_name` optional
+- `last_name` optional
+
+Notes:
+- `display_name + @username` is the intended beta social identity surface.
+- Beta sharing should remain device-code plus owner-approval based, not open username discovery.
 
 ### `devices`
 Purpose:
@@ -258,19 +270,15 @@ These functions are important because they keep multi-table mutations atomic and
 - Customer ownership begins only after the onboarding claim succeeds, not merely because a device exists in the backend.
 
 ## Next Backend Steps
-1. Apply the migration to `addone-staging`.
-2. Generate typed database types from the staging project.
-3. Add repository/query hooks for:
-   - active user profile
-   - owned devices
-   - settings updates
-   - day history reads and writes
-4. Replace the mock device store with real Supabase-backed reads.
-5. Implement the device-side AP HTTP server for the locked local provisioning contract.
-6. Define the firmware cloud sync contract around:
-   - claim
-   - heartbeat / last seen
-   - command pull / ack
-   - day-event push
-7. Integrate firmware against those contracts.
-8. Bring up the realtime gateway and MQTT broker so online devices stop relying on polling as the primary delivery path.
+1. Revalidate the device-authoritative runtime path on real hardware and keep the snapshot mirror stable.
+2. Finish the always-on beta bring-up:
+   - hosted gateway
+   - managed broker
+   - beta app / firmware profiles
+3. Harden gateway and broker operations for beta:
+   - auth
+   - restart safety
+   - health checks
+   - observability
+4. Support the planned sharing beta workstream without widening scope into rewards, reminders, or multi-device product work.
+5. Split dedicated development and beta Supabase projects later when account capacity allows, without changing the current runtime contract.

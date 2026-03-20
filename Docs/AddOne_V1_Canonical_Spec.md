@@ -1,6 +1,6 @@
 # AddOne V1 Canonical Spec
 
-Last locked: March 17, 2026
+Last locked: March 19, 2026
 
 This document is the canonical product and UI spec for AddOne v1.
 If another doc conflicts with this one, this file wins until an explicit new decision is made.
@@ -71,10 +71,19 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - Future auth can add Google or password-based login later without changing the data model.
 - `Friends` / sharing is now a planned beta workstream rather than a surface to hide.
 - First-user beta should include:
-  - deliberate person-to-person linking
-  - browsing friends' boards and recent progress
-  - one bounded lightweight social lane, not only passive viewing
-- Deeper comments, full messaging, and shared-goal challenge groups are future-facing unless explicitly pulled into scope later.
+  - deliberate unit-based linking
+  - one active rotatable share code per device
+  - owner approval for shared-board access
+  - live browsing of approved friends' boards
+- Access to `Friends` requires a completed friend-facing social profile:
+  - required `display_name`
+  - required unique `username`
+  - optional `avatar`
+  - optional `first_name`
+  - optional `last_name`
+- Email remains the auth credential and account identifier, not the friend-facing social label.
+- Social profile completion should happen outside core device onboarding; onboarding remains focused on getting the device online and claimed.
+- Activity feed, reactions, comments, push notifications, and shared-goal challenge groups are future-facing unless explicitly pulled into scope later.
 - Ownership model for first-user v1 is `single owner, one device`.
 
 ## Future Domain And Branding
@@ -264,7 +273,10 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 ## Known Gaps
 - App navigation still needs a first-user beta cleanup pass:
   - turn the `Friends` tab from placeholder UI into the intended beta sharing flow
-  - lock the first-beta social floor for `Friends` so the surface is more than passive viewing but less than a full messaging product
+  - keep the first-beta `Friends` social floor intentionally narrow:
+    - profile-gated unit sharing
+    - live browsing of approved shared boards
+    - richer social interaction explicitly deferred
   - reconcile the leftover dedicated `/history` route with the currently surfaced inline board editor so the shipped UX and docs match
 - Onboarding and recovery now use the device-side Wi-Fi scan list with hidden-network manual fallback, but they still need continued polish against real devices and real routers.
 - Nearby AP maintenance currently covers setup and Wi-Fi recovery only, which is the intended first-user v1 scope.
@@ -277,7 +289,7 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 1. Lock the first-user beta surface:
    - define the first-user beta `Friends` / sharing scope
    - replace the current `Friends` placeholder UI with the intended product flow
-   - keep the first-beta social layer bounded and explicitly defer deeper messaging and shared-goal challenges unless reprioritized
+   - keep the first-beta social layer intentionally narrow and explicitly defer activity feed, reactions, comments, push, and shared-goal challenges unless reprioritized
    - choose one history-editing entry path and remove the stale alternative from the shipped surface
    - keep rewards, reminders, and multi-device UX hidden unless explicitly brought into scope
 2. Revalidate the current runtime path on real hardware as a locked baseline:
