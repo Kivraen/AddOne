@@ -88,7 +88,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current execution task:
   [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md)
 - Git durability note:
-  the local branch has a GitHub remote configured but is currently ahead of origin, so the latest local coordination state is committed but not yet fully backed up remotely.
+  the active safe baseline is now on `codex/recovery-safe-baseline-20260319` and backed up remotely; the old damaged repo lives at `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319` and should not be used for new work.
 
 ## Where We Are Now
 
