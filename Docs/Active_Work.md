@@ -19,7 +19,7 @@ The coordinator owns this file.
 
 | Workstream | Trust | Summary | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| Coordination system | Verified | Main plan, stage register, task briefs, report format, and dashboard foundation now exist. | Coordinator | Keep the docs and the dashboard aligned after every completed task. |
+| Coordination system | Verified | Main plan, stage register, task briefs, report format, and recovery-safe coordinator memory now exist in the clean repo. | Coordinator | Keep the docs aligned after every completed task. Rebuild the dashboard source only if the visual layer is still needed. |
 | App beta surface | Stale | The product shell has a substantial S3 polish pass behind it now, and the first-beta Friends plan is now explicitly locked. The next concrete dependency is the social-profile/account surface before Friends implementation can start. | Coordinator | `S3` remains active until profile gating, Friends, and the final onboarding polish slice are all explicit enough to accept. |
 | Timezone model | Verified | The current flow is now audited: device timezone is the canonical scheduling setting, a future viewer timezone must stay separate, and universal support is firmware-blocked today. | Coordinator | Choose a beta policy next: supported-zone picker and fallback messaging, or explicit firmware timezone expansion. |
 | Beta environment | Implemented | Hosted beta infrastructure shape exists, but the full always-on stack is not yet end-to-end verified. | Coordinator | Queue `T-002` after the active UI stage is explicit enough to hand off cleanly. |
