@@ -33,6 +33,7 @@ Use it to recover the project state quickly without relying on chat history.
 2. `T-001` beta Friends surface and social floor
 3. `T-008` onboarding and Wi-Fi recovery polish
 4. `T-011` timezone revision pass to close acceptance gaps
+5. `T-016` Expo SDK 55 upgrade and validation after the current SDK 54 real-device beta build is tested
 
 ## Recovery Notes
 
@@ -46,6 +47,7 @@ Use it to recover the project state quickly without relying on chat history.
 - `T-009` is still not implemented, so Friends cannot move from plan to execution yet.
 - `T-011` is still `revise and retry` until reset-time handling and manual proof are closed.
 - Hosted beta validation and real-device validation remain after the UI stage.
+- Expo SDK 55 is not yet durably migrated in this repo; the planned upgrade now lives in `T-016`.
 
 ## Source Of Truth Order
 
