@@ -1,6 +1,6 @@
 # Active Work
 
-Last updated: March 19, 2026
+Last updated: March 20, 2026
 
 This file is the live registry for coordination work.
 It is the structured companion to [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md).
@@ -22,7 +22,7 @@ The coordinator owns this file.
 | Coordination system | Verified | Main plan, stage register, task briefs, report format, and dashboard foundation now exist. | Coordinator | Keep the docs and the dashboard aligned after every completed task. |
 | App beta surface | Stale | The product shell has a substantial S3 polish pass behind it now, and the first-beta Friends plan is now explicitly locked. The next concrete dependency is the social-profile/account surface before Friends implementation can start. | Coordinator | `S3` remains active until profile gating, Friends, and the final onboarding polish slice are all explicit enough to accept. |
 | Timezone model | Verified | The current flow is now audited: device timezone is the canonical scheduling setting, a future viewer timezone must stay separate, and universal support is firmware-blocked today. | Coordinator | Choose a beta policy next: supported-zone picker and fallback messaging, or explicit firmware timezone expansion. |
-| Beta environment | Implemented | Hosted beta infrastructure shape exists, but the full always-on stack is not yet end-to-end verified. | Coordinator | Queue `T-002` after the active UI stage is explicit enough to hand off cleanly. |
+| Beta environment | Implemented | Hosted beta infrastructure is alive and the TestFlight distribution path now works, but the always-on device reconnect path is not yet trusted enough to close validation. | Coordinator | Queue `T-002` after the active UI stage is explicit enough to hand off cleanly, then use `T-003` to prove the real device path. |
 | Backend runtime mirror | Implemented | Snapshot-based runtime and gateway forwarding exist, but the full staged validation loop is still pending. | Coordinator | Re-check after `T-002` and `T-003`. |
 | Hardware validation | Not Done | Validation criteria are clear, but the full real-device pass has not been completed yet. | Coordinator | Start `T-003` only after `S1` is accepted or explicitly bounded. |
 
@@ -35,7 +35,7 @@ The coordinator owns this file.
 | T-002 | Hosted beta bring-up | infra | Backlog | Unassigned | — | [T-002](tasks/T-002-hosted-beta-bring-up.md) | — | Strict gate | Return to this after the active UI stage is explicit enough to avoid cross-stage churn. |
 | T-003 | Real-device validation pass | firmware | Backlog | Unassigned | T-002 | [T-003](tasks/T-003-real-device-validation-pass.md) | — | Strict gate | Start after the hosted beta path is stable enough to support validation. |
 | T-004 | Truth cleanup after validation | docs | Backlog | Unassigned | T-001, T-002, T-003 | [T-004](tasks/T-004-truth-cleanup-after-validation.md) | — | Strict gate | Run after implementation and validation results are known. |
-| T-005 | Beta UI audit and scope lock | app | In Progress | Codex | — | [T-005](tasks/T-005-beta-ui-audit-and-scope-lock.md) | [Report](agent-reports/2026-03-19-s3-cumulative-ui-surface-report.md) | Strict gate | The cumulative checkpoint is accepted, repo-wide typecheck signal is restored, and the Friends planning lock is now accepted; move execution to `T-009`, then `T-001`, then the final onboarding slice. |
+| T-005 | Beta UI audit and scope lock | app | Closed | Codex | — | [T-005](tasks/T-005-beta-ui-audit-and-scope-lock.md) | [Report](agent-reports/2026-03-19-s3-cumulative-ui-surface-report.md) | Strict gate | Accepted as the stage-entry audit and scope-lock checkpoint. Continue the active stage through `T-009`, `T-001`, the `T-011` revision path if needed, and the final onboarding slice. |
 | T-015 | Friends beta plan and model lock | product | Closed | Codex | T-005 | [T-015](tasks/T-015-friends-beta-plan-and-model-lock.md) | [Report](agent-reports/2026-03-19-friends-beta-plan-and-model-lock.md) | Strict gate | Accepted. First-beta Friends is now narrowed to profile-gated code sharing plus live read-only board browsing, with richer social deferred. |
 | T-009 | Profile identity model and account surface | app | Brief Ready | Unassigned | T-015 | [T-009](tasks/T-009-profile-identity-model-and-account-surface.md) | — | Strict gate | Start with [B-010](briefs/B-010-stage-s3-profile-identity-and-account-surface.md) to implement the social-profile gate that Friends now depends on. |
 | T-008 | Onboarding and Wi-Fi recovery polish batch | app | Backlog | Unassigned | T-001 | [T-008](tasks/T-008-onboarding-and-wifi-recovery-polish.md) | — | Strict gate | Hold this as the final visible UI polish slice after the friends planning and friends implementation checkpoint. |

@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 18, 2026
+Last updated: March 20, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -41,9 +41,11 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The app reads live runtime state from `device_runtime_snapshots` and Supabase realtime.
 - The firmware v2 foundation exists with AP provisioning, claim redemption, heartbeat, MQTT realtime subscribe, fallback poll, and runtime snapshot upload.
 - The realtime gateway exists and mirrors queued commands plus device-side runtime/presence events.
-- The `Friends` tab is still visible placeholder UI even though the backend already has sharing primitives.
-- Hosted beta documentation and config shape exist, but the full hosted baseline is not yet trusted enough to unblock real-device validation without ambiguity.
-- The current profile surface is still just the email or demo session and a sign-out action.
+- The recovered latest UI baseline is now restored and promoted to `main` at `d589cdc`.
+- A real TestFlight install from that baseline now works.
+- The `Friends` tab is still not implemented as the planned first-beta sharing surface, even though the backend already has sharing primitives.
+- Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
+- The current profile surface is still not the planned friend-facing identity model.
 - The backend profile model currently exposes `profiles.display_name` rather than a richer username or first/last-name shape.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
 
@@ -51,18 +53,17 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
-- First execution task: [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md)
+- Next brief: [B-010-stage-s3-profile-identity-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-010-stage-s3-profile-identity-and-account-surface.md)
+- Current execution task: [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md)
 
 ## Current Blockers
 
-- The main screen and settings still need a coordinated polish pass rather than isolated fixes.
-- Onboarding and Wi-Fi recovery need a durable issue log and polish plan before implementation gets split.
-- The profile identity model is not locked yet.
-- The friends beta shape still has contradictory ideas and no accepted first-user connection model yet.
-- The beta timezone policy is not locked yet: we still need to choose between a supported-zone picker with explicit fallback messaging or broader firmware timezone support.
-- Release hardening and validation stages now depend on this UI lock pass being explicit enough to hand off cleanly.
-- GitHub is not yet a full backup of the current local branch state because `codex/ui-skin-main-screen` is ahead of origin.
+- The profile identity model and account surface are still the next missing dependency before the `Friends` beta flow can be implemented.
+- The `Friends` implementation itself is still pending after the planning lock.
+- The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
+- Onboarding and Wi-Fi recovery still need the final polish slice after the profile and friends work.
+- The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
+- `main` is now fully backed up on GitHub, so there is no current backup gap.
 
 ## Fresh Agent Read Order
 

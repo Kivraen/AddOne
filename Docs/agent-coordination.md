@@ -1,6 +1,6 @@
 # AddOne Agent Coordination
 
-Last updated: March 18, 2026
+Last updated: March 20, 2026
 
 This file defines how AddOne uses the coordinator-led stage workflow.
 
@@ -55,7 +55,7 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - `S0 Coordination Bootstrap` -> [T-000-project-dashboard-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-000-project-dashboard-foundation.md)
 - `S1 Validation Baseline Ready` -> [T-002-hosted-beta-bring-up.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-002-hosted-beta-bring-up.md)
 - `S2 Trusted Real-Device Validation` -> [T-003-real-device-validation-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-003-real-device-validation-pass.md)
-- `S3 Beta UI Completion And Social Shape` -> [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) and later UI implementation batches
+- `S3 Beta UI Completion And Social Shape` -> [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as accepted entrypoint work, then [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md), then later UI implementation batches
 - `S4 Beta Hardening And Durable Release Memory` -> [T-004-truth-cleanup-after-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-004-truth-cleanup-after-validation.md)
 
 ## Required Brief Contents
@@ -102,3 +102,5 @@ If a remote exists, acceptance should also consider whether the durable checkpoi
 - Never absorb unrelated dirty files into a stage acceptance commit.
 - Push accepted durable checkpoints when appropriate because this repo has a GitHub remote.
 - Before risky multi-file changes or overnight stopping points, prefer checkpoint commits and optional tags.
+- Keep `main` as the stable official branch and start new implementation slices from a fresh branch off `main`.
+- Use worktrees only for explicit parallel tracks or when the user wants two active checkouts at once.

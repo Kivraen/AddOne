@@ -9,11 +9,11 @@ This file records the real git and recovery state for AddOne so future agents do
 - Canonical working repo:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
 - Current branch:
-  - `codex/ui-skin-main-screen`
+  - `main`
 - Current clean branch tip:
-  - `34156db` `codex: accept timezone audit and update stage memory`
+  - `d589cdc` `codex: add testflight build profile`
 - Tracking branch:
-  - `origin/codex/ui-skin-main-screen`
+  - `origin/main`
 - Current working tree status:
   - clean
 
@@ -22,10 +22,14 @@ This file records the real git and recovery state for AddOne so future agents do
 - The clean repo is healthy and should be used for ongoing work.
 - The quarantined repo still exists at:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319`
-- That quarantined repo contains a local-only checkpoint:
-  - `4fe6c1c` `codex: checkpoint current product state`
-- `4fe6c1c` is ahead of `origin/codex/ui-skin-main-screen` and contains later UI and coordination changes that were never pushed to GitHub.
-- This is why the clean repo can be healthy but still look older than the latest local state remembered by the user.
+- The newer local-only recovery line was successfully reconstructed and promoted.
+- The recovered latest UI baseline now lives on:
+  - `main`
+  - `origin/main`
+  - `codex/ui-skin-recovered-local-latest`
+- Recovery checkpoint tags now exist on the remote:
+  - `ui-recovered-candidate-20260320`
+  - `main-before-ui-recovered-20260320`
 
 ## What Went Wrong
 
@@ -36,7 +40,7 @@ This file records the real git and recovery state for AddOne so future agents do
 - Result:
   - the clean repo is stable
   - the old repo is quarantined
-  - the latest local-only checkpoint still needs explicit recovery if we want that exact newer UI state back in the clean repo
+  - the recovered latest UI state is now back inside the canonical repo and on `main`
 
 ## Plain Language Rules
 
@@ -58,6 +62,10 @@ This file records the real git and recovery state for AddOne so future agents do
   - confirm the exact repo path
   - confirm the exact branch name
   - confirm whether the current state is already pushed
+- Default workflow from here:
+  - `main` stays stable
+  - new implementation work starts from a fresh branch off `main`
+  - use worktrees only when we intentionally want two active checkouts at once
 - Avoid force-push and history rewrites unless the user explicitly asks.
 - Keep local backup folders and temporary recovery clones outside the active repo root.
 
@@ -89,6 +97,5 @@ This file records the real git and recovery state for AddOne so future agents do
 
 ## Current Recovery Gap
 
-- The clean repo is safe for continued work.
-- The clean repo is not yet proven to contain the newer local-only checkpoint `4fe6c1c`.
-- Recovering `4fe6c1c` into the clean repo should be treated as a real follow-up task, not an assumption.
+- There is no active recovery gap in the canonical repo right now.
+- The broken repo remains useful only as historical quarantine, not as the active source of truth.

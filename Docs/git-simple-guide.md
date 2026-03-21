@@ -14,7 +14,7 @@ This file explains AddOne git behavior in plain language.
 2. `Branch`
 - A branch is one named line of work.
 - Right now the branch we should use is:
-  - `codex/ui-skin-main-screen`
+  - `main`
 
 3. `Dirty`
 - `Dirty` does not mean broken.
@@ -93,9 +93,14 @@ Use this as the default workflow:
 
 - Safe repo:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
-- Safe current branch:
-  - `codex/ui-skin-main-screen`
+- Stable official branch:
+  - `main`
+- New work should usually happen on:
+  - a fresh branch created from `main`
 - Quarantined old repo:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319`
-- Known unresolved gap:
-  - the older quarantined repo still has a newer local-only checkpoint `4fe6c1c` that was never pushed and may contain newer UI state than the current clean repo
+- Recovery status:
+  - the newer local-only UI state has already been recovered and promoted to `main`
+- Worktree rule:
+  - do not use worktrees by default
+  - use them only when we explicitly want two active checkouts at the same time

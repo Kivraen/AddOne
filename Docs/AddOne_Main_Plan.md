@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 18, 2026
+Last locked: March 20, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -60,6 +60,7 @@ Those files are duplicate worktree snapshots and should not be treated as the cu
 - AddOne is in `post-architecture, pre-beta validation`.
 - The stage-coordinator system is now active.
 - The current active stage is `S3: Beta UI Completion And Social Shape`.
+- The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install.
 - The core app, backend, realtime gateway, and firmware v2 foundations are now real.
 - The remaining work is mostly:
   - beta UI completion and social-shape lock
@@ -88,7 +89,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current execution task:
   [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md)
 - Git durability note:
-  the local branch has a GitHub remote configured but is currently ahead of origin, so the latest local coordination state is committed but not yet fully backed up remotely.
+  `main` now points to the tested recovered baseline at `d589cdc`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
 ## Where We Are Now
 
@@ -106,6 +107,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - The realtime gateway now handles both directions:
   - `Supabase queued commands -> MQTT`
   - `MQTT ack / presence / day-state / runtime snapshots -> Supabase RPCs`
+- The TestFlight path is now real and working for the recovered latest app baseline.
 - Remaining backend work is mostly hosted-beta validation and hardening, not foundational schema design.
 
 ### Firmware

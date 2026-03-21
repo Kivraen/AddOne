@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 18, 2026
+Last updated: March 20, 2026
 
 ## Current Stage Map
 
@@ -13,8 +13,8 @@ Last updated: March 18, 2026
 ## Active Stage
 
 - `S3: Beta UI Completion And Social Shape`
-- Goal: lock the visible beta product surface, capture the real UI gaps, and split the next implementation work into clean batches for home/settings polish, onboarding/recovery polish, profile identity, and friends beta scope.
-- Next brief: [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
+- Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
+- Next brief: [B-010-stage-s3-profile-identity-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-010-stage-s3-profile-identity-and-account-surface.md)
 
 ## Stage Notes
 
@@ -28,7 +28,8 @@ Last updated: March 18, 2026
 
 - Only one stage is active at a time unless the user explicitly asks for a parallel track.
 - Stage order is adaptive. The active stage changed on March 18, 2026 because the user reprioritized finishing the beta UI surface before more infra-only proof work.
-- `T-005` is the current stage-entry task because the UI work still needs a durable issue log and several product decisions locked before it should be split into execution agents.
+- `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
+- `T-009` is the next concrete implementation slice inside `S3`.
 - `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`

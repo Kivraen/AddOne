@@ -50,16 +50,18 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
 - The accepted timezone audit in [2026-03-18-timezone-model-and-universal-flow-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) confirms that device timezone is the canonical scheduling setting, any future viewer/display timezone must stay separate, and unsupported zones currently fall back to Los Angeles rules on-device.
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
+- The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install from `d589cdc`.
 
 ## Open Risks / Blockers
 
 - The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
+- The current device offline or reconnect behavior is still unresolved and should be treated as a real validation problem after the remaining S3 product-shape work is done.
 
 ## Recommendation
 
-Keep [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as the umbrella coordination task, treat the March 19 UI polish report as the current checkpoint, and treat [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) as accepted.
+Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as accepted historical stage-entry work, treat the March 19 UI polish report as the current recovered baseline context, and treat [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) as accepted.
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
