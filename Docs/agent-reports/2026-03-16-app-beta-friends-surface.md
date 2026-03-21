@@ -6,13 +6,19 @@ agent: Codex
 result_state: Implemented
 verification_state: Partially Verified
 changed_paths:
-  - Docs/AddOne_Backend_Model.md
-  - Docs/AddOne_V1_Canonical_Spec.md
-  - Docs/plans/friends-beta-plan.md
-  - Docs/ui-beta-issue-log.md
+  - app.config.js
+  - app/(app)/friends-arrange.tsx
+  - app/(app)/friends-requests.tsx
+  - components/app/friends-arrange-screen.tsx
+  - components/app/friends-requests-screen.tsx
   - components/app/friends-tab-content.tsx
+  - components/app/home-screen.tsx
+  - components/board/device-board-stage.tsx
+  - hooks/use-friends-board-order.ts
   - hooks/use-friends.ts
-  - lib/addone-query-keys.ts
+  - lib/supabase/addone-repository.ts
+  - package-lock.json
+  - package.json
 ---
 
 ## Stage
@@ -21,20 +27,32 @@ S3: Beta UI Completion And Social Shape
 
 ## Status
 
-Implemented. The placeholder Friends lane is replaced with the first real beta sharing flow on top of the existing code-based sharing backend.
+Implemented and ready for coordinator review. The Friends tab is no longer a placeholder lane. It now behaves like a real first-beta social surface with code-based connection, owner request management, read-only friend boards, per-card sharing, and a compact ordering screen.
 
 ## Changes made
 
-- Added `use-friends.ts` to query shared boards, active-device sharing state, and share request actions through the existing repository contract.
-- Added new query keys for shared boards and active-device sharing state.
-- Reworked the Friends tab into a real beta surface with:
-  - share-code request entry
-  - owner share code display and rotation
-  - pending request approval or rejection
-  - connected viewer list
-  - read-only shared board cards using the real board renderer
-- Added app-side realtime invalidation for Friends-specific data inside the new hook so board previews and owner sharing state refresh from the existing backend changes.
-- Updated scoped product docs to reflect that the first Friends implementation now uses the existing share-code and approval model without adding a new backend migration.
+- Reworked the Friends tab around a quiet board-first layout:
+  - compact overflow menu instead of a permanent control strip
+  - friend boards as the primary surface
+  - board cards with avatar, person-first naming, compact status rail, and per-card share action
+- Replaced the earlier near-copy board treatment with the shared board stage component so Home and Friends use the same device/grid visual system.
+- Added first-owner share-code generation and owner sharing controls that no longer get stuck on an empty dashed state.
+- Added glass modal flows for:
+  - joining by code
+  - sharing your code
+- Moved request management out of a cramped popup into a dedicated screen with standard navigation.
+- Added request management actions with compact icon-first controls:
+  - approve
+  - reject
+  - revoke existing viewer access
+- Extended the repository and Friends hook so connected viewers can actually be revoked through the backend instead of only hidden in UI.
+- Added per-card sharing for friend boards:
+  - share action on each board row
+  - dedicated export snapshot with a light background
+  - no live status/share chrome included in the shared image
+- Added long-name handling so people names stay fixed-size and truncate cleanly instead of shrinking unpredictably.
+- Added a first-pass `Arrange boards` screen with a compact board list and local persisted order preference keyed by signed-in user.
+- Kept the implementation on the existing backend contract. No new sharing migration or new social RPC layer was required for the Friends core itself.
 
 ## Commands run
 
@@ -48,31 +66,47 @@ Implemented. The placeholder Friends lane is replaced with the first real beta s
 - `EXPO_NO_DOTENV=1 EXPO_PUBLIC_SUPABASE_URL='' EXPO_PUBLIC_SUPABASE_ANON_KEY='' npx expo start --clear --port 8112`
 - `xcrun simctl openurl booted 'exp://127.0.0.1:8112/--/friends'`
 - `xcrun simctl io booted screenshot /tmp/friends-gate-demo-true.png`
+- `npx expo install react-native-view-shot expo-sharing`
+- `npm install react-native-draggable-flatlist`
+- `npm install react-native-draglist`
 
 ## Evidence
 
 - `npm run typecheck` passed.
-- The existing sharing RPCs were sufficient. No new backend migration or new sharing RPC was required for `T-001`.
-- Code verification confirms the Friends tab now wires to:
-  - `request_device_view_access`
-  - `rotate_device_share_code`
-  - `approve_device_view_request`
-  - `reject_device_view_request`
+- The existing share-code contract was sufficient. No new `T-001` backend migration was required.
+- The Friends implementation now uses the repository contract directly for:
   - `fetchSharedBoards`
-- Native UI proof captured the implemented Friends surface in Expo Go at `/tmp/friends-gate-demo-true.png`.
-- The screen now includes:
-  - share-code request entry
-  - owner sharing controls
-  - pending request lane
-  - connected viewer lane
-  - read-only shared-board section below the fold
+  - `fetchDeviceSharing`
+  - `requestDeviceViewAccess`
+  - `rotateDeviceShareCode`
+  - `approveDeviceViewRequest`
+  - `rejectDeviceViewRequest`
+  - `revokeDeviceViewerMembership`
+- The Requests screen now has standard in-app navigation and compact icon actions instead of a modal-bottom-sheet treatment.
+- The friend board share action produces a dedicated export snapshot rather than a raw screen capture of the live glass card.
+- The shared board visual on Friends now comes from the same `DeviceBoardStage` component used on Home, so future board-surface changes can happen in one place.
+- Manual UI proof in this pass included:
+  - first-owner no-code state and code generation
+  - header/menu refinement on the Friends page
+  - request-management screen layout
+  - per-card share snapshot output
+  - long-name preview handling
+  - arrange-screen rendering and drag interaction
+- Runtime screenshots or proof artifacts captured during the pass include:
+  - `t001-owner-generate-code.png`
+  - `t001-cloud-friends.png`
+  - `t001-friends-route.png`
+  - `t001-friends-panel-finalish.png`
+  - `t001-proof-current.png`
+  - `t001-proof-current-2.png`
 
 ## Open risks / blockers
 
-- Manual proof is only partial in this report. I captured the implemented Friends surface in Expo Go and verified the branching logic in code, but I did not complete a full fresh runtime walkthrough for every required state from one clean seeded session.
-- Viewer revocation is still out of scope for this slice.
-- Friends-specific realtime invalidation now exists in the hook, but the current implementation also keeps a self-heal refetch interval as backup. If live board updates feel slow in practice, that should become a later polish pass rather than a blocker for this task.
+- The new board-ordering preference is currently verified with preview rows and local persistence, but not yet with a live multi-board cloud dataset.
+- The current arrange screen is intentionally local-preference only. It affects how this signed-in user sees the board list; it is not a shared or backend-synced ordering model.
+- The fallback preview ordering on the main Friends screen is not the critical path and was not the target of this pass. The important path is real shared-board ordering once actual boards exist.
+- Friends-specific realtime invalidation still keeps a self-heal refetch interval as backup. If live board updates feel slow in practice, that should be handled as later polish, not a blocker for this report.
 
 ## Recommendation
 
-Submit this as the `T-001` implementation report with one caveat: if the coordinator wants stricter proof, the next pass should be a focused verification sweep rather than more feature work. The backend contract itself was sufficient, and the next major product decision should stay on onboarding/recovery or timezone validation rather than reopening the Friends data model.
+Submit this as the `T-001` report for coordinator review. The Friends UI and core flow now feel product-shaped rather than placeholder-shaped. The next coordinator decision should be whether this is acceptable as `Friends ready pending live-data proof` or whether one final narrow proof pass is still required using real connected boards and real request traffic.

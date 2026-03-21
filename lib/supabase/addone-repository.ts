@@ -828,3 +828,19 @@ export async function rejectDeviceViewRequest(requestId: string) {
 
   return assertData(error, data as ShareRequestRow, "Failed to reject the share request.");
 }
+
+export async function revokeDeviceViewerMembership(params: { deviceId: string; membershipId: string }) {
+  const supabase = ensureSupabase();
+  const { data, error } = await ((supabase.from("device_memberships") as any)
+    .update({
+      status: "revoked",
+    } as TablesUpdate<"device_memberships">)
+    .eq("id", params.membershipId)
+    .eq("device_id", params.deviceId)
+    .eq("role", "viewer")
+    .eq("status", "approved")
+    .select("id")
+    .single() as any);
+
+  return assertData(error, data as { id: string }, "Failed to remove viewer access.");
+}

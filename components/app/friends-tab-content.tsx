@@ -1,17 +1,23 @@
+import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import { ReactNode, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import * as Sharing from "expo-sharing";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ActionSheetIOS, ActivityIndicator, Modal, Pressable, ScrollView, Share, Text, TextInput, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { captureRef } from "react-native-view-shot";
 
-import { PixelGrid } from "@/components/board/pixel-grid";
+import { DeviceBoardStage } from "@/components/board/device-board-stage";
 import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useDevices } from "@/hooks/use-devices";
-import { useFriends, formatFriendsError } from "@/hooks/use-friends";
+import { useFriendsBoardOrder } from "@/hooks/use-friends-board-order";
+import { FriendsDemoScenario, useFriends, formatFriendsError } from "@/hooks/use-friends";
 import { useSocialProfile } from "@/hooks/use-social-profile";
-import { buildBoardCells, getMergedPalette, targetStatusLabel } from "@/lib/board";
+import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import {
   triggerNavigationHaptic,
@@ -25,6 +31,7 @@ interface FriendsTabContentProps {
 }
 
 type FeedbackTone = "error" | "success";
+type FriendsSheetKey = "join" | "share" | "connections" | "boards" | null;
 
 function SectionEyebrow({ children }: { children: string }) {
   return (
@@ -177,14 +184,15 @@ function initialsForName(value: string) {
   return initials || "A";
 }
 
-function AvatarChip(props: { avatarUrl?: string | null; label: string }) {
+function AvatarChip(props: { avatarUrl?: string | null; label: string; size?: number }) {
+  const size = props.size ?? 38;
   if (props.avatarUrl) {
     return (
       <Image
         source={{ uri: props.avatarUrl }}
         style={{
-          width: 38,
-          height: 38,
+          width: size,
+          height: size,
           borderRadius: theme.radius.full,
           backgroundColor: withAlpha(theme.colors.textPrimary, 0.08),
         }}
@@ -197,8 +205,8 @@ function AvatarChip(props: { avatarUrl?: string | null; label: string }) {
       style={{
         alignItems: "center",
         justifyContent: "center",
-        width: 38,
-        height: 38,
+        width: size,
+        height: size,
         borderRadius: theme.radius.full,
         backgroundColor: withAlpha(theme.colors.textPrimary, 0.08),
       }}
@@ -207,8 +215,8 @@ function AvatarChip(props: { avatarUrl?: string | null; label: string }) {
         style={{
           color: theme.colors.textPrimary,
           fontFamily: theme.typography.label.fontFamily,
-          fontSize: 14,
-          lineHeight: 18,
+          fontSize: Math.max(14, Math.round(size * 0.36)),
+          lineHeight: Math.max(18, Math.round(size * 0.42)),
         }}
       >
         {initialsForName(props.label)}
@@ -232,6 +240,33 @@ function formatTimestamp(value: string | null | undefined) {
   }
 }
 
+function formatRelativeTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return "No update";
+  }
+
+  const diffMs = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(diffMs)) {
+    return "No update";
+  }
+
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
 function formatShareCode(code: string | null) {
   if (!code) {
     return "------";
@@ -249,39 +284,409 @@ function normalizeShareCodeInput(value: string) {
   return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
 }
 
+function normalizeDemoScenario(value: string | string[] | undefined): FriendsDemoScenario | null {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  switch (normalized) {
+    case "profile-gate":
+    case "empty-owner":
+    case "empty-boards":
+    case "pending":
+    case "connected":
+      return normalized;
+    default:
+      return null;
+  }
+}
+
+function makePreviewBoard(
+  id: string,
+  ownerName: string,
+  habitName: string,
+  paletteId: string,
+  activeByWeek: number[][],
+  syncState: SharedBoard["syncState"] = "online",
+): SharedBoard {
+  return {
+    id,
+    ownerName,
+    habitName,
+    syncState,
+    lastSnapshotAt: new Date().toISOString(),
+    weeklyTarget: 4,
+    paletteId,
+    days: Array.from({ length: 21 }, (_, weekIndex) =>
+      Array.from({ length: 7 }, (_, dayIndex) => activeByWeek[weekIndex]?.includes(dayIndex) ?? false),
+    ),
+    logicalToday: new Date().toISOString().slice(0, 10),
+    today: {
+      weekIndex: 4,
+      dayIndex: 4,
+    },
+  };
+}
+
+function previewBoards(): SharedBoard[] {
+  return [
+    makePreviewBoard(
+      "preview-amber",
+      "Alexandria Montgomery-Winters",
+      "Night Run",
+      "amber",
+      [[0, 2, 4], [1, 3, 5], [0, 1, 2, 4], [0, 2], [1, 2, 4]],
+      "online",
+    ),
+    makePreviewBoard("preview-ice", "Taylor Reed", "Sketch Practice", "ice", [[0, 1], [0, 2, 4], [1, 2, 3], [0, 3, 4], [0, 1, 4]], "online"),
+    makePreviewBoard("preview-classic", "Morgan Lee", "Morning Stretch", "classic", [[0, 1, 2], [2, 3, 4], [0, 1, 4], [1, 3], [0, 1, 2, 3]], "offline"),
+  ];
+}
+
+function previewPendingRequest(): DeviceShareRequest {
+  return {
+    createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
+    id: "preview-request",
+    requesterDisplayName: "Avery Stone",
+    requesterUserId: "preview-requester",
+    status: "pending",
+  };
+}
+
+function previewViewer(): DeviceViewer {
+  return {
+    approvedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    displayName: "Riley Hart",
+    membershipId: "preview-viewer",
+    userId: "preview-user",
+  };
+}
+
+function sharedBoardStats(board: SharedBoard) {
+  let completed = 0;
+  let successfulWeeks = 0;
+
+  for (let col = 0; col < board.days.length; col += 1) {
+    const isPastWeek = col > board.today.weekIndex;
+    const isCurrentWeek = col === board.today.weekIndex;
+    const visibleDays = isPastWeek ? 7 : isCurrentWeek ? board.today.dayIndex + 1 : 0;
+    const completedThisWeek = board.days[col].slice(0, visibleDays).filter(Boolean).length;
+
+    completed += completedThisWeek;
+    if (visibleDays > 0 && completedThisWeek >= board.weeklyTarget) {
+      successfulWeeks += 1;
+    }
+  }
+
+  const currentWeekCompleted = board.days[board.today.weekIndex].slice(0, board.today.dayIndex + 1).filter(Boolean).length;
+
+  return {
+    completed,
+    currentWeekCompleted,
+    successfulWeeks,
+  };
+}
+
+function CompactMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ alignItems: "center", flex: 1, gap: 4, justifyContent: "center", paddingHorizontal: 2 }}>
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textAlign: "center",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: 16,
+          lineHeight: 20,
+          fontVariant: ["tabular-nums"],
+          textAlign: "center",
+        }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function ShareSnapshotMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingHorizontal: 2 }}>
+      <Text
+        style={{
+          color: withAlpha(theme.colors.textInverse, 0.62),
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textAlign: "center",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textInverse,
+          fontFamily: theme.typography.title.fontFamily,
+          fontSize: 20,
+          lineHeight: 24,
+          fontVariant: ["tabular-nums"],
+          textAlign: "center",
+        }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SharedBoardShareSnapshot(props: {
+  board: SharedBoard;
+  boardWidth: number;
+  cells: ReturnType<typeof buildBoardCells>;
+  palette: ReturnType<typeof getMergedPalette>;
+  stats: ReturnType<typeof sharedBoardStats>;
+}) {
+  return (
+    <View
+      style={{
+        width: Math.min(440, props.boardWidth + 84),
+        borderRadius: 30,
+        backgroundColor: "#F7F4EE",
+        paddingHorizontal: 24,
+        paddingTop: 24,
+        paddingBottom: 22,
+        gap: 18,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <View
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            width: 54,
+            height: 54,
+            borderRadius: theme.radius.full,
+            backgroundColor: withAlpha(theme.colors.textInverse, 0.08),
+          }}
+        >
+          <Text
+            style={{
+              color: theme.colors.textInverse,
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: 20,
+              lineHeight: 24,
+            }}
+          >
+            {props.board.ownerName
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase() ?? "")
+              .join("") || "A"}
+          </Text>
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text
+            numberOfLines={2}
+            ellipsizeMode="tail"
+            style={{
+              color: theme.colors.textInverse,
+              fontFamily: theme.typography.display.fontFamily,
+              fontSize: 28,
+              lineHeight: 32,
+            }}
+          >
+            {props.board.ownerName}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{
+              color: withAlpha(theme.colors.textInverse, 0.68),
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: 15,
+              lineHeight: 20,
+              flexShrink: 1,
+            }}
+          >
+            {props.board.habitName}
+          </Text>
+        </View>
+      </View>
+
+      <DeviceBoardStage
+        accentColor={props.palette.weekSuccess}
+        cells={props.cells}
+        maxGridWidth={props.boardWidth}
+        palette={props.palette}
+      />
+
+      <View style={{ flexDirection: "row", alignItems: "stretch" }}>
+        <ShareSnapshotMetric label="This week" value={`${props.stats.currentWeekCompleted}/${props.board.weeklyTarget}`} />
+        <View style={{ width: 1, backgroundColor: withAlpha(theme.colors.textInverse, 0.12), marginHorizontal: 10 }} />
+        <ShareSnapshotMetric label="Weeks" value={`${props.stats.successfulWeeks}`} />
+        <View style={{ width: 1, backgroundColor: withAlpha(theme.colors.textInverse, 0.12), marginHorizontal: 10 }} />
+        <ShareSnapshotMetric label="Recorded" value={`${props.stats.completed}d`} />
+      </View>
+    </View>
+  );
+}
+
 function SharedBoardCard({ board, width }: { board: SharedBoard; width: number }) {
   const cells = useMemo(() => buildBoardCells(board), [board]);
   const palette = getMergedPalette(board.paletteId);
-  const boardWidth = Math.max(280, Math.min(width - 32, 420));
+  const boardWidth = Math.max(300, Math.min(width - 12, 460));
+  const stats = useMemo(() => sharedBoardStats(board), [board]);
+  const shareSnapshotRef = useRef<View>(null);
+  const [isSharingCard, setIsSharingCard] = useState(false);
+
+  async function handleShareCard() {
+    if (!shareSnapshotRef.current || isSharingCard) {
+      return;
+    }
+
+    setIsSharingCard(true);
+
+    try {
+      const imageUri = await captureRef(shareSnapshotRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(imageUri, {
+          dialogTitle: `${board.ownerName}'s progress`,
+          mimeType: "image/png",
+          UTI: "public.png",
+        });
+      } else {
+        await Share.share({
+          message: `${board.ownerName} · ${board.habitName}`,
+          url: imageUri,
+        });
+      }
+
+      triggerPrimaryActionSuccessHaptic();
+    } catch (error) {
+      triggerPrimaryActionFailureHaptic();
+      console.warn("Failed to share friend board card", error);
+    } finally {
+      setIsSharingCard(false);
+    }
+  }
 
   return (
-    <GlassCard style={{ gap: 16, paddingHorizontal: 18, paddingVertical: 18 }}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <View style={{ flex: 1, gap: 6 }}>
-          <SectionEyebrow>{board.ownerName}</SectionEyebrow>
-          <SectionTitle>{board.habitName}</SectionTitle>
-          <BodyCopy>{targetStatusLabel(board)}</BodyCopy>
-        </View>
-        <StatusPill label={board.syncState === "online" ? "Live" : "Offline"} tone={board.syncState === "online" ? "success" : "default"} />
-      </View>
-
+    <GlassCard
+      style={{
+        gap: 16,
+        paddingHorizontal: 0,
+        paddingVertical: 20,
+      }}
+    >
       <View
+        pointerEvents="none"
         style={{
-          alignItems: "center",
-          borderRadius: theme.radius.card,
-          borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-          backgroundColor: withAlpha(theme.colors.bgBase, 0.7),
-          paddingHorizontal: 12,
-          paddingVertical: 12,
+          position: "absolute",
+          left: -10000,
+          top: 0,
+          opacity: 1,
         }}
       >
-        <PixelGrid availableWidth={boardWidth} cells={cells} mode="shared" palette={palette} readOnly />
+        <View ref={shareSnapshotRef} collapsable={false}>
+          <SharedBoardShareSnapshot board={board} boardWidth={boardWidth} cells={cells} palette={palette} stats={stats} />
+        </View>
       </View>
 
-      <View style={{ gap: 4 }}>
-        <BodyCopy>Read-only shared board</BodyCopy>
-        <BodyCopy>Last snapshot: {formatTimestamp(board.lastSnapshotAt)}</BodyCopy>
+      <View style={{ gap: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingHorizontal: 18 }}>
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <AvatarChip label={board.ownerName} size={46} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.title.fontFamily,
+                  fontSize: 22,
+                  lineHeight: 26,
+                }}
+              >
+                {board.ownerName}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: 13,
+                  lineHeight: 18,
+                  flexShrink: 1,
+                }}
+              >
+                {board.habitName}
+              </Text>
+            </View>
+          </View>
+          <View style={{ alignItems: "flex-end", justifyContent: "flex-start", minWidth: 64, gap: 8 }}>
+            <Pressable
+              disabled={isSharingCard}
+              hitSlop={10}
+              onPress={() => {
+                void handleShareCard();
+              }}
+              style={{ opacity: isSharingCard ? 0.56 : 1, paddingVertical: 2 }}
+            >
+              <Ionicons color={theme.colors.textSecondary} name="share-social-outline" size={18} />
+            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, minWidth: 64 }}>
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: 12,
+                  lineHeight: 16,
+                  textAlign: "right",
+                }}
+              >
+                {formatRelativeTimestamp(board.lastSnapshotAt)}
+              </Text>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: board.syncState === "online" ? theme.colors.accentSuccess : theme.colors.textMuted,
+                  boxShadow:
+                    board.syncState === "online"
+                      ? `0px 0px 18px ${withAlpha(theme.colors.accentSuccess, 0.55)}`
+                    : undefined,
+                }}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 8 }}>
+          <DeviceBoardStage accentColor={palette.weekSuccess} cells={cells} maxGridWidth={boardWidth} palette={palette} />
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "stretch", paddingHorizontal: 18 }}>
+          <CompactMetric label="This week" value={`${stats.currentWeekCompleted}/${board.weeklyTarget}`} />
+          <View style={{ width: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.08), marginHorizontal: 10 }} />
+          <CompactMetric label="Weeks" value={`${stats.successfulWeeks}`} />
+          <View style={{ width: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.08), marginHorizontal: 10 }} />
+          <CompactMetric label="Recorded" value={`${stats.completed}d`} />
+        </View>
       </View>
     </GlassCard>
   );
@@ -292,6 +697,7 @@ function RequestRow(props: {
   isRejecting: boolean;
   onApprove: () => void;
   onReject: () => void;
+  preview?: boolean;
   request: DeviceShareRequest;
 }) {
   return (
@@ -302,6 +708,7 @@ function RequestRow(props: {
         borderWidth: 1,
         borderColor: withAlpha(theme.colors.textPrimary, 0.08),
         backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
+        opacity: props.preview ? 0.9 : 1,
         paddingHorizontal: 14,
         paddingVertical: 14,
       }}
@@ -324,10 +731,10 @@ function RequestRow(props: {
       </View>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ flex: 1 }}>
-          <ActionButton label="Approve" loading={props.isApproving} onPress={props.onApprove} />
+          <ActionButton disabled={props.preview} label="Approve" loading={props.isApproving} onPress={props.onApprove} />
         </View>
         <View style={{ flex: 1 }}>
-          <ActionButton label="Reject" loading={props.isRejecting} onPress={props.onReject} secondary />
+          <ActionButton disabled={props.preview} label="Reject" loading={props.isRejecting} onPress={props.onReject} secondary />
         </View>
       </View>
     </View>
@@ -395,10 +802,223 @@ function EmptyMessage(props: { body: string; title: string }) {
   );
 }
 
+function IconButton(props: {
+  badge?: number;
+  indicator?: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  title: string;
+  compact?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={props.onPress}
+      style={{
+        alignItems: "center",
+        gap: props.compact ? 0 : 10,
+        width: props.compact ? 44 : 68,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          width: props.compact ? 40 : 52,
+          height: props.compact ? 40 : 52,
+          borderRadius: theme.radius.full,
+          borderWidth: 1,
+          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+          backgroundColor: withAlpha(theme.colors.bgElevated, 0.82),
+          position: "relative",
+        }}
+      >
+        <Ionicons color={theme.colors.textPrimary} name={props.icon} size={21} />
+        {props.indicator ? (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: theme.colors.statusErrorMuted,
+              borderWidth: 2,
+              borderColor: withAlpha(theme.colors.bgElevated, 0.96),
+            }}
+          />
+        ) : null}
+        {!props.indicator && props.badge && props.badge > 0 ? (
+          <View
+            style={{
+              position: "absolute",
+              top: -3,
+              right: -3,
+              minWidth: 22,
+              height: 22,
+              borderRadius: theme.radius.full,
+              backgroundColor: theme.colors.accentAmber,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 6,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.textInverse,
+                fontFamily: theme.typography.micro.fontFamily,
+                fontSize: 10,
+                lineHeight: 12,
+                letterSpacing: 0.6,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {props.badge > 9 ? "9+" : String(props.badge)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      {props.compact ? null : (
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: 12,
+            lineHeight: 15,
+            textAlign: "center",
+          }}
+        >
+          {props.title}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function SheetUtilityActionButton(props: {
+  disabled?: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  loading?: boolean;
+  onPress: () => void;
+}) {
+  const isDisabled = props.disabled || props.loading;
+
+  return (
+    <Pressable
+      accessibilityLabel={props.label}
+      accessibilityRole="button"
+      disabled={isDisabled}
+      onPress={props.onPress}
+      style={{
+        alignItems: "center",
+        gap: 8,
+        opacity: isDisabled ? 0.46 : 1,
+        width: 72,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          width: 52,
+          height: 52,
+          borderRadius: theme.radius.full,
+          borderWidth: 1,
+          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+          backgroundColor: withAlpha(theme.colors.bgBase, 0.7),
+        }}
+      >
+        {props.loading ? (
+          <ActivityIndicator color={theme.colors.textPrimary} />
+        ) : (
+          <Ionicons color={theme.colors.textPrimary} name={props.icon} size={20} />
+        )}
+      </View>
+      <Text
+        style={{
+          color: theme.colors.textSecondary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: 0.6,
+          textAlign: "center",
+          textTransform: "uppercase",
+        }}
+      >
+        {props.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function UtilityActionRow(props: { children: ReactNode }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      {props.children}
+    </View>
+  );
+}
+
+function SheetSection(props: { body?: string; children: ReactNode; title: string }) {
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ gap: 6 }}>
+        <SectionTitle>{props.title}</SectionTitle>
+        {props.body ? <BodyCopy>{props.body}</BodyCopy> : null}
+      </View>
+      {props.children}
+    </View>
+  );
+}
+
+function PreviewNote({ children }: { children: ReactNode }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textTertiary,
+        fontFamily: theme.typography.micro.fontFamily,
+        fontSize: theme.typography.micro.fontSize,
+        lineHeight: theme.typography.micro.lineHeight,
+        letterSpacing: theme.typography.micro.letterSpacing,
+        textTransform: "uppercase",
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function SheetCloseButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      hitSlop={10}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        width: 36,
+        height: 36,
+        borderRadius: theme.radius.full,
+      }}
+    >
+      <Ionicons color={theme.colors.textPrimary} name="close-outline" size={24} />
+    </Pressable>
+  );
+}
+
 export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }: FriendsTabContentProps) {
   const router = useRouter();
+  const params = useLocalSearchParams<{ proofState?: string | string[] }>();
   const { width } = useWindowDimensions();
   const { activeDevice } = useDevices();
+  const demoScenario = normalizeDemoScenario(params.proofState);
   const { isComplete, isLoading: isLoadingProfile } = useSocialProfile();
   const {
     approveRequest,
@@ -416,17 +1036,175 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     sharedBoardsError,
     sharingError,
     sharingState,
-  } = useFriends();
+  } = useFriends(demoScenario);
   const [shareCodeInput, setShareCodeInput] = useState("");
   const [shareCodeFeedback, setShareCodeFeedback] = useState<{ message: string; tone: FeedbackTone } | null>(null);
   const [ownerFeedback, setOwnerFeedback] = useState<{ message: string; tone: FeedbackTone } | null>(null);
   const [activeRequestActionId, setActiveRequestActionId] = useState<string | null>(null);
+  const [activeSheet, setActiveSheet] = useState<FriendsSheetKey>(null);
+  const autoCodeDeviceIdRef = useRef<string | null>(null);
   const boardCardWidth = Math.max(320, Math.min(width - 40, 640));
+  const isProofScenario = demoScenario !== null;
+  const effectiveIsComplete = demoScenario === "profile-gate" ? false : isProofScenario ? true : isComplete;
+  const showIntroCard = !isProofScenario || demoScenario === "profile-gate";
+  const showJoinCard = !isProofScenario;
+  const showOwnerCard =
+    !isProofScenario || demoScenario === "empty-owner" || demoScenario === "pending" || demoScenario === "connected";
+  const showOwnerCode = !isProofScenario || demoScenario === "empty-owner" || demoScenario === "pending";
+  const showPendingSection = !isProofScenario || demoScenario === "empty-owner" || demoScenario === "pending";
+  const showViewersSection = !isProofScenario || demoScenario === "empty-owner" || demoScenario === "connected";
+  const showSharedBoardsSection = !isProofScenario || demoScenario === "empty-boards" || demoScenario === "connected";
+  const pendingCount = sharingState.pendingRequests.length;
+  const viewerCount = sharingState.viewers.length;
+  const sharedCount = sharedBoards.length;
+  const previewOnlyBoards = useMemo(() => previewBoards(), []);
+  const { orderedBoards } = useFriendsBoardOrder(sharedBoards);
+  const showcaseBoards = sharedBoards.length > 0 ? orderedBoards : previewOnlyBoards;
+  const previewRequestCard = useMemo(() => previewPendingRequest(), []);
+  const previewViewerCard = useMemo(() => previewViewer(), []);
+  const activePalette = getMergedPalette(activeDevice?.paletteId ?? "amber", activeDevice?.customPalette);
+  const galleryWidth = Math.max(300, Math.min(width - 40, 620));
+  const codeReady = Boolean(sharingState.code);
+  const isBootstrappingCode =
+    Boolean(activeDevice?.id) && !codeReady && !sharingError && !isLoadingSharing && (isRotatingCode || autoCodeDeviceIdRef.current === activeDevice?.id);
+  const dialogMaxHeight = useMemo(() => {
+    switch (activeSheet) {
+      case "join":
+        return "52%";
+      case "share":
+        return "58%";
+      case "connections":
+        return "72%";
+      case "boards":
+        return "82%";
+      default:
+        return "60%";
+    }
+  }, [activeSheet]);
 
   const handleProfileGate = () => {
     triggerNavigationHaptic();
     router.push("/profile?from=friends");
   };
+
+  const openControlsMenu = () => {
+    triggerNavigationHaptic();
+
+    if (process.env.EXPO_OS === "ios") {
+      const options = ["Requests", "Arrange boards", "Connect by code", "Share your code", "Cancel"];
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex: 4,
+          options,
+          userInterfaceStyle: "dark",
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            router.push("/friends-requests");
+            return;
+          }
+
+          if (buttonIndex === 1) {
+            router.push("/friends-arrange");
+            return;
+          }
+
+          if (buttonIndex === 2) {
+            setActiveSheet("join");
+            return;
+          }
+
+          if (buttonIndex === 3) {
+            setActiveSheet("share");
+          }
+        },
+      );
+      return;
+    }
+
+    setActiveSheet("share");
+  };
+
+  const handleCopyShareCode = async () => {
+    if (!sharingState.code) {
+      return;
+    }
+
+    await Clipboard.setStringAsync(sharingState.code);
+    triggerPrimaryActionSuccessHaptic();
+    setOwnerFeedback({
+      message: "Code copied.",
+      tone: "success",
+    });
+  };
+
+  const handleSystemShare = async () => {
+    if (!sharingState.code) {
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `AddOne board code: ${sharingState.code}`,
+      });
+    } catch (error) {
+      setOwnerFeedback({
+        message: formatFriendsError(error, "We couldn't open the share sheet."),
+        tone: "error",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!activeDevice?.id) {
+      autoCodeDeviceIdRef.current = null;
+      return;
+    }
+
+    if (autoCodeDeviceIdRef.current && autoCodeDeviceIdRef.current !== activeDevice.id) {
+      autoCodeDeviceIdRef.current = null;
+    }
+  }, [activeDevice?.id]);
+
+  useEffect(() => {
+    if (
+      isProofScenario ||
+      !effectiveIsComplete ||
+      !activeDevice?.id ||
+      codeReady ||
+      sharingError ||
+      isLoadingSharing ||
+      isRotatingCode ||
+      autoCodeDeviceIdRef.current === activeDevice.id
+    ) {
+      return;
+    }
+
+    autoCodeDeviceIdRef.current = activeDevice.id;
+    void rotateShareCode(activeDevice.id)
+      .then(() => {
+        setOwnerFeedback({
+          message: "Share code ready.",
+          tone: "success",
+        });
+      })
+      .catch((error) => {
+        autoCodeDeviceIdRef.current = null;
+        setOwnerFeedback({
+          message: formatFriendsError(error, "We couldn't prepare the share code right now."),
+          tone: "error",
+        });
+      });
+  }, [
+    activeDevice?.id,
+    codeReady,
+    effectiveIsComplete,
+    isLoadingSharing,
+    isProofScenario,
+    isRotatingCode,
+    rotateShareCode,
+    sharingError,
+  ]);
 
   const handleRequestAccess = async () => {
     const normalizedCode = normalizeShareCodeInput(shareCodeInput);
@@ -465,7 +1243,7 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
       await rotateShareCode(activeDevice.id);
       triggerPrimaryActionSuccessHaptic();
       setOwnerFeedback({
-        message: "Share code rotated. Use the new code for any future requests.",
+        message: sharingState.code ? "Share code rotated. Use the new code for any future requests." : "Share code created.",
         tone: "success",
       });
     } catch (error) {
@@ -519,239 +1297,392 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     }
   };
 
+  const currentSheetTitle =
+    activeSheet === "join"
+      ? "Join a board"
+      : activeSheet === "share"
+        ? activeDevice
+          ? `Share ${activeDevice.name}`
+          : "Share your board"
+        : activeSheet === "connections"
+          ? "Requests"
+          : "Connected boards";
+
+  const currentSheetSubtitle =
+    activeSheet === "join"
+      ? "Enter a board code."
+      : activeSheet === "share"
+        ? null
+        : activeSheet === "connections"
+          ? null
+          : sharedBoards.length > 0
+            ? "Read-only boards."
+            : "Preview mode.";
+  const currentSheetNote =
+    activeSheet === "share"
+      ? sharingState.code
+        ? "Copy or share this code. Rotate only if it was exposed. Approved people keep access."
+        : "Generate a code to start sharing."
+      : null;
+
   return (
-    <ScreenScrollView bottomInset={bottomInset} contentContainerStyle={{ gap: 18 }}>
-      <ScreenSection style={{ gap: 18 }}>
-        <GlassCard style={{ gap: 14, paddingHorizontal: 20, paddingVertical: 20 }}>
-          <SectionEyebrow>Friends</SectionEyebrow>
-
-          {isLoadingProfile ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <ActivityIndicator color={theme.colors.accentAmber} />
-              <BodyCopy>Checking profile…</BodyCopy>
-            </View>
-          ) : null}
-
-          {!isLoadingProfile && !isComplete ? (
-            <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
-              <View style={{ gap: 10 }}>
-                <SectionTitle>Finish your profile first.</SectionTitle>
-                <BodyCopy>Add your first name, last name, and @username before sharing turns on.</BodyCopy>
-                <ActionButton label="Finish profile" onPress={handleProfileGate} />
-              </View>
-            </Animated.View>
-          ) : null}
-
-          {!isLoadingProfile && isComplete ? (
-            <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
-              <View style={{ gap: 10 }}>
-                <SectionTitle>Quiet sharing, real boards.</SectionTitle>
-                <BodyCopy>
-                  Request access by code, approve people deliberately, and keep every shared board read-only.
-                </BodyCopy>
-              </View>
-            </Animated.View>
-          ) : null}
-        </GlassCard>
-
-        {!isLoadingProfile && isComplete ? (
-          <>
-            <GlassCard style={{ gap: 16, paddingHorizontal: 20, paddingVertical: 20 }}>
-              <View style={{ gap: 6 }}>
-                <SectionEyebrow>Join a board</SectionEyebrow>
-                <SectionTitle>Enter a share code</SectionTitle>
-                <BodyCopy>Ask the owner for their current board code, then send a request for approval.</BodyCopy>
-              </View>
-
-              <TextInput
-                autoCapitalize="characters"
-                autoCorrect={false}
-                keyboardType="ascii-capable"
-                maxLength={12}
-                onChangeText={(value) => {
-                  setShareCodeFeedback(null);
-                  setShareCodeInput(normalizeShareCodeInput(value));
-                }}
-                placeholder="ABC123"
-                placeholderTextColor={theme.colors.textMuted}
-                style={{
-                  borderRadius: theme.radius.sheet,
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                  backgroundColor: withAlpha(theme.colors.bgBase, 0.88),
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.title.fontFamily,
-                  fontSize: 24,
-                  lineHeight: 30,
-                  letterSpacing: 2,
-                  paddingHorizontal: 16,
-                  paddingVertical: 15,
-                  textAlign: "center",
-                }}
-                value={shareCodeInput}
-              />
-
-              {shareCodeFeedback ? <BodyCopy tone={shareCodeFeedback.tone}>{shareCodeFeedback.message}</BodyCopy> : null}
-              {!shareCodeFeedback && requestAccessError ? (
-                <BodyCopy tone="error">{formatFriendsError(requestAccessError, "We couldn't send that share request.")}</BodyCopy>
+    <View style={{ flex: 1 }}>
+      <ScreenScrollView bottomInset={bottomInset} contentContainerStyle={{ gap: 18 }}>
+        <ScreenSection style={{ gap: 18 }}>
+          {showIntroCard ? (
+            <>
+              {isLoadingProfile ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4 }}>
+                  <ActivityIndicator color={theme.colors.accentAmber} />
+                  <BodyCopy>Checking profile…</BodyCopy>
+                </View>
               ) : null}
 
-              <ActionButton
-                label="Request access"
-                loading={isRequestingAccess}
-                onPress={handleRequestAccess}
-              />
-            </GlassCard>
+              {!isLoadingProfile && !effectiveIsComplete ? (
+                <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
+                  <GlassCard style={{ gap: 10, paddingHorizontal: 18, paddingVertical: 18 }}>
+                    <SectionEyebrow>Friends</SectionEyebrow>
+                    <SectionTitle>Finish your profile first.</SectionTitle>
+                    <BodyCopy>Add your first name, last name, and @username before sharing turns on.</BodyCopy>
+                    <ActionButton label="Finish profile" onPress={handleProfileGate} />
+                  </GlassCard>
+                </Animated.View>
+              ) : null}
+            </>
+          ) : null}
 
-            <GlassCard style={{ gap: 16, paddingHorizontal: 20, paddingVertical: 20 }}>
-              <View style={{ gap: 6 }}>
-                <SectionEyebrow>Your board</SectionEyebrow>
-                <SectionTitle>{activeDevice ? `Share ${activeDevice.name}` : "Share your board"}</SectionTitle>
-                <BodyCopy>
-                  {activeDevice
-                    ? "This is the active board code and approval lane for your current device."
-                    : "Onboard a device first to generate a board code and manage incoming requests."}
-                </BodyCopy>
-              </View>
-
-              {activeDevice ? (
-                <>
-                  <View
-                    style={{
-                      gap: 10,
-                      borderRadius: theme.radius.card,
-                      borderWidth: 1,
-                      borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                      backgroundColor: withAlpha(theme.colors.bgBase, 0.74),
-                      paddingHorizontal: 16,
-                      paddingVertical: 16,
-                    }}
-                  >
-                    <SectionEyebrow>Current code</SectionEyebrow>
-                    {isLoadingSharing ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                        <ActivityIndicator color={theme.colors.accentAmber} />
-                        <BodyCopy>Loading sharing state…</BodyCopy>
+          {!isLoadingProfile && effectiveIsComplete ? (
+            <>
+              {showSharedBoardsSection ? (
+                <View style={{ gap: 16, paddingTop: 6 }}>
+                  <View style={{ paddingHorizontal: 4, gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <View style={{ gap: 4 }}>
+                        <SectionTitle>Growing together</SectionTitle>
                       </View>
-                    ) : (
-                      <>
-                        <Text
-                          selectable
-                          style={{
-                            color: theme.colors.textPrimary,
-                            fontFamily: theme.typography.display.fontFamily,
-                            fontSize: 30,
-                            lineHeight: 34,
-                            letterSpacing: 3,
-                            textAlign: "center",
-                          }}
-                        >
-                          {formatShareCode(sharingState.code)}
-                        </Text>
-                        <BodyCopy>Rotating the code does not remove people who were already approved.</BodyCopy>
-                      </>
-                    )}
+                      <IconButton compact icon="ellipsis-horizontal" indicator={pendingCount > 0} onPress={openControlsMenu} title="More" />
+                    </View>
+                    {sharingError ? (
+                      <BodyCopy tone="error">{formatFriendsError(sharingError, "We couldn't load sharing for this board.")}</BodyCopy>
+                    ) : null}
                   </View>
 
-                  {ownerFeedback ? <BodyCopy tone={ownerFeedback.tone}>{ownerFeedback.message}</BodyCopy> : null}
-                  {!ownerFeedback && sharingError ? (
-                    <BodyCopy tone="error">{formatFriendsError(sharingError, "We couldn't load sharing for this board.")}</BodyCopy>
+                  {isLoadingSharedBoards ? (
+                    <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+                      <ActivityIndicator color={theme.colors.accentAmber} />
+                      <BodyCopy>Loading shared boards…</BodyCopy>
+                    </GlassCard>
                   ) : null}
 
-                  <ActionButton
-                    disabled={!sharingState.code}
-                    label="Rotate share code"
-                    loading={isRotatingCode}
-                    onPress={handleRotateShareCode}
-                    secondary
-                  />
+                  {!isLoadingSharedBoards && sharedBoardsError ? (
+                    <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+                      <BodyCopy tone="error">{formatFriendsError(sharedBoardsError, "We couldn't load the shared boards.")}</BodyCopy>
+                    </GlassCard>
+                  ) : null}
 
-                  <View style={{ gap: 12 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <SectionTitle>Pending requests</SectionTitle>
-                      <StatusPill
-                        label={sharingState.pendingRequests.length === 0 ? "Clear" : `${sharingState.pendingRequests.length} pending`}
-                        tone={sharingState.pendingRequests.length > 0 ? "warning" : "default"}
-                      />
-                    </View>
+                  {!isLoadingSharedBoards && !sharedBoardsError ? showcaseBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />) : null}
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </ScreenSection>
+      </ScreenScrollView>
 
-                    {sharingState.pendingRequests.length === 0 ? (
-                      <EmptyMessage
-                        body="Requests will appear here after someone enters your current board code."
-                        title="No pending requests"
-                      />
-                    ) : (
-                      sharingState.pendingRequests.map((request) => (
-                        <RequestRow
-                          key={request.id}
-                          isApproving={isApprovingRequest && activeRequestActionId === request.id}
-                          isRejecting={isRejectingRequest && activeRequestActionId === request.id}
-                          onApprove={() => handleApproveRequest(request.id)}
-                          onReject={() => handleRejectRequest(request.id)}
-                          request={request}
-                        />
-                      ))
-                    )}
+      {activeSheet ? (
+        <Modal animationType="fade" transparent visible onRequestClose={() => setActiveSheet(null)}>
+          <View
+            style={{
+              alignItems: "center",
+              flex: 1,
+              justifyContent: "center",
+              paddingHorizontal: 16,
+              paddingTop: 24,
+              paddingBottom: bottomInset + 12,
+            }}
+          >
+            <BlurView
+              intensity={28}
+              tint="dark"
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
+              }}
+            />
+            <GlassCard
+              style={{
+                width: "100%",
+                maxHeight: dialogMaxHeight,
+                gap: 0,
+                paddingHorizontal: 0,
+                paddingVertical: 0,
+                backgroundColor: withAlpha(theme.colors.bgElevated, 0.76),
+                borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+                boxShadow: `0px 22px 64px ${withAlpha(theme.colors.bgBase, 0.34)}`,
+              }}
+            >
+              <View style={{ gap: 10, paddingHorizontal: 20, paddingBottom: activeSheet === "share" ? 18 : 14, paddingTop: 18 }}>
+                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <View style={{ flex: 1, gap: activeSheet === "share" ? 10 : 8 }}>
+                    <Text
+                      style={{
+                        color: theme.colors.textPrimary,
+                        fontFamily: theme.typography.title.fontFamily,
+                        fontSize: theme.typography.title.fontSize,
+                        lineHeight: theme.typography.title.lineHeight,
+                      }}
+                    >
+                      {currentSheetTitle}
+                    </Text>
+                    {currentSheetSubtitle ? (
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontFamily: theme.typography.label.fontFamily,
+                          fontSize: theme.typography.label.fontSize,
+                          lineHeight: theme.typography.label.lineHeight,
+                        }}
+                        >
+                          {currentSheetSubtitle}
+                        </Text>
+                      ) : null}
+                      {currentSheetNote ? (
+                        <Text
+                          style={{
+                            color: theme.colors.textSecondary,
+                            fontFamily: theme.typography.body.fontFamily,
+                            fontSize: 15,
+                            lineHeight: 22,
+                            maxWidth: "92%",
+                          }}
+                        >
+                          {currentSheetNote}
+                        </Text>
+                      ) : null}
                   </View>
-
-                  <View style={{ gap: 12 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <SectionTitle>Connected people</SectionTitle>
-                      <StatusPill label={sharingState.viewers.length === 0 ? "Waiting" : `${sharingState.viewers.length} connected`} />
-                    </View>
-
-                    {sharingState.viewers.length === 0 ? (
-                      <EmptyMessage
-                        body="Approved viewers will stay listed here until sharing is revoked in a later pass."
-                        title="No viewers yet"
-                      />
-                    ) : (
-                      sharingState.viewers.map((viewer) => <ViewerRow key={viewer.membershipId} viewer={viewer} />)
-                    )}
-                  </View>
-                </>
-              ) : (
-                <EmptyMessage
-                  body="You can still request another board by code, but your own share code appears only after you claim a device."
-                  title="No owned device connected"
-                />
-              )}
-            </GlassCard>
-
-            <View style={{ gap: 12 }}>
-              <View style={{ paddingHorizontal: 4, gap: 6 }}>
-                <SectionEyebrow>Connected boards</SectionEyebrow>
-                <SectionTitle>Read-only boards you can follow</SectionTitle>
-                <BodyCopy>Your own board stays separate. These previews are for checking in on other people without editing their history.</BodyCopy>
+                  <SheetCloseButton onPress={() => setActiveSheet(null)} />
+                </View>
               </View>
 
-              {isLoadingSharedBoards ? (
-                <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
-                  <ActivityIndicator color={theme.colors.accentAmber} />
-                  <BodyCopy>Loading shared boards…</BodyCopy>
-                </GlassCard>
+              <ScrollView contentContainerStyle={{ gap: activeSheet === "share" ? 22 : 18, paddingBottom: 22, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
+              {activeSheet === "join" ? (
+                <View style={{ gap: 14 }}>
+                  <TextInput
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    keyboardType="ascii-capable"
+                    maxLength={12}
+                    onChangeText={(value) => {
+                      setShareCodeFeedback(null);
+                      setShareCodeInput(normalizeShareCodeInput(value));
+                    }}
+                    placeholder="ABC123"
+                    placeholderTextColor={theme.colors.textMuted}
+                    style={{
+                      borderRadius: theme.radius.sheet,
+                      borderWidth: 1,
+                      borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                      backgroundColor: withAlpha(theme.colors.bgBase, 0.88),
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.title.fontFamily,
+                      fontSize: 24,
+                      lineHeight: 30,
+                      letterSpacing: 2,
+                      paddingHorizontal: 16,
+                      paddingVertical: 15,
+                      textAlign: "center",
+                    }}
+                    value={shareCodeInput}
+                  />
+
+                  {shareCodeFeedback ? <BodyCopy tone={shareCodeFeedback.tone}>{shareCodeFeedback.message}</BodyCopy> : null}
+                  {!shareCodeFeedback && requestAccessError ? (
+                    <BodyCopy tone="error">{formatFriendsError(requestAccessError, "We couldn't send that share request.")}</BodyCopy>
+                  ) : null}
+
+                  <ActionButton label="Request access" loading={isRequestingAccess} onPress={handleRequestAccess} />
+                </View>
               ) : null}
 
-              {!isLoadingSharedBoards && sharedBoardsError ? (
-                <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
-                  <BodyCopy tone="error">{formatFriendsError(sharedBoardsError, "We couldn't load the shared boards.")}</BodyCopy>
-                </GlassCard>
+              {activeSheet === "share" ? (
+                <View style={{ gap: 18 }}>
+                  {activeDevice ? (
+                    <>
+                      {showOwnerCode ? (
+                        <View
+                          style={{
+                            gap: 14,
+                            borderRadius: theme.radius.hero,
+                            borderWidth: 1,
+                            borderColor: withAlpha(activePalette.dayOn, 0.18),
+                            backgroundColor: withAlpha(activePalette.socket, 0.92),
+                            paddingHorizontal: 18,
+                            paddingVertical: 20,
+                          }}
+                        >
+                          {isLoadingSharing || isBootstrappingCode ? (
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                              <ActivityIndicator color={activePalette.dayOn} />
+                              <BodyCopy>Preparing code…</BodyCopy>
+                            </View>
+                          ) : (
+                            <>
+                              <Text
+                                selectable
+                                style={{
+                                  color: theme.colors.textPrimary,
+                                  fontFamily: theme.typography.display.fontFamily,
+                                  fontSize: 34,
+                                  lineHeight: 38,
+                                  letterSpacing: 3,
+                                  textAlign: "center",
+                                }}
+                              >
+                                {formatShareCode(sharingState.code)}
+                              </Text>
+                            </>
+                          )}
+                        </View>
+                      ) : null}
+
+                      {ownerFeedback ? <BodyCopy tone={ownerFeedback.tone}>{ownerFeedback.message}</BodyCopy> : null}
+                      {!ownerFeedback && sharingError ? (
+                        <BodyCopy tone="error">{formatFriendsError(sharingError, "We couldn't load sharing for this board.")}</BodyCopy>
+                      ) : null}
+
+                      <UtilityActionRow>
+                        <SheetUtilityActionButton
+                          disabled={!sharingState.code}
+                          icon="copy-outline"
+                          label="Copy"
+                          onPress={handleCopyShareCode}
+                        />
+                        <SheetUtilityActionButton
+                          disabled={!sharingState.code}
+                          icon="share-social-outline"
+                          label="Share"
+                          onPress={handleSystemShare}
+                        />
+                        <SheetUtilityActionButton
+                          icon={sharingState.code ? "sync-outline" : "add-circle-outline"}
+                          label={sharingState.code ? "Rotate" : "Generate"}
+                          loading={isRotatingCode}
+                          onPress={handleRotateShareCode}
+                        />
+                      </UtilityActionRow>
+                    </>
+                  ) : (
+                    <EmptyMessage
+                      body="Claim a device first."
+                      title="No owned device connected"
+                    />
+                  )}
+                </View>
               ) : null}
 
-              {!isLoadingSharedBoards && !sharedBoardsError && sharedBoards.length === 0 ? (
-                <EmptyMessage
-                  body="Once an owner approves your request, their board will appear here as a live read-only preview."
-                  title="No shared boards yet"
-                />
+              {activeSheet === "connections" ? (
+                <>
+                  {showPendingSection ? (
+                    <SheetSection title="Pending">
+                      {sharingState.pendingRequests.length === 0 ? (
+                        <View style={{ gap: 12 }}>
+                          <EmptyMessage
+                            body="Requests appear here after someone uses your code."
+                            title="No pending requests"
+                          />
+                          <View style={{ gap: 8 }}>
+                            <PreviewNote>Preview</PreviewNote>
+                            <RequestRow
+                              isApproving={false}
+                              isRejecting={false}
+                              onApprove={() => {}}
+                              onReject={() => {}}
+                              preview
+                              request={previewRequestCard}
+                            />
+                          </View>
+                        </View>
+                      ) : (
+                        sharingState.pendingRequests.map((request) => (
+                          <RequestRow
+                            key={request.id}
+                            isApproving={isApprovingRequest && activeRequestActionId === request.id}
+                            isRejecting={isRejectingRequest && activeRequestActionId === request.id}
+                            onApprove={() => handleApproveRequest(request.id)}
+                            onReject={() => handleRejectRequest(request.id)}
+                            request={request}
+                          />
+                        ))
+                      )}
+                    </SheetSection>
+                  ) : null}
+
+                  {showViewersSection ? (
+                    <SheetSection title="Connected people">
+                      {sharingState.viewers.length === 0 ? (
+                        <View style={{ gap: 12 }}>
+                          <EmptyMessage
+                            body="Approved people stay here."
+                            title="No viewers yet"
+                          />
+                          <View style={{ gap: 8 }}>
+                            <PreviewNote>Preview</PreviewNote>
+                            <ViewerRow viewer={previewViewerCard} />
+                          </View>
+                        </View>
+                      ) : (
+                        sharingState.viewers.map((viewer) => <ViewerRow key={viewer.membershipId} viewer={viewer} />)
+                      )}
+                    </SheetSection>
+                  ) : null}
+                </>
               ) : null}
 
-              {!isLoadingSharedBoards && !sharedBoardsError
-                ? sharedBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />)
-                : null}
-            </View>
-          </>
-        ) : null}
-      </ScreenSection>
-    </ScreenScrollView>
+              {activeSheet === "boards" ? (
+                <View style={{ gap: 14 }}>
+                  {!isLoadingSharedBoards && !sharedBoardsError && sharedBoards.length === 0 ? (
+                    <EmptyMessage
+                      body="Approved boards will appear here."
+                      title="No shared boards yet"
+                    />
+                  ) : null}
+
+                  {isLoadingSharedBoards ? (
+                    <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
+                      <ActivityIndicator color={theme.colors.accentAmber} />
+                      <BodyCopy>Loading shared boards…</BodyCopy>
+                    </GlassCard>
+                  ) : null}
+
+                  {!isLoadingSharedBoards && sharedBoardsError ? (
+                    <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+                      <BodyCopy tone="error">{formatFriendsError(sharedBoardsError, "We couldn't load the shared boards.")}</BodyCopy>
+                    </GlassCard>
+                  ) : null}
+
+                  {!isLoadingSharedBoards && !sharedBoardsError
+                    ? showcaseBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />)
+                    : null}
+                </View>
+              ) : null}
+              </ScrollView>
+            </GlassCard>
+          </View>
+        </Modal>
+      ) : null}
+    </View>
   );
 }

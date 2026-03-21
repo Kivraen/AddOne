@@ -15,6 +15,7 @@ module.exports = {
     },
     plugins: [
       "expo-router",
+      "expo-sharing",
       "@react-native-community/datetimepicker",
       "expo-image",
       [

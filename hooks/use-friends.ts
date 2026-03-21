@@ -10,6 +10,7 @@ import {
   fetchDeviceSharing,
   fetchSharedBoards,
   rejectDeviceViewRequest,
+  revokeDeviceViewerMembership,
   requestDeviceViewAccess,
   rotateDeviceShareCode,
 } from "@/lib/supabase/addone-repository";
@@ -17,6 +18,8 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { DeviceShareRequest, DeviceSharingState, SharedBoard } from "@/types/addone";
 
 const FRIENDS_SELF_HEAL_MS = 15_000;
+
+export type FriendsDemoScenario = "connected" | "empty-boards" | "empty-owner" | "pending" | "profile-gate";
 
 const EMPTY_SHARING_STATE: DeviceSharingState = {
   code: null,
@@ -28,7 +31,11 @@ function emptyBoardDays() {
   return Array.from({ length: 21 }, () => Array.from({ length: 7 }, () => false));
 }
 
-function demoSharedBoards(): SharedBoard[] {
+function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] {
+  if (!scenario || scenario === "profile-gate" || scenario === "empty-owner" || scenario === "empty-boards" || scenario === "pending") {
+    return [];
+  }
+
   return [
     {
       id: "demo-shared-board",
@@ -51,18 +58,38 @@ function demoSharedBoards(): SharedBoard[] {
   ];
 }
 
-function demoSharingState(): DeviceSharingState {
+function demoSharingState(scenario?: FriendsDemoScenario | null): DeviceSharingState {
+  if (!scenario || scenario === "profile-gate" || scenario === "empty-boards") {
+    return EMPTY_SHARING_STATE;
+  }
+
+  if (scenario === "empty-owner") {
+    return {
+      code: "ADDONE",
+      pendingRequests: [],
+      viewers: [],
+    };
+  }
+
+  if (scenario === "pending") {
+    return {
+      code: "ADDONE",
+      pendingRequests: [
+        {
+          createdAt: new Date().toISOString(),
+          id: "demo-request",
+          requesterDisplayName: "Jamie Cole",
+          requesterUserId: "demo-requester",
+          status: "pending",
+        },
+      ],
+      viewers: [],
+    };
+  }
+
   return {
     code: "ADDONE",
-    pendingRequests: [
-      {
-        createdAt: new Date().toISOString(),
-        id: "demo-request",
-        requesterDisplayName: "Jamie Cole",
-        requesterUserId: "demo-requester",
-        status: "pending",
-      },
-    ],
+    pendingRequests: [],
     viewers: [
       {
         approvedAt: new Date().toISOString(),
@@ -94,19 +121,20 @@ export function formatFriendsError(error: unknown, fallback: string) {
   return error.message || fallback;
 }
 
-export function useFriends() {
+export function useFriends(demoScenario?: FriendsDemoScenario | null) {
   const { activeDeviceId } = useDevices();
   const { mode, status, user } = useAuth();
   const queryClient = useQueryClient();
+  const isProofScenario = demoScenario !== null;
   const isCloudSignedIn = mode === "cloud" && status === "signedIn" && !!user?.id;
   const sharedBoardsKey = addOneQueryKeys.sharedBoards(user?.id);
   const sharingKey = addOneQueryKeys.deviceSharing(activeDeviceId);
 
   const sharedBoardsQuery = useQuery({
-    enabled: mode === "demo" || isCloudSignedIn,
+    enabled: isProofScenario || mode === "demo" || isCloudSignedIn,
     queryFn: async () => {
-      if (mode === "demo") {
-        return demoSharedBoards();
+      if (isProofScenario || mode === "demo") {
+        return demoSharedBoards(demoScenario);
       }
 
       return fetchSharedBoards(user!.id);
@@ -117,26 +145,23 @@ export function useFriends() {
   });
 
   const sharingQuery = useQuery({
-    enabled: (mode === "demo" || isCloudSignedIn) && !!activeDeviceId,
+    enabled: (isProofScenario || mode === "demo" || isCloudSignedIn) && !!activeDeviceId,
     queryFn: async () => {
-      if (mode === "demo") {
-        return demoSharingState();
+      if (isProofScenario || mode === "demo") {
+        return demoSharingState(demoScenario);
       }
 
       return fetchDeviceSharing(activeDeviceId!);
     },
     queryKey: sharingKey,
-    refetchInterval: activeDeviceId && isCloudSignedIn ? FRIENDS_SELF_HEAL_MS : false,
+    refetchInterval: activeDeviceId && isCloudSignedIn && !isProofScenario ? FRIENDS_SELF_HEAL_MS : false,
     refetchIntervalInBackground: true,
   });
 
-  const sharedBoardIds = useMemo(
-    () => (sharedBoardsQuery.data ?? []).map((board) => board.id).sort(),
-    [sharedBoardsQuery.data],
-  );
+  const sharedBoardIds = useMemo(() => (sharedBoardsQuery.data ?? []).map((board) => board.id).sort(), [sharedBoardsQuery.data]);
 
   useEffect(() => {
-    if (!isCloudSignedIn || !user?.id) {
+    if (isProofScenario || !isCloudSignedIn || !user?.id) {
       return;
     }
 
@@ -243,7 +268,7 @@ export function useFriends() {
         void supabase.removeChannel(channel);
       }
     };
-  }, [activeDeviceId, isCloudSignedIn, queryClient, sharedBoardIds, sharedBoardsKey, sharingKey, user?.id]);
+  }, [activeDeviceId, isCloudSignedIn, isProofScenario, queryClient, sharedBoardIds, sharedBoardsKey, sharingKey, user?.id]);
 
   const requestAccessMutation = useMutation({
     mutationFn: requestDeviceViewAccess,
@@ -281,6 +306,30 @@ export function useFriends() {
     },
   });
 
+  const revokeViewerMutation = useMutation({
+    mutationFn: async (membershipId: string) => {
+      if (isProofScenario || mode === "demo") {
+        return { id: membershipId };
+      }
+
+      if (!activeDeviceId) {
+        throw new Error("No owned device connected.");
+      }
+
+      return revokeDeviceViewerMembership({
+        deviceId: activeDeviceId,
+        membershipId,
+      });
+    },
+    onSuccess: async () => {
+      if (activeDeviceId) {
+        await queryClient.invalidateQueries({ queryKey: sharingKey });
+      }
+
+      await queryClient.invalidateQueries({ queryKey: sharedBoardsKey });
+    },
+  });
+
   return {
     approveRequest: approveRequestMutation.mutateAsync,
     isApprovingRequest: approveRequestMutation.isPending,
@@ -289,7 +338,9 @@ export function useFriends() {
     isRejectingRequest: rejectRequestMutation.isPending,
     isRequestingAccess: requestAccessMutation.isPending,
     isRotatingCode: rotateCodeMutation.isPending,
+    isRevokingViewer: revokeViewerMutation.isPending,
     rejectRequest: rejectRequestMutation.mutateAsync,
+    revokeViewer: revokeViewerMutation.mutateAsync,
     requestAccess: requestAccessMutation.mutateAsync,
     requestAccessError: requestAccessMutation.error,
     rotateShareCode: rotateCodeMutation.mutateAsync,

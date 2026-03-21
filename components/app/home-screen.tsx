@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, LayoutChangeEvent, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, View, useWindowDimensions } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -18,7 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { PixelGrid } from "@/components/board/pixel-grid";
+import { DeviceBoardStage } from "@/components/board/device-board-stage";
 import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
@@ -473,7 +472,7 @@ function IconActionPill({ icon, onPress }: { icon: keyof typeof Ionicons.glyphMa
 
 export function HomeScreen() {
   const router = useRouter();
-  const { height, width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
   const { isApplyingToday, refreshRuntimeSnapshot, toggleToday } = useDeviceActions();
@@ -482,7 +481,6 @@ export function HomeScreen() {
   const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
   const clearBoardEditorOpen = useAppUiStore((state) => state.clearBoardEditorOpen);
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
-  const [boardStageWidth, setBoardStageWidth] = useState(0);
   const todayActionLockRef = useRef(false);
   const [todayActionInFlight, setTodayActionInFlight] = useState(false);
   const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
@@ -543,13 +541,6 @@ export function HomeScreen() {
   );
   const deviceAccentColor = useMemo(() => getDeviceAccentColor(effectiveDevice), [effectiveDevice]);
   const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
-
-  function handleBoardStageLayout(event: LayoutChangeEvent) {
-    const nextWidth = event.nativeEvent.layout.width;
-    if (Math.abs(nextWidth - boardStageWidth) > 1) {
-      setBoardStageWidth(nextWidth);
-    }
-  }
 
   if (isLoading) {
     return (
@@ -665,11 +656,8 @@ export function HomeScreen() {
   const currentWeekCompleted = device.days[device.today.weekIndex]
     .slice(0, device.today.dayIndex + 1)
     .filter(Boolean).length;
-  const boardFrameInsetX = 10;
-  const boardFrameInsetY = 8;
   const homeBottomInset = theme.layout.tabScrollBottom;
   const contentMinHeight = Math.max(0, height - insets.top - homeBottomInset - theme.layout.scrollTop);
-  const homeBoardAvailableWidth = Math.max(0, Math.min((boardStageWidth || width - 40) - boardFrameInsetX * 2, 760));
   const isTodayToggleLocked = staleRefreshInFlight || todayActionInFlight || activePendingTodayState !== undefined;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
   const todayState = boardButtonState(device, buttonIsApplying, isTodayToggleLocked);
@@ -765,102 +753,19 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <View style={{ position: "relative", alignItems: "center", justifyContent: "center", paddingTop: 10, paddingBottom: 14 }}>
-          <View pointerEvents="none" style={{ position: "absolute", top: 10, right: -8, bottom: 28, left: -8 }}>
-            <View
-              style={{
-                position: "absolute",
-                top: 42,
-                left: "9%",
-                width: "82%",
-                height: 80,
-                borderRadius: theme.radius.full,
-                backgroundColor: withAlpha(theme.colors.accentAmber, 0.18),
-                boxShadow: `0px 0px 116px ${withAlpha(theme.colors.accentAmber, 0.29)}`,
-                transform: [{ scaleX: 1.12 }],
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                top: 56,
-                left: "19%",
-                width: "62%",
-                height: 46,
-                borderRadius: theme.radius.full,
-                backgroundColor: withAlpha(palette.dayOn, 0.2),
-                boxShadow: `0px 0px 102px ${withAlpha(palette.dayOn, 0.32)}`,
-              }}
-            />
-            <LinearGradient
-              colors={["transparent", withAlpha(theme.colors.textPrimary, 0.05), "transparent"]}
-              end={{ x: 0.5, y: 1 }}
-              start={{ x: 0.5, y: 0 }}
-              style={{ position: "absolute", top: 0, right: 14, bottom: 10, left: 14, borderRadius: 32 }}
-            />
-          </View>
-
-          <View
-            style={{
-              alignSelf: "stretch",
-              overflow: "hidden",
-              borderRadius: 26,
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: "#090B10",
-              boxShadow: `0px 22px 60px ${withAlpha(theme.colors.bgBase, 0.38)}`,
-              padding: 4,
-            }}
-          >
-            <LinearGradient
-              colors={[
-                withAlpha(theme.colors.textPrimary, 0.08),
-                withAlpha(theme.colors.textPrimary, 0.02),
-                "transparent",
-              ]}
-              end={{ x: 0.9, y: 0.85 }}
-              start={{ x: 0.1, y: 0.05 }}
-              style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-            />
-            <View
-              style={{
-                overflow: "hidden",
-                borderRadius: 22,
-                borderWidth: 1,
-                borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                backgroundColor: palette.socket,
-                boxShadow: `inset 0px 1px 0px ${withAlpha(theme.colors.textPrimary, 0.06)}`,
-                paddingHorizontal: boardFrameInsetX,
-                paddingVertical: boardFrameInsetY,
-              }}
-            >
-              <LinearGradient
-                colors={[withAlpha(theme.colors.textPrimary, 0.04), "transparent", withAlpha(theme.colors.bgBase, 0.08)]}
-                end={{ x: 0.8, y: 1 }}
-                start={{ x: 0.1, y: 0 }}
-                style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-              />
-              <View onLayout={handleBoardStageLayout}>
-                <PixelGrid
-                  availableWidth={homeBoardAvailableWidth}
-                  cells={cells}
-                  mode="display"
-                  palette={palette}
-                  pendingPulse={
-                    activePendingTodayState !== undefined
-                      ? {
-                          col: device.today.weekIndex,
-                          row: device.today.dayIndex,
-                        }
-                      : null
-                  }
-                  readOnly
-                  showFooterHint={false}
-                />
-              </View>
-            </View>
-          </View>
-        </View>
+        <DeviceBoardStage
+          accentColor={theme.colors.accentAmber}
+          cells={cells}
+          palette={palette}
+          pendingPulse={
+            activePendingTodayState !== undefined
+              ? {
+                  col: device.today.weekIndex,
+                  row: device.today.dayIndex,
+                }
+              : null
+          }
+        />
 
         <View style={{ gap: 14 }}>
           <View style={{ height: 1, backgroundColor: dividerColor }} />
