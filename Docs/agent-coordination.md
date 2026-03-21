@@ -7,6 +7,7 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 ## Canonical Coordination Files
 
 - [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md): canonical master plan and project phase narrative
+- [AddOne_UI_Direction.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_UI_Direction.md): AddOne-specific visual and UX direction for all user-facing work
 - [project-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/project-memory.md): stable facts and accepted coordination decisions
 - [git-operations.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/git-operations.md): git and GitHub reliability rules plus current backup status
 - [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md): current stage map and active stage pointer
@@ -40,6 +41,7 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 ## UI Work Rule
 
 - Every UI-facing task must explicitly require the `building-native-ui` skill in `.agents/skills/building-native-ui/SKILL.md`.
+- Every UI-facing task must explicitly require [AddOne_UI_Direction.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_UI_Direction.md) as a read-first source of truth for taste, hierarchy, copy density, and interaction choices.
 - UI briefs should bias toward native Expo Router patterns, safe-area-correct scroll roots, native tabs conventions, and restrained black-glass styling that fits the existing AddOne shell.
 - Do not accept UI work that ignores the current visual direction or regresses the native navigation structure.
 
@@ -80,6 +82,7 @@ Every delegated brief must include:
 - scoped files and docs
 - report format
 - explicit iteration rule for user-facing work when the slice is likely to need aesthetic or usability feedback
+- AddOne-specific UI direction doc when the task changes visible product UI
 
 ## Required Report Format For Staged Work
 

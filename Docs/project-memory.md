@@ -15,6 +15,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The repo already uses `Docs/` as its durable doc root.
 - The stage-coordinator convention's lowercase `docs/` paths map to `Docs/` in this repo so we do not create a second coordination tree on case-insensitive filesystems.
 - The canonical master plan remains [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md).
+- The canonical AddOne-specific UI direction now lives in [AddOne_UI_Direction.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_UI_Direction.md).
 - Git reliability rules live in [git-operations.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/git-operations.md).
 - The live execution queue remains [Active_Work.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/Active_Work.md).
 - Stage memory now lives under [Docs/stages](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages).
@@ -22,6 +23,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Worker reports remain under [Docs/agent-reports](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports).
 - `origin` is configured as the GitHub remote for this repo.
 - UI work in this repo must use the `building-native-ui` skill in `.agents/skills/building-native-ui/SKILL.md`.
+- Visible UI work should also read [AddOne_UI_Direction.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_UI_Direction.md) so agents stop guessing the product's taste and hierarchy rules.
 
 ## Accepted Coordination Decisions
 
