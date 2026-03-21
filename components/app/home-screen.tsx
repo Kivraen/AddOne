@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,8 +19,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DeviceBoardStage } from "@/components/board/device-board-stage";
-import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
-import { GlassCard } from "@/components/ui/glass-card";
+import { ScreenScrollView } from "@/components/layout/screen-frame";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
@@ -360,6 +360,71 @@ function PulsingStatusDot({ color }: { color: string }) {
   );
 }
 
+function EmptyHomePrimaryAction({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={{ alignItems: "center", gap: 18 }}>
+      <Pressable
+        accessibilityLabel="Add Your AddOne"
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          alignItems: "center",
+          justifyContent: "center",
+          width: 136,
+          height: 136,
+          borderRadius: 28,
+          borderCurve: "continuous",
+          borderWidth: 1,
+          borderColor: withAlpha(theme.colors.textPrimary, 0.16),
+          backgroundColor: pressed ? withAlpha(theme.colors.textPrimary, 0.92) : theme.colors.textPrimary,
+          boxShadow: `0px 18px 46px ${withAlpha(theme.colors.bgBase, 0.3)}`,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
+        })}
+      >
+        <Image
+          contentFit="contain"
+          source="sf:plus"
+          style={{ width: 42, height: 42 }}
+          tintColor={theme.colors.bgBase}
+        />
+      </Pressable>
+
+      <View
+        style={{
+          alignItems: "center",
+          gap: 2,
+          paddingHorizontal: 16,
+        }}
+      >
+        <View
+          style={{
+            position: "absolute",
+            top: 2,
+            left: 0,
+            right: 0,
+            bottom: -2,
+            borderRadius: theme.radius.full,
+            backgroundColor: withAlpha(theme.colors.textPrimary, 0.035),
+            boxShadow: `0px 12px 30px ${withAlpha(theme.colors.bgBase, 0.24)}`,
+          }}
+        />
+        <Text
+          style={{
+            color: withAlpha(theme.colors.textPrimary, 0.72),
+            fontFamily: theme.typography.title.fontFamily,
+            fontSize: 24,
+            lineHeight: 28,
+            letterSpacing: -0.45,
+            textAlign: "center",
+          }}
+        >
+          Add Your AddOne
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function HeaderChip({
   color,
   icon,
@@ -569,36 +634,8 @@ export function HomeScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         contentMaxWidth={theme.layout.narrowContentWidth}
       >
-        <View style={{ alignItems: "center", gap: 18, paddingVertical: 24 }}>
-          <Pressable
-            onPress={() => router.push("/onboarding")}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 132,
-              height: 132,
-              borderRadius: theme.radius.sheet,
-              borderCurve: "continuous",
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.22)",
-            }}
-          >
-            <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
-          </Pressable>
-
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-              textAlign: "center",
-            }}
-          >
-            Connect your AddOne
-          </Text>
+        <View style={{ alignItems: "center", justifyContent: "center", minHeight: 360, paddingVertical: 24 }}>
+          <EmptyHomePrimaryAction onPress={() => router.push("/onboarding")} />
         </View>
       </ScreenScrollView>
     );

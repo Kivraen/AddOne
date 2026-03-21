@@ -1,6 +1,6 @@
 # AddOne Beta UI Issue Log
 
-Last updated: March 19, 2026
+Last updated: March 21, 2026
 
 This is the live issue and decision log for `S3: Beta UI Completion And Social Shape`.
 Use it to capture:
@@ -29,6 +29,7 @@ Use it to capture:
 - Beta habit identity should stay intentionally short: onboarding and `Routine` settings should collect a defaultable one-line habit name plus an optional one-line minimum-goal phrase, and the home subtitle should use that minimum-goal line in the calm state instead of redundant status copy. For now the minimum-goal text is app-side metadata, not a device/runtime setting.
 - The beta daily-minimum phrase can be longer than the first draft allowed, but the home subtitle must still stay single-line. Allow more entry room in setup/settings, then clamp the home presentation with tail truncation instead of wrapping to a second line.
 - The home connection affordance should not jump straight from live to a Recovery CTA on the first stale poll. Keep a subtle pulsing live-style indicator first, and only surface Recovery after the device looks confirmed offline.
+- The no-owned-device Home state should open with one large centered high-contrast connect action and a brief label beneath it. Keep the surrounding screen minimal, avoid decorative motion, and let the single action read as the first clear move into setup.
 - The home KPI strip should prioritize progress the user can act on: `This week`, successful `Weeks`, and `Recorded` days. `Visible fill` is lower-value and should stay out of the primary KPI row.
 - History edit mode should use the same connection grace logic as home instead of gating directly on raw `isLive`. During the grace window it should check quietly in the background and avoid premature offline alarms; only once the board looks confirmed offline should it switch to the unavailable state with explicit `Back` and `Refresh` actions.
 - History edit mode should not flash portrait or offline helper copy while the route is still rotating into landscape. Keep the rotation transition visually quiet, then reveal either the editor or the real fallback state once orientation settles.
