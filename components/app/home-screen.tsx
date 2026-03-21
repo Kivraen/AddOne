@@ -18,8 +18,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DeviceBoardStage } from "@/components/board/device-board-stage";
-import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
-import { GlassCard } from "@/components/ui/glass-card";
+import { ScreenScrollView } from "@/components/layout/screen-frame";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
@@ -40,6 +39,9 @@ const HOME_INSIGHT_PANEL_HEIGHT = theme.typography.micro.lineHeight + theme.typo
 const HOME_INSIGHT_TRANSITION_DURATION = 360;
 const HOME_INSIGHT_ENTRY_OFFSET = 16;
 const HOME_INSIGHT_EXIT_OFFSET = 10;
+const EMPTY_HOME_ACTION_SIZE = 156;
+const EMPTY_HOME_GLOW_SIZE = 224;
+const EMPTY_HOME_ACTION_RADIUS = 42;
 
 type HomeHeaderConnectionState = "online" | "verifying-board" | "checking-connection" | "offline";
 type HomeInsight = { eyebrow: string; message: string };
@@ -360,6 +362,182 @@ function PulsingStatusDot({ color }: { color: string }) {
   );
 }
 
+function EmptyHomePrimaryAction({ onPress }: { onPress: () => void }) {
+  const pressed = useSharedValue(0);
+  const glowScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.8);
+  const glowDrift = useSharedValue(0);
+
+  useEffect(() => {
+    glowScale.value = withRepeat(
+      withSequence(
+        withTiming(1.035, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.94, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.68, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+    glowDrift.value = withRepeat(
+      withSequence(
+        withTiming(-4, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
+        withTiming(4, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+
+    return () => {
+      glowScale.value = 1;
+      glowOpacity.value = 0.8;
+      glowDrift.value = 0;
+    };
+  }, [glowDrift, glowOpacity, glowScale]);
+
+  const buttonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withTiming(pressed.value ? 0.985 : 1, { duration: theme.motion.press.duration }) }],
+  }));
+  const outerGlowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    transform: [{ translateY: glowDrift.value }, { scale: glowScale.value }],
+  }));
+
+  return (
+    <View style={{ alignItems: "center", gap: 18 }}>
+      <View
+        style={{
+          alignItems: "center",
+          height: EMPTY_HOME_GLOW_SIZE,
+          justifyContent: "center",
+          width: EMPTY_HOME_GLOW_SIZE,
+        }}
+      >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              height: EMPTY_HOME_GLOW_SIZE,
+              width: EMPTY_HOME_GLOW_SIZE,
+              borderRadius: 60,
+              borderCurve: "continuous",
+              backgroundColor: withAlpha(theme.colors.accentAmber, 0.08),
+              boxShadow: `0px 0px 88px ${withAlpha(theme.colors.accentAmber, 0.28)}`,
+            },
+            outerGlowStyle,
+          ]}
+        />
+        <Animated.View style={buttonStyle}>
+          <Pressable
+            accessibilityLabel="Connect your AddOne"
+            accessibilityRole="button"
+            onPress={onPress}
+            onPressIn={() => {
+              pressed.value = 1;
+            }}
+            onPressOut={() => {
+              pressed.value = 0;
+            }}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              width: EMPTY_HOME_ACTION_SIZE,
+              height: EMPTY_HOME_ACTION_SIZE,
+              borderRadius: EMPTY_HOME_ACTION_RADIUS,
+              borderCurve: "continuous",
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+              backgroundColor: withAlpha(theme.colors.bgElevated, 0.98),
+              boxShadow: `0px 14px 34px ${withAlpha(theme.colors.textPrimary, 0.06)}`,
+              overflow: "hidden",
+            }}
+          >
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 1,
+                right: 1,
+                left: 1,
+                height: EMPTY_HOME_ACTION_SIZE / 2,
+                borderTopLeftRadius: EMPTY_HOME_ACTION_RADIUS,
+                borderTopRightRadius: EMPTY_HOME_ACTION_RADIUS,
+                backgroundColor: withAlpha(theme.colors.textPrimary, 0.02),
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 52,
+                height: 52,
+              }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  width: 8,
+                  height: 36,
+                  borderRadius: 4,
+                  backgroundColor: withAlpha(theme.colors.textPrimary, 0.22),
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  width: 36,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: withAlpha(theme.colors.textPrimary, 0.22),
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  width: 6,
+                  height: 32,
+                  borderRadius: 3,
+                  backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  width: 32,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
+                }}
+              />
+            </View>
+          </Pressable>
+        </Animated.View>
+      </View>
+
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.title.fontFamily,
+          fontSize: theme.typography.title.fontSize,
+          lineHeight: theme.typography.title.lineHeight,
+          textAlign: "center",
+        }}
+      >
+        Connect your AddOne
+      </Text>
+    </View>
+  );
+}
+
 function HeaderChip({
   color,
   icon,
@@ -569,36 +747,8 @@ export function HomeScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         contentMaxWidth={theme.layout.narrowContentWidth}
       >
-        <View style={{ alignItems: "center", gap: 18, paddingVertical: 24 }}>
-          <Pressable
-            onPress={() => router.push("/onboarding")}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 132,
-              height: 132,
-              borderRadius: theme.radius.sheet,
-              borderCurve: "continuous",
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.22)",
-            }}
-          >
-            <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
-          </Pressable>
-
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-              textAlign: "center",
-            }}
-          >
-            Connect your AddOne
-          </Text>
+        <View style={{ alignItems: "center", justifyContent: "center", minHeight: 360, paddingVertical: 24 }}>
+          <EmptyHomePrimaryAction onPress={() => router.push("/onboarding")} />
         </View>
       </ScreenScrollView>
     );

@@ -1,6 +1,6 @@
 # AddOne Beta UI Issue Log
 
-Last updated: March 21, 2026
+Last updated: March 19, 2026
 
 This is the live issue and decision log for `S3: Beta UI Completion And Social Shape`.
 Use it to capture:
@@ -29,7 +29,6 @@ Use it to capture:
 - Beta habit identity should stay intentionally short: onboarding and `Routine` settings should collect a defaultable one-line habit name plus an optional one-line minimum-goal phrase, and the home subtitle should use that minimum-goal line in the calm state instead of redundant status copy. For now the minimum-goal text is app-side metadata, not a device/runtime setting.
 - The beta daily-minimum phrase can be longer than the first draft allowed, but the home subtitle must still stay single-line. Allow more entry room in setup/settings, then clamp the home presentation with tail truncation instead of wrapping to a second line.
 - The home connection affordance should not jump straight from live to a Recovery CTA on the first stale poll. Keep a subtle pulsing live-style indicator first, and only surface Recovery after the device looks confirmed offline.
-- The no-owned-device Home state should behave as the start of onboarding: one centered glowing add-device control, minimal supporting copy, and the existing onboarding route behind the tap. The supporting line should read `Connect your AddOne`.
 - The home KPI strip should prioritize progress the user can act on: `This week`, successful `Weeks`, and `Recorded` days. `Visible fill` is lower-value and should stay out of the primary KPI row.
 - History edit mode should use the same connection grace logic as home instead of gating directly on raw `isLive`. During the grace window it should check quietly in the background and avoid premature offline alarms; only once the board looks confirmed offline should it switch to the unavailable state with explicit `Back` and `Refresh` actions.
 - History edit mode should not flash portrait or offline helper copy while the route is still rotating into landscape. Keep the rotation transition visually quiet, then reveal either the editor or the real fallback state once orientation settles.
@@ -49,7 +48,7 @@ Use it to capture:
 
 ### Onboarding
 
-- The beta onboarding flow should keep one obvious next action per step, with helper copy explaining what happens next instead of stacking equal-weight buttons and raw status text in the same block.
+- The onboarding flow is real and guided, but it is still a state-dense step flow that needs polish around copy, pacing, and error handling.
 - We need a deliberate pass on:
   - Wi-Fi scan results and hidden-network fallback
   - waiting-for-device messaging
@@ -58,8 +57,7 @@ Use it to capture:
 
 ### Wi-Fi recovery
 
-- Wi-Fi recovery should follow the same calm-step rule as onboarding: one clear immediate action, one short explanation of what happens next, and trust-preserving fallback copy when reconnect takes too long or drops back into setup mode.
-- Wi-Fi loss alone must not push an already provisioned offline-capable board into recovery. Recovery should only start from an explicit app action or runtime long-hold, while boot-time hold is reserved for full factory reset.
+- Wi-Fi recovery is implemented, but it still needs a trust pass on reconnect messaging, timeout clarity, and the manual-entry path.
 - Wi-Fi recovery should stay focused on reconnecting Wi-Fi. It should reuse the device's current timezone under the hood and not surface a timezone picker in the beta recovery flow.
 - Once Wi-Fi recovery is started, the flow needs an explicit `Cancel recovery` action. Relying on navigation alone is not enough when there is an active local/cloud recovery session.
 - Wi-Fi recovery should avoid ambiguous status chips like `Ready for Wi-Fi` when the step title and helper copy already explain the action. Prefer direct instructions over extra status chrome.
@@ -112,26 +110,23 @@ Use it to capture:
   - sign out
 - Beta auth should stay `email OTP`; we do not need a heavier auth system just to unlock the social layer.
 - `Friends` should be gated behind a friend-facing social profile rather than exposing raw email:
-  - required `first_name`
-  - required `last_name`
+  - required `display_name`
   - required unique `username`
-  - optional profile photo
+  - optional `avatar`
+  - optional `first_name`
+  - optional `last_name`
 - Social profile completion should happen when the user first enters `Friends`, not during core device onboarding.
-- Friend-facing UI should use `first_name + last_name + @username`; `display_name` can remain the derived storage field; email stays private and account-only.
+- Friend-facing UI should use `display_name + @username`; email stays private and account-only.
 - Current backend reality:
   - the repo already has `profiles.display_name`
   - the repo already has `profiles.avatar_url`
-  - beta profile identity now adds first-name, last-name, and unique username support
-  - profile photos should come from native library/camera flows backed by storage, not pasted avatar URLs
+  - the repo does not yet have a unique `username` field
+  - the username-backed social profile is planned, but not yet implemented
 
 ### Friends and social beta
 
 - `Friends` planning is now the next active product slice inside `S3`. Onboarding and Wi-Fi recovery polish are intentionally being held as the final visible UI polish slice after the friends checkpoint.
-- The `Friends` tab now has a real first-beta sharing surface:
-  - enter share code
-  - approve or reject pending requests
-  - view connected people
-  - browse approved boards read-only
+- The `Friends` tab is visible, but it is still placeholder UI.
 - The shared object in beta is the unit/grid, not a broad user-level social graph.
 - The first-beta sharing model is now:
   - one active rotatable share code per device
@@ -150,9 +145,6 @@ Use it to capture:
   - reactions
   - comments
   - push notifications
-- Current known follow-up after the first Friends implementation:
-  - viewer revocation is still a later management pass
-  - broader realtime invalidation polish may still need a later pass if the self-heal interval feels too soft in practice
 - Future social should still be preserved in the direction:
   - app-level activity log across connected boards
   - reactions

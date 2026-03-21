@@ -59,6 +59,12 @@ Non-negotiables:
 - Do not rewrite coordinator docs like project memory, the master plan, the stage register, or `Active_Work.md`.
 - Do not delete or redesign the onboarding route. This pass only changes the entry screen into that flow.
 
+Iteration rule:
+- This task is user-facing and iterative by default.
+- Do not assume the first implementation pass is the final accepted result.
+- If the user gives follow-up feedback, keep iterating on the same branch until the user explicitly says the result is acceptable or explicitly asks for a checkpoint review.
+- When you write the report, describe the final branch state after those iterations, including the user feedback that materially shaped the result.
+
 Scope:
 - In scope: `components/app/home-screen.tsx` and any narrowly related issue-log or copy update needed for this exact empty-state behavior.
 - Out of scope: broader onboarding flow restructuring, backend work, firmware work, and cleanup of unrelated repo noise.

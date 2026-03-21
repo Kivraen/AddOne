@@ -1,6 +1,6 @@
 # AddOne Agent Coordination
 
-Last updated: March 21, 2026
+Last updated: March 18, 2026
 
 This file defines how AddOne uses the coordinator-led stage workflow.
 
@@ -29,13 +29,6 @@ This file defines how AddOne uses the coordinator-led stage workflow.
   - `Docs/Active_Work.md`
 - Workers may update scoped implementation files and scoped product or engineering docs named in the brief.
 - Workers do not advance a stage by themselves.
-- If a beta-scope product slice is implemented on the task branch, the coordinator treats it as part of the candidate beta surface even if acceptance is still pending proof.
-- `Revise and retry` means preserve the implementation checkpoint, record the missing proof or support work, and continue from that state unless the user explicitly wants rollback.
-- User-facing execution work is iterative by default. A worker should not assume the first implementation pass is the final accepted result.
-- For visible product work, a task is only truly ready for coordinator review when:
-  - the user explicitly says the current result is acceptable, or
-  - the user explicitly wants a checkpoint review even though more iteration may follow.
-- If the user keeps refining a worker-owned slice after the first pass, the worker report must be refreshed so it reflects the actual final state of the branch, the user's feedback, and the decisions made during iteration.
 
 ## UI Work Rule
 
@@ -48,22 +41,21 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 1. Confirm the active stage and the next execution task that belongs to it.
 2. Generate or refresh a copy-paste brief for that task.
 3. Delegate narrow work with explicit success metrics, required proof, and non-negotiables.
-4. Keep user-facing execution work in iteration mode until the user approves the result or explicitly asks for a checkpoint review.
-5. Review the returned report against the active stage note.
-6. Decide only one of:
+4. Review the returned report against the active stage note.
+5. Decide only one of:
    - `accepted`
    - `revise and retry`
    - `blocked`
-7. Update project memory, stage notes, the stage register, and the active-work registry.
-8. Commit accepted or materially updated coordination state without mixing unrelated changes.
-9. Push the durable checkpoint if the remote is available, or record why it is not pushed yet.
+6. Update project memory, stage notes, the stage register, and the active-work registry.
+7. Commit accepted or materially updated coordination state without mixing unrelated changes.
+8. Push the durable checkpoint if the remote is available, or record why it is not pushed yet.
 
 ## Stage To Task Mapping
 
 - `S0 Coordination Bootstrap` -> [T-000-project-dashboard-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-000-project-dashboard-foundation.md)
 - `S1 Validation Baseline Ready` -> [T-002-hosted-beta-bring-up.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-002-hosted-beta-bring-up.md)
 - `S2 Trusted Real-Device Validation` -> [T-003-real-device-validation-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-003-real-device-validation-pass.md)
-- `S3 Beta UI Completion And Social Shape` -> [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as accepted entrypoint work, then [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md), then later UI implementation batches
+- `S3 Beta UI Completion And Social Shape` -> [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) and later UI implementation batches
 - `S4 Beta Hardening And Durable Release Memory` -> [T-004-truth-cleanup-after-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-004-truth-cleanup-after-validation.md)
 
 ## Required Brief Contents
@@ -79,7 +71,6 @@ Every delegated brief must include:
 - active stage note path
 - scoped files and docs
 - report format
-- explicit iteration rule for user-facing work when the slice is likely to need aesthetic or usability feedback
 
 ## Required Report Format For Staged Work
 
@@ -94,7 +85,6 @@ Every staged worker report must include:
 7. `Recommendation`
 
 If the report is stored under `Docs/agent-reports`, keep the existing frontmatter and add the staged report block in the body.
-For iterative work, `Changes made`, `Evidence`, and `Recommendation` must reflect the final branch state after user feedback, not only the first pass.
 
 ## Review Rules
 
@@ -104,8 +94,6 @@ For iterative work, `Changes made`, `Evidence`, and `Recommendation` must reflec
 
 Do not advance a stage on implementation claims alone.
 If a remote exists, acceptance should also consider whether the durable checkpoint has been pushed or whether the reason it is not pushed is recorded.
-Do not treat `revise and retry` as a reason to discard implemented beta work; instead, preserve it, update the plan to include it, and define the exact next proof or support task.
-If visible work changed materially after the original worker report, require a refreshed report before treating the checkpoint as coordinator-ready.
 
 ## Commit Policy
 
@@ -114,6 +102,3 @@ If visible work changed materially after the original worker report, require a r
 - Never absorb unrelated dirty files into a stage acceptance commit.
 - Push accepted durable checkpoints when appropriate because this repo has a GitHub remote.
 - Before risky multi-file changes or overnight stopping points, prefer checkpoint commits and optional tags.
-- Keep `main` as the stable official branch and start new implementation slices from a fresh branch off `main`.
-- Use worktrees only for explicit parallel tracks or when the user wants two active checkouts at once.
-- If a beta-scope slice is implemented but not yet accepted, prefer a clearly labeled checkpoint commit on the task branch so the work is saved and the follow-up proof pass starts from a stable base.

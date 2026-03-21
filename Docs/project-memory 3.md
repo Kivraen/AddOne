@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 21, 2026
+Last updated: March 18, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -34,10 +34,6 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Important accepted coordination state should be committed without mixing in unrelated dirty files.
 - Accepted durable checkpoints should be pushed when appropriate because a GitHub remote exists for this repo.
 - Before risky redesigns, broad refactors, or overnight stopping points, prefer checkpoint commits and optional tags.
-- Implemented beta-scope product work is not discarded just because the coordinator verdict is `revise and retry`.
-- When a beta slice is implemented but not yet accepted, keep it checkpointed in git, keep it in the beta plan, and add the required verification or support follow-up explicitly.
-- User-facing task work is iterative by default. Do not treat the first worker pass as final if the user is still refining the result.
-- A worker report should describe the actual final state after user iteration, not just the first implementation pass.
 
 ## Current Repo Reality
 
@@ -45,30 +41,28 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The app reads live runtime state from `device_runtime_snapshots` and Supabase realtime.
 - The firmware v2 foundation exists with AP provisioning, claim redemption, heartbeat, MQTT realtime subscribe, fallback poll, and runtime snapshot upload.
 - The realtime gateway exists and mirrors queued commands plus device-side runtime/presence events.
-- The recovered latest UI baseline is now restored and promoted to `main` at `d589cdc`.
-- A real TestFlight install from that baseline now works.
-- The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
-- The first Friends sharing implementation now exists in the task branch, but it still needs a stricter verification pass before coordinator acceptance.
-- Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
-- The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
+- The `Friends` tab is still visible placeholder UI even though the backend already has sharing primitives.
+- Hosted beta documentation and config shape exist, but the full hosted baseline is not yet trusted enough to unblock real-device validation without ambiguity.
+- The current profile surface is still just the email or demo session and a sign-out action.
+- The backend profile model currently exposes `profiles.display_name` rather than a richer username or first/last-name shape.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
 
 ## Current Active Stage
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-014-stage-s3-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-014-stage-s3-add-device-entry-flow-first-screen.md)
-- Current execution task: [T-017-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-017-add-device-entry-flow-first-screen.md)
+- Next brief: [B-002-stage-s3-ui-audit-and-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-002-stage-s3-ui-audit-and-lock.md)
+- First execution task: [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md)
 
 ## Current Blockers
 
-- `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
-- `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
-- `T-017` is the current focused execution pass inside `T-008`, starting with the no-owned-device add-device entry screen.
-- The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
-- Onboarding and Wi-Fi recovery still need the final polish slice after the profile and friends work.
-- The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
-- `main` is now fully backed up on GitHub, so there is no current backup gap.
+- The main screen and settings still need a coordinated polish pass rather than isolated fixes.
+- Onboarding and Wi-Fi recovery need a durable issue log and polish plan before implementation gets split.
+- The profile identity model is not locked yet.
+- The friends beta shape still has contradictory ideas and no accepted first-user connection model yet.
+- The beta timezone policy is not locked yet: we still need to choose between a supported-zone picker with explicit fallback messaging or broader firmware timezone support.
+- Release hardening and validation stages now depend on this UI lock pass being explicit enough to hand off cleanly.
+- GitHub is not yet a full backup of the current local branch state because `codex/ui-skin-main-screen` is ahead of origin.
 
 ## Fresh Agent Read Order
 
