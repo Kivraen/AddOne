@@ -37,7 +37,7 @@ public:
   bool hasPersistedDeviceAuthToken() const;
   bool isConfigured() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);
-  bool redeemPendingClaim(const ProvisioningContract::PendingClaim& claim);
+  bool redeemPendingClaim(const ProvisioningContract::PendingClaim& claim, uint32_t resetEpoch);
   bool uploadRuntimeSnapshot(uint32_t revision,
                              const HabitTracker::WeekDate& currentWeekStart,
                              uint8_t todayRow,

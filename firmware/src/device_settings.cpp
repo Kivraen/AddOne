@@ -89,6 +89,11 @@ bool DeviceSettingsStore::applySync(const DeviceSettingsSyncPayload& payload, St
   return persist_();
 }
 
+bool DeviceSettingsStore::clearToDefaults() {
+  settings_ = DeviceSettingsState{};
+  return persist_();
+}
+
 uint8_t DeviceSettingsStore::clampBrightness_(uint8_t brightness) {
   return min<uint8_t>(brightness, 100);
 }

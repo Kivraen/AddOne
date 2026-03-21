@@ -15,6 +15,50 @@ constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
 constexpr unsigned long kRecoveryCommandCooldownMs = 15000;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
 
+bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
+  int year = 0;
+  int month = 0;
+  int day = 0;
+  if (sscanf(input.c_str(), "%d-%d-%d", &year, &month, &day) != 3) {
+    return false;
+  }
+
+  outDate.year = year;
+  outDate.month = month;
+  outDate.day = day;
+  return true;
+}
+
+void populateSettingsSyncPayload(JsonObjectConst settingsObject, DeviceSettingsSyncPayload& payload) {
+  payload.hasAmbientAuto = !settingsObject["ambient_auto"].isNull();
+  payload.hasBrightness = !settingsObject["brightness"].isNull();
+  payload.hasDayResetTime = !settingsObject["day_reset_time"].isNull();
+  payload.hasName = !settingsObject["name"].isNull();
+  payload.hasPaletteCustom = settingsObject.containsKey("palette_custom") && settingsObject["palette_custom"].is<JsonObjectConst>();
+  payload.hasPalettePreset = !settingsObject["palette_preset"].isNull();
+  payload.hasRewardEnabled = !settingsObject["reward_enabled"].isNull();
+  payload.hasRewardTrigger = !settingsObject["reward_trigger"].isNull();
+  payload.hasRewardType = !settingsObject["reward_type"].isNull();
+  payload.hasTimezone = !settingsObject["timezone"].isNull();
+  payload.hasWeeklyTarget = !settingsObject["weekly_target"].isNull();
+
+  payload.ambientAuto = payload.hasAmbientAuto ? settingsObject["ambient_auto"].as<bool>() : true;
+  payload.rewardEnabled = payload.hasRewardEnabled ? settingsObject["reward_enabled"].as<bool>() : false;
+  payload.dayResetTime = settingsObject["day_reset_time"] | "";
+  payload.name = settingsObject["name"] | "";
+  if (payload.hasPaletteCustom) {
+    serializeJson(settingsObject["palette_custom"], payload.paletteCustomJson);
+  } else {
+    payload.paletteCustomJson = "";
+  }
+  payload.palettePreset = settingsObject["palette_preset"] | "";
+  payload.rewardTrigger = settingsObject["reward_trigger"] | "";
+  payload.rewardType = settingsObject["reward_type"] | "";
+  payload.timezone = settingsObject["timezone"] | "";
+  payload.brightness = payload.hasBrightness ? settingsObject["brightness"].as<uint8_t>() : 70;
+  payload.weeklyTarget = payload.hasWeeklyTarget ? settingsObject["weekly_target"].as<uint8_t>() : Config::kDefaultWeeklyMinimum;
+}
+
 const char* stateName(FirmwareState state) {
   switch (state) {
     case FirmwareState::SetupRecovery:
@@ -177,7 +221,9 @@ bool FirmwareApp::tickWifiReconnectPolicy_(bool allowRecoveryEscalation) {
 }
 
 void FirmwareApp::begin() {
-  recoveryRequestedAtBoot_ = ButtonInput::recoveryHeldAtBoot();
+  const unsigned long bootHoldDurationMs = ButtonInput::bootHoldDurationMs();
+  recoveryRequestedAtBoot_ = false;
+  factoryResetRequestedAtBoot_ = bootHoldDurationMs >= Config::kFactoryResetHoldMs;
   buttonInput_.begin();
   deviceSettings_.begin();
   ambientLight_.begin();
@@ -185,6 +231,10 @@ void FirmwareApp::begin() {
   habitTracker_.begin();
   habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
   provisioningStore_.begin();
+  if (factoryResetRequestedAtBoot_) {
+    performFactoryReset_("Boot-time factory reset requested.");
+    return;
+  }
   migrateReadyForTrackingFlag_();
   cloudClient_.begin(identity_);
   realtimeClient_.begin(identity_);
@@ -212,6 +262,8 @@ void FirmwareApp::begin() {
   Serial.printf("Ready for tracking: %s\n", provisioningStore_.isReadyForTracking() ? "yes" : "no");
   Serial.printf("Authoritative time available: %s\n", hasAuthoritativeTime_() ? "yes" : "no");
   Serial.printf("Recovery requested at boot: %s\n", recoveryRequestedAtBoot_ ? "yes" : "no");
+  Serial.printf("Factory reset requested at boot: %s\n", factoryResetRequestedAtBoot_ ? "yes" : "no");
+  Serial.printf("Current reset epoch: %lu\n", static_cast<unsigned long>(provisioningStore_.resetEpoch()));
 
   if (recoveryRequestedAtBoot_ || provisioningStore_.hasPendingClaim() || !bootReadyForTracking_()) {
     enterState_(FirmwareState::SetupRecovery);
@@ -259,6 +311,50 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
 
 void FirmwareApp::markRuntimeSnapshotDirty_() {
   runtimeSnapshotDirty_ = true;
+}
+
+void FirmwareApp::performFactoryReset_(const char* reason) {
+  Serial.printf("%s\n", reason);
+
+  if (WiFi.status() == WL_CONNECTED && cloudClient_.isConfigured()) {
+    markRuntimeSnapshotDirty_();
+    flushRuntimeSnapshot_();
+  }
+
+  tm resetBaseline{};
+  bool haveLogicalNow = timeService_.nowLogical(resetBaseline);
+  if (!haveLogicalNow) {
+    resetBaseline.tm_year = 126;
+    resetBaseline.tm_mon = 0;
+    resetBaseline.tm_mday = 5;
+    resetBaseline.tm_hour = 12;
+    resetBaseline.tm_isdst = -1;
+    mktime(&resetBaseline);
+  }
+
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+    deviceSettings_.clearToDefaults();
+    habitTracker_.clearToDefaults(resetBaseline);
+    xSemaphoreGive(stateMutex_);
+  } else {
+    deviceSettings_.clearToDefaults();
+    habitTracker_.clearToDefaults(resetBaseline);
+  }
+
+  provisioningStore_.incrementResetEpoch();
+  provisioningStore_.clearAllUserState();
+  pendingFactoryReset_ = false;
+  recoveryRequestedAtRuntime_ = false;
+  recoveryRequestedAtBoot_ = false;
+  factoryResetRequestedAtBoot_ = false;
+
+  apServer_.stop();
+  timeService_.applySettings(deviceSettings_.current());
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true, true);
+  delay(150);
+  ESP.restart();
 }
 
 void FirmwareApp::syncTaskEntry_(void* context) {
@@ -589,6 +685,86 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     return true;
   }
 
+  if (command.kind == "factory_reset") {
+    if (WiFi.status() == WL_CONNECTED) {
+      markRuntimeSnapshotDirty_();
+      flushRuntimeSnapshot_();
+    }
+
+    pendingFactoryReset_ = true;
+    Serial.println("Factory reset requested from app.");
+    return true;
+  }
+
+  if (command.kind == "restore_board_backup") {
+    if (command.payloadJson.isEmpty()) {
+      failureReason = "Restore payload is empty.";
+      return false;
+    }
+
+    DynamicJsonDocument doc(6144);
+    DeserializationError error = deserializeJson(doc, command.payloadJson);
+    if (error) {
+      failureReason = "Failed to parse restore payload.";
+      return false;
+    }
+
+    const String currentWeekStartValue = doc["current_week_start"] | "";
+    HabitTracker::WeekDate restoredWeekStart{};
+    if (!parseWeekDateString(currentWeekStartValue, restoredWeekStart)) {
+      failureReason = "Restore payload is missing a valid current_week_start.";
+      return false;
+    }
+
+    JsonVariantConst boardDaysJsonVariant = doc["board_days"];
+    JsonObjectConst settingsObject = doc["settings"].as<JsonObjectConst>();
+    if (!boardDaysJsonVariant.is<JsonArrayConst>() || settingsObject.isNull()) {
+      failureReason = "Restore payload is missing board_days or settings.";
+      return false;
+    }
+
+    String restoredBoardDaysJson;
+    serializeJson(boardDaysJsonVariant, restoredBoardDaysJson);
+
+    DeviceSettingsSyncPayload restoreSettings{};
+    populateSettingsSyncPayload(settingsObject, restoreSettings);
+    const uint32_t nextRevision = static_cast<uint32_t>((doc["source_snapshot_revision"] | 0) + 1);
+
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+      failureReason = "Device state busy.";
+      return false;
+    }
+
+    const bool settingsApplied = deviceSettings_.applySync(restoreSettings, failureReason);
+    if (!settingsApplied) {
+      if (stateMutex_) {
+        xSemaphoreGive(stateMutex_);
+      }
+      if (failureReason.isEmpty()) {
+        failureReason = "Failed to apply restored device settings.";
+      }
+      return false;
+    }
+
+    timeService_.applySettings(deviceSettings_.current());
+    const bool restored = habitTracker_.restoreFromSnapshot(
+        restoredBoardDaysJson,
+        restoredWeekStart,
+        deviceSettings_.current().weeklyTarget,
+        nextRevision,
+        failureReason);
+    if (stateMutex_) {
+      xSemaphoreGive(stateMutex_);
+    }
+    if (!restored) {
+      return false;
+    }
+
+    markRuntimeSnapshotDirty_();
+    Serial.println("Restored board backup from cloud.");
+    return true;
+  }
+
   failureReason = "Unsupported command kind.";
   return false;
 }
@@ -845,7 +1021,7 @@ void FirmwareApp::tickSetupRecovery_() {
     return;
   }
 
-  if (cloudClient_.redeemPendingClaim(claim)) {
+  if (cloudClient_.redeemPendingClaim(claim, provisioningStore_.resetEpoch())) {
     provisioningStore_.clearPendingClaim();
     provisioningStore_.markReadyForTracking();
     markRuntimeSnapshotDirty_();
@@ -916,6 +1092,11 @@ void FirmwareApp::tickTracking_() {
 
   if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
     enterWifiRecoveryMode_();
+    return;
+  }
+
+  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+    performFactoryReset_("App-triggered factory reset requested.");
   }
 }
 
@@ -929,6 +1110,11 @@ void FirmwareApp::tickReward_() {
   if (buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;
     enterState_(FirmwareState::Tracking);
+    return;
+  }
+
+  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+    performFactoryReset_("App-triggered factory reset requested.");
     return;
   }
 
@@ -960,7 +1146,7 @@ void FirmwareApp::tickTimeInvalid_() {
     recoveryRequestedAtRuntime_ = true;
   }
 
-  if (tickWifiReconnectPolicy_(true)) {
+  if (tickWifiReconnectPolicy_(false)) {
     recoveryRequestedAtRuntime_ = true;
   }
 
@@ -990,5 +1176,10 @@ void FirmwareApp::tickTimeInvalid_() {
 
   if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
     enterWifiRecoveryMode_();
+    return;
+  }
+
+  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+    performFactoryReset_("App-triggered factory reset requested.");
   }
 }

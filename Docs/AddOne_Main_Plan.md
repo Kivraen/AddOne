@@ -85,9 +85,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-013-stage-s3-onboarding-and-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-013-stage-s3-onboarding-and-recovery-polish.md)
+  [B-014-stage-s3-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-014-stage-s3-add-device-entry-flow-first-screen.md)
 - Current execution task:
-  [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md)
+  [T-017-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-017-add-device-entry-flow-first-screen.md)
 - Git durability note:
   `main` now points to the tested recovered baseline at `d589cdc`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
@@ -134,7 +134,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice while Friends proof is externally blocked, then finish Friends verification before closing `S3`
+- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice while Friends proof is externally blocked, starting with the add-device entry flow and then broadening through the rest of onboarding before returning to Friends verification
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 

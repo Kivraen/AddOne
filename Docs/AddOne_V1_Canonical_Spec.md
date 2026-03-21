@@ -107,8 +107,7 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - `hardware_uid` is not a normal user-facing onboarding field.
 - AP starts on:
   - first boot
-  - manual power-up hold
-- pending-claim recovery bootstrap
+  - pending-claim recovery bootstrap
 - explicit recovery request from the app while the device is still online
 - holding the main button for `5 seconds`
 - Wi-Fi recovery reuses the same temporary AP + short-lived session contract as onboarding.
@@ -116,14 +115,15 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - First-user v1 stores one active Wi-Fi profile only. Rejoining Wi-Fi replaces the previous credentials instead of keeping a saved multi-network list.
 - Wi-Fi recovery can be started either:
   - from the app while the device is still online
-  - by holding the main button while reconnecting power
   - by holding the main button for `5 seconds` while the device is already running
+- Boot-time button hold is reserved for full factory reset, not Wi-Fi recovery.
 - Cloud failure alone must never trigger AP mode.
 - AP should time out after about `10 minutes idle`.
 - First-user v1 requires Wi-Fi during first setup.
 - After onboarding, the device itself must continue working locally even if Wi-Fi is later lost.
 - After onboarding, a provisioned device with valid RTC time must boot straight into normal tracking even if Wi-Fi is unavailable.
 - After onboarding, a provisioned device with invalid RTC/system time must boot into a dedicated `TimeInvalid` safety state instead of guessing the board.
+- After onboarding, losing Wi-Fi alone must not auto-enter Wi-Fi recovery; recovery should start only from an explicit user or app-triggered action.
 
 ## Onboarding Contract
 - Devices may be pre-registered during manufacturing / firmware flashing.

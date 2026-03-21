@@ -1,5 +1,6 @@
 #include "habit_tracker.h"
 
+#include <ArduinoJson.h>
 #include <Preferences.h>
 #include <string.h>
 
@@ -106,6 +107,12 @@ bool HabitTracker::bumpRuntimeRevision() {
   return persist_();
 }
 
+bool HabitTracker::clearToDefaults(const tm& nowDate) {
+  initEmpty_(nowDate);
+  runtimeRevision_ = 0;
+  return persist_();
+}
+
 bool HabitTracker::currentWeekStart(WeekDate& outDate) const {
   if (!initialized_ || !isValidWeekDate_(lastWeekStart_)) {
     return false;
@@ -113,6 +120,54 @@ bool HabitTracker::currentWeekStart(WeekDate& outDate) const {
 
   outDate = lastWeekStart_;
   return true;
+}
+
+bool HabitTracker::restoreFromSnapshot(const String& boardDaysJson,
+                                      const WeekDate& weekStart,
+                                      uint8_t minimum,
+                                      uint32_t nextRevision,
+                                      String& failureReason) {
+  if (!isValidWeekDate_(weekStart)) {
+    failureReason = "Snapshot week start is invalid.";
+    return false;
+  }
+
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, boardDaysJson);
+  if (error) {
+    failureReason = "Snapshot board payload could not be parsed.";
+    return false;
+  }
+
+  JsonArrayConst weeks = doc.as<JsonArrayConst>();
+  if (weeks.isNull() || weeks.size() != Config::kWeeks) {
+    failureReason = "Snapshot board payload has the wrong number of weeks.";
+    return false;
+  }
+
+  memset(&grid_, 0, sizeof(grid_));
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    JsonArrayConst weekDays = weeks[week].as<JsonArrayConst>();
+    if (weekDays.isNull() || weekDays.size() != Config::kDaysPerWeek) {
+      failureReason = "Snapshot board payload has an invalid week shape.";
+      return false;
+    }
+
+    for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
+      grid_.days[day][week] = weekDays[day].as<bool>();
+    }
+  }
+
+  minimum_ = constrain(minimum, 1, Config::kDaysPerWeek);
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    evaluateWeek_(week);
+  }
+
+  lastWeekStart_ = weekStart;
+  isFirstWeek_ = false;
+  initialized_ = true;
+  runtimeRevision_ = nextRevision;
+  return persist_();
 }
 
 bool HabitTracker::checkWeekBoundary(const tm& nowDate) {

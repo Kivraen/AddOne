@@ -291,6 +291,16 @@ bool RealtimeClient::replaceExistingQueuedCommand_(const CloudClient::DeviceComm
       return true;
     }
 
+    if (command.kind == "factory_reset" && queued.kind == "factory_reset") {
+      queued = command;
+      return true;
+    }
+
+    if (command.kind == "restore_board_backup" && queued.kind == "restore_board_backup") {
+      queued = command;
+      return true;
+    }
+
     if (command.kind == "set_day_state" &&
         queued.kind == "set_day_state" &&
         !command.localDate.isEmpty() &&

@@ -8,6 +8,7 @@ import {
   enterWifiRecoveryFromApp,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
+  requestDeviceFactoryResetFromApp,
   requestRuntimeSnapshotFromApp,
   setDayStateFromApp,
 } from "@/lib/supabase/addone-repository";
@@ -317,6 +318,9 @@ export function useDeviceActions() {
   const wifiRecoveryMutation = useMutation({
     mutationFn: enterWifiRecoveryFromApp,
   });
+  const factoryResetMutation = useMutation({
+    mutationFn: requestDeviceFactoryResetFromApp,
+  });
 
   const isBusy =
     claimMutation.isPending ||
@@ -325,7 +329,8 @@ export function useDeviceActions() {
     historyDraftMutation.isPending ||
     applySettingsMutation.isPending ||
     isAwaitingSettingsConfirmation ||
-    wifiRecoveryMutation.isPending;
+    wifiRecoveryMutation.isPending ||
+    factoryResetMutation.isPending;
 
   const refreshRuntimeSnapshot = async (deviceId?: string) => {
     const targetDevice = await resolveFreshLiveDevice(deviceId);
@@ -415,7 +420,9 @@ export function useDeviceActions() {
       isRefreshingRuntimeSnapshot: false,
       isSavingHistoryDraft: false,
       isSavingSettings: false,
+      isStartingFactoryReset: false,
       isStartingWifiRecovery: false,
+      requestFactoryReset: async (_deviceId?: string) => undefined,
       requestWifiRecovery: async (_deviceId?: string) => undefined,
       refreshDevices: async () => undefined,
       refreshRuntimeSnapshot: async () => undefined,
@@ -463,7 +470,15 @@ export function useDeviceActions() {
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
     isSavingHistoryDraft: historyDraftMutation.isPending,
     isSavingSettings: applySettingsMutation.isPending || isAwaitingSettingsConfirmation,
+    isStartingFactoryReset: factoryResetMutation.isPending,
     isStartingWifiRecovery: wifiRecoveryMutation.isPending,
+    requestFactoryReset: async (deviceId?: string) => {
+      const targetDevice = await resolveFreshLiveDevice(deviceId);
+      await factoryResetMutation.mutateAsync({
+        deviceId: targetDevice.id,
+        requestId: makeClientEventId(),
+      });
+    },
     requestWifiRecovery: async (deviceId?: string) => {
       const targetDevice = await resolveFreshLiveDevice(deviceId);
       await wifiRecoveryMutation.mutateAsync({

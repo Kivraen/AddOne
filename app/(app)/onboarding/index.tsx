@@ -25,10 +25,37 @@ import {
   resolveHabitNameDraft,
 } from "@/lib/habit-details";
 import { useDeviceHabitMetadataStore } from "@/store/device-habit-metadata-store";
+import { RestoreChoice } from "@/types/addone";
 
 const ONBOARDING_PAGE_GAP = 18;
 const ONBOARDING_CARD_GAP = 18;
 const ONBOARDING_FIELD_GAP = 12;
+
+function randomHexSegment(length: number) {
+  let output = "";
+
+  while (output.length < length) {
+    output += Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .padStart(8, "0");
+  }
+
+  return output.slice(0, length);
+}
+
+function makeRequestId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return [
+    randomHexSegment(8),
+    randomHexSegment(4),
+    `4${randomHexSegment(3)}`,
+    `${(Math.floor(Math.random() * 4) + 8).toString(16)}${randomHexSegment(3)}`,
+    randomHexSegment(12),
+  ].join("-");
+}
 
 function formatExpirationLabel(expiresAt: string) {
   const diffMs = new Date(expiresAt).getTime() - Date.now();
@@ -128,6 +155,65 @@ function BodyText({ children, tone = "secondary" }: { children: string; tone?: "
   );
 }
 
+function GuidanceCard({
+  body,
+  title,
+}: {
+  body: string;
+  title?: string;
+}) {
+  return (
+    <View
+      style={{
+        gap: 6,
+        borderRadius: theme.radius.sheet,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.textPrimary, 0.05),
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      {title ? (
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: theme.typography.label.fontSize,
+            lineHeight: theme.typography.label.lineHeight,
+          }}
+        >
+          {title}
+        </Text>
+      ) : null}
+      <BodyText>{body}</BodyText>
+    </View>
+  );
+}
+
+function Checklist({ items }: { items: string[] }) {
+  return (
+    <View style={{ gap: 10 }}>
+      {items.map((item) => (
+        <View key={item} style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
+          <View
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              marginTop: 8,
+              backgroundColor: theme.colors.accentAmber,
+            }}
+          />
+          <View style={{ flex: 1 }}>
+            <BodyText>{item}</BodyText>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function FieldNote({ children }: { children: string }) {
   return (
     <Text
@@ -146,9 +232,11 @@ function FieldNote({ children }: { children: string }) {
 function StepHeader({
   step,
   title,
+  subtitle,
 }: {
   step: number;
   title: string;
+  subtitle?: string;
 }) {
   return (
     <View style={{ gap: 8 }}>
@@ -174,6 +262,7 @@ function StepHeader({
       >
         {title}
       </Text>
+      {subtitle ? <BodyText>{subtitle}</BodyText> : null}
     </View>
   );
 }
@@ -237,8 +326,11 @@ export default function OnboardingScreen() {
     hasClaimToken,
     isBusy,
     isPolling,
+    isRestoringBoard,
     markWaiting,
     refreshSession,
+    restoreCandidates,
+    restorePreviousBoard,
     session,
   } = useOnboarding();
   const {
@@ -278,6 +370,7 @@ export default function OnboardingScreen() {
   const [weeklyTarget, setWeeklyTarget] = useState(activeDevice?.weeklyTarget ?? 5);
   const [timezoneInput, setTimezoneInput] = useState(phoneTimezoneResolution.resolvedValue);
   const [paletteId, setPaletteId] = useState(activeDevice?.paletteId ?? "classic");
+  const [restoreChoice, setRestoreChoice] = useState<RestoreChoice | null>(null);
   const normalizedHabitName = normalizeHabitNameForSave(habitNameInput);
   const normalizedMinimumGoal = normalizeMinimumGoalForSave(minimumGoalInput);
 
@@ -293,8 +386,14 @@ export default function OnboardingScreen() {
     setPaletteId(activeDevice.paletteId);
   }, [activeDevice, activeDeviceMinimumGoal, phoneTimezoneResolution.resolvedValue, session?.status]);
 
+  useEffect(() => {
+    setRestoreChoice(null);
+  }, [session?.deviceId]);
+
   const sessionReadyForAp = session?.status === "awaiting_ap" && !session.isExpired && hasClaimToken;
   const claimedDeviceReady = session?.status === "claimed" && !!activeDevice && activeDevice.id === session.deviceId;
+  const primaryRestoreCandidate = restoreCandidates[0] ?? null;
+  const needsRestoreChoice = claimedDeviceReady && restoreChoice === null && restoreCandidates.length > 0;
   const sortedNetworks = useMemo(
     () =>
       [...networks].sort((left, right) => {
@@ -381,6 +480,32 @@ export default function OnboardingScreen() {
     }
   }
 
+  async function handleRestorePreviousBoard() {
+    if (!claimedDeviceReady || !activeDevice || !primaryRestoreCandidate) {
+      return;
+    }
+
+    try {
+      setSetupError(null);
+      setSetupMessage(null);
+      await restorePreviousBoard({
+        backupId: primaryRestoreCandidate.backupId,
+        deviceId: activeDevice.id,
+        requestId: makeRequestId(),
+      });
+      setRestoreChoice("restore");
+      setSetupMessage("Restoring your previous board now. Keep the device online while it syncs its saved grid.");
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : "We couldn't restore the previous board.");
+    }
+  }
+
+  function handleStartFresh() {
+    setRestoreChoice("fresh");
+    setSetupError(null);
+    setSetupMessage("Starting fresh. Your earlier board stays saved in the cloud if you need it again.");
+  }
+
   let step = 1;
   if (sessionReadyForAp) {
     step = 2;
@@ -441,6 +566,15 @@ export default function OnboardingScreen() {
         <GlassCard style={{ gap: ONBOARDING_CARD_GAP, paddingHorizontal: 18, paddingVertical: 18 }}>
           <StepHeader
             step={step}
+            subtitle={
+              step === 1
+                ? "A short guided setup to get the board online."
+                : step === 2
+                  ? "Confirm the board's temporary network, then send your home Wi‑Fi."
+                  : step === 3
+                    ? "The board is leaving setup mode and publishing its first live state."
+                    : "Pick the basics now. You can change them later."
+            }
             title={
               step === 1
                 ? "Start setup"
@@ -454,28 +588,31 @@ export default function OnboardingScreen() {
 
           {step === 1 ? (
             <>
-              <BodyText>Start setup, join AddOne Wi‑Fi, then connect the board to your network.</BodyText>
-              <ActionButton disabled={isBusy} label={isBusy ? "Starting…" : "Start setup"} onPress={() => void handleStartSession()} />
+              <GuidanceCard body="This usually takes about a minute and keeps setup on this phone." title="What happens next" />
+              <Checklist
+                items={[
+                  "Join the board's temporary AddOne Wi‑Fi.",
+                  "Send the Wi‑Fi your board should use every day.",
+                  "Name the habit and open your board.",
+                ]}
+              />
+              <ActionButton disabled={isBusy} label={isBusy ? "Starting…" : "Begin setup"} onPress={() => void handleStartSession()} />
             </>
           ) : null}
 
           {step === 2 ? (
             <>
-              <BodyText>In Wi‑Fi settings, join `AddOne-XXXX`, then return here and choose your network.</BodyText>
+              <GuidanceCard
+                body="Open Wi‑Fi settings, join the network that starts with AddOne, then come back here."
+                title="Right now"
+              />
 
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <ActionButton
-                  disabled={isCheckingAp || isScanningNetworks}
-                  label={isCheckingAp || isScanningNetworks ? "Checking…" : "Check AddOne Wi‑Fi"}
-                  onPress={() => void handleCheckDeviceAp()}
-                  secondary
-                />
-                <ActionButton
-                  disabled={isSubmittingProvisioning || !preparedRequest}
-                  label={isSubmittingProvisioning ? "Sending…" : "Continue"}
-                  onPress={() => void handleProvisionDeviceAp()}
-                />
-              </View>
+              <ActionButton
+                disabled={isCheckingAp || isScanningNetworks}
+                label={isCheckingAp || isScanningNetworks ? "Checking…" : "I joined AddOne Wi‑Fi"}
+                onPress={() => void handleCheckDeviceAp()}
+                secondary
+              />
 
               <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                 <FieldLabel>Wi‑Fi network</FieldLabel>
@@ -506,6 +643,7 @@ export default function OnboardingScreen() {
                     secondary
                   />
                 </View>
+                <FieldNote>If your network does not appear, type it manually.</FieldNote>
                 {validation.errors.wifiSsid ? (
                   <Text
                     style={{
@@ -533,6 +671,7 @@ export default function OnboardingScreen() {
                   secureTextEntry
                   value={draft.wifiPassword}
                 />
+                <FieldNote>The board only uses this to rejoin your Wi‑Fi.</FieldNote>
                 {validation.errors.wifiPassword ? (
                   <Text
                     style={{
@@ -546,19 +685,29 @@ export default function OnboardingScreen() {
                   </Text>
                 ) : null}
               </View>
+
+              <ActionButton
+                disabled={isSubmittingProvisioning || !preparedRequest}
+                label={isSubmittingProvisioning ? "Sending…" : "Connect board"}
+                onPress={() => void handleProvisionDeviceAp()}
+              />
             </>
           ) : null}
 
           {step === 3 ? (
             <>
-              <BodyText>The board is joining Wi‑Fi and publishing its first live snapshot.</BodyText>
+              <GuidanceCard
+                body="Keep this screen open while the board joins Wi‑Fi. When the first live snapshot arrives, setup will move to the final step."
+                title="What to expect"
+              />
               <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                 <ActivityIndicator color={theme.colors.textPrimary} />
                 <BodyText>Waiting for the device…</BodyText>
               </View>
+              <FieldNote>If this takes longer than expected, refresh once before trying setup again.</FieldNote>
               <ActionButton
                 disabled={isPolling}
-                label={isPolling ? "Refreshing…" : "Refresh"}
+                label={isPolling ? "Refreshing…" : "Refresh status"}
                 onPress={() => void refreshSession()}
                 secondary
               />
@@ -568,10 +717,42 @@ export default function OnboardingScreen() {
           {step === 4 ? (
             <>
               {!claimedDeviceReady || !activeDevice ? (
-                <BodyText>Waiting for the first live device snapshot…</BodyText>
+                <GuidanceCard body="The board is online, but the first full device snapshot is still loading." title="Almost there" />
               ) : (
                 <>
-                  <BodyText>Set what matters now. Reset stays at midnight and brightness stays on auto.</BodyText>
+                  {needsRestoreChoice && primaryRestoreCandidate ? (
+                    <View style={{ gap: ONBOARDING_FIELD_GAP }}>
+                      <GuidanceCard
+                        body={`We found a saved board from ${primaryRestoreCandidate.backedUpAt ? "your earlier setup" : "your account"}. Restore it to keep your history, or start fresh on this device.`}
+                        title="Restore or start fresh"
+                      />
+                      <FieldNote>
+                        {primaryRestoreCandidate.sourceDeviceName
+                          ? `Latest saved board: ${primaryRestoreCandidate.sourceDeviceName}`
+                          : "Latest saved board is ready to restore."}
+                      </FieldNote>
+                      <ActionButton
+                        disabled={isRestoringBoard}
+                        label={isRestoringBoard ? "Restoring…" : "Restore previous board"}
+                        onPress={() => void handleRestorePreviousBoard()}
+                      />
+                      <ActionButton
+                        disabled={isRestoringBoard}
+                        label="Start fresh instead"
+                        onPress={handleStartFresh}
+                        secondary
+                      />
+                    </View>
+                  ) : null}
+
+                  <GuidanceCard
+                    body={
+                      restoreChoice === "restore"
+                        ? "Your board restore is in motion. These basics can still be adjusted now, and you can refine the rest later in settings."
+                        : "These are the only choices you need right now. You can change them later in settings."
+                    }
+                    title="Finish the basics"
+                  />
 
                   <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
@@ -607,6 +788,7 @@ export default function OnboardingScreen() {
 
                   <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                     <FieldLabel>Weekly target</FieldLabel>
+                    <FieldNote>How many days should count as a good week?</FieldNote>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
                         <ChoicePill
@@ -632,6 +814,7 @@ export default function OnboardingScreen() {
 
                   <View style={{ gap: ONBOARDING_FIELD_GAP }}>
                     <FieldLabel>Palette</FieldLabel>
+                    <FieldNote>Pick the one that feels easiest to read from a distance.</FieldNote>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       {[
                         { id: "classic", label: "Classic" },
@@ -651,8 +834,8 @@ export default function OnboardingScreen() {
                   </View>
 
                   <ActionButton
-                    disabled={isSavingSettings}
-                    label={isSavingSettings ? "Finishing…" : "Open my board"}
+                    disabled={isSavingSettings || isRestoringBoard || needsRestoreChoice}
+                    label={isSavingSettings ? "Finishing…" : "Finish and open my board"}
                     onPress={() => void handleFinishSetup()}
                   />
                 </>
@@ -661,24 +844,37 @@ export default function OnboardingScreen() {
           ) : null}
 
           {session ? (
-            <BodyText tone="muted">{formatExpirationLabel(session.expiresAt)}</BodyText>
+            <FieldNote>{formatExpirationLabel(session.expiresAt)}</FieldNote>
           ) : null}
 
-          {setupMessage ? <BodyText>{setupMessage}</BodyText> : null}
+          {setupMessage ? <GuidanceCard body={setupMessage} title="Status" /> : null}
 
-          {apInfo ? <BodyText tone="muted">{`Device AP: ${apInfo.device_ap_ssid}`}</BodyText> : null}
+          {apInfo ? <FieldNote>{`Device AP: ${apInfo.device_ap_ssid}`}</FieldNote> : null}
 
           {setupError || apInfoError || networksError || provisioningError || provisioningResponse?.message ? (
-            <Text
+            <View
               style={{
-                color: theme.colors.statusErrorMuted,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
+                gap: 6,
+                borderRadius: theme.radius.sheet,
+                borderWidth: 1,
+                borderColor: withAlpha(theme.colors.statusErrorMuted, 0.2),
+                backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.08),
+                paddingHorizontal: 14,
+                paddingVertical: 14,
               }}
             >
-              {setupError ?? apInfoError ?? networksError ?? provisioningError ?? provisioningResponse?.message}
-            </Text>
+              <FieldLabel>Trouble finishing setup</FieldLabel>
+              <Text
+                style={{
+                  color: theme.colors.statusErrorMuted,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                {setupError ?? apInfoError ?? networksError ?? provisioningError ?? provisioningResponse?.message}
+              </Text>
+            </View>
           ) : null}
         </GlassCard>
       </View>

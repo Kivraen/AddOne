@@ -33,6 +33,7 @@ export interface TodayPointer {
 }
 
 export interface AddOneDevice {
+  boardId: string | null;
   id: string;
   name: string;
   ownerName: string;
@@ -64,6 +65,36 @@ export interface AddOneDevice {
   needsSnapshotRefresh: boolean;
   today: TodayPointer;
 }
+
+export interface Board {
+  id: string;
+  ownerUserId: string;
+  archivedAt: string | null;
+}
+
+export interface BoardBackup {
+  id: string;
+  boardId: string;
+  boardDays: boolean[][];
+  currentWeekStart: string;
+  todayRow: number;
+  backedUpAt: string;
+  sourceDeviceId: string | null;
+  sourceSnapshotRevision: number;
+  sourceSnapshotHash: string | null;
+}
+
+export interface RestoreCandidate {
+  backupId: string;
+  boardId: string;
+  boardName: string;
+  backedUpAt: string;
+  sourceDeviceId: string | null;
+  sourceDeviceName: string | null;
+}
+
+export type RestoreChoice = "restore" | "fresh";
+export type ResetFlowState = "idle" | "confirming" | "queued";
 
 export interface SharedBoard {
   id: string;

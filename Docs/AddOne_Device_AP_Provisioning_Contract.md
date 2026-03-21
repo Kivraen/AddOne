@@ -18,7 +18,9 @@ This document covers only the local AP handoff. For cloud claim and steady-state
 - First-user v1 stores one active Wi-Fi profile only. Recovery overwrites the previous credentials instead of keeping multiple saved networks.
 - Recovery AP can be entered:
   - by app command while the device is still online
-  - or by holding the main button while reconnecting power
+  - or by holding the main button for `5 seconds` while the device is already running
+- Boot-time button hold is reserved for full factory reset, not Wi-Fi recovery.
+- Missing Wi-Fi by itself must never force AP mode on an already provisioned offline-capable device.
 
 ## Local Network Assumptions
 - Device AP SSID pattern: `AddOne-XXXX`
@@ -158,7 +160,7 @@ Suggested failure categories:
 
 ## Firmware Responsibilities
 1. Start AP automatically on first boot with no saved Wi-Fi.
-2. Start AP on power-up hold / Wi-Fi reset recovery.
+2. Start AP only on first boot, explicit recovery request, or a runtime Wi-Fi recovery hold.
 3. Serve the local provisioning endpoints only while AP mode is active.
 4. Validate and persist the AP payload.
 5. Exit AP mode and connect to the configured Wi-Fi.

@@ -7,9 +7,11 @@ import {
   cancelDeviceOnboardingSession,
   createDeviceOnboardingSession,
   fetchDeviceOnboardingSession,
+  fetchRestorableBoardBackupsForUser,
   fetchLatestActiveDeviceOnboardingSession,
   redeemDeviceOnboardingClaimForTesting,
   markDeviceOnboardingWaiting,
+  restoreBoardBackupToDevice,
 } from "@/lib/supabase/addone-repository";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
@@ -93,6 +95,12 @@ export function useOnboarding() {
     mode === "demo"
       ? demoSession
       : onboardingSessionQuery.data ?? (sessionId === latestActiveSessionQuery.data?.id ? latestActiveSessionQuery.data : null);
+
+  const restoreCandidatesQuery = useQuery({
+    enabled: mode === "cloud" && status === "signedIn" && session?.status === "claimed" && !!session?.deviceId,
+    queryFn: () => fetchRestorableBoardBackupsForUser(session!.deviceId!),
+    queryKey: addOneQueryKeys.restoreCandidates(session?.deviceId, user?.id),
+  });
 
   useEffect(() => {
     if (mode !== "demo" || demoSession?.status !== "awaiting_cloud") {
@@ -236,6 +244,28 @@ export function useOnboarding() {
     },
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: async (params: { backupId: string; deviceId: string; requestId: string }) => {
+      if (mode === "demo") {
+        return {
+          board_id: "demo-board",
+          command_id: "demo-restore",
+          status: "queued",
+        };
+      }
+
+      return restoreBoardBackupToDevice(params);
+    },
+    onSuccess: async (_result, variables) => {
+      if (mode === "demo") {
+        return;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) });
+      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.restoreCandidates(variables.deviceId, user?.id) });
+    },
+  });
+
   return {
     cancelSession: cancelMutation.mutateAsync,
     claimToken: mode === "demo" ? demoSession?.claimToken ?? null : activeOnboardingClaimToken,
@@ -245,13 +275,21 @@ export function useOnboarding() {
     },
     createSession: createSessionMutation.mutateAsync,
     hasClaimToken: mode === "demo" ? Boolean(demoSession?.claimToken) : Boolean(activeOnboardingClaimToken),
-    isBusy: createSessionMutation.isPending || markWaitingMutation.isPending || cancelMutation.isPending || redeemMutation.isPending,
+    isBusy:
+      createSessionMutation.isPending ||
+      markWaitingMutation.isPending ||
+      cancelMutation.isPending ||
+      redeemMutation.isPending ||
+      restoreMutation.isPending,
     isLoading: latestActiveSessionQuery.isLoading || onboardingSessionQuery.isLoading,
     isPolling: mode === "demo" ? session?.status === "awaiting_cloud" : onboardingSessionQuery.isFetching && session?.status === "awaiting_cloud",
     markWaiting: markWaitingMutation.mutateAsync,
     refreshSession: mode === "demo" ? async () => ({ data: demoSession }) : onboardingSessionQuery.refetch,
+    restoreCandidates: mode === "demo" ? [] : restoreCandidatesQuery.data ?? [],
+    restorePreviousBoard: restoreMutation.mutateAsync,
     session,
     sessionId,
     simulateRedeemForTesting: redeemMutation.mutateAsync,
+    isRestoringBoard: restoreMutation.isPending,
   };
 }

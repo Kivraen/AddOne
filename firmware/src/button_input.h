@@ -8,10 +8,10 @@ class ButtonInput {
 public:
   ~ButtonInput();
   void begin();
+  static unsigned long bootHoldDurationMs();
   bool consumeLongHold();
   bool consumeShortPress();
   void loop();
-  static bool recoveryHeldAtBoot();
 
 private:
   static void pollTaskEntry_(void* context);

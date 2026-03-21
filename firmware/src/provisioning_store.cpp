@@ -4,6 +4,16 @@
 
 void ProvisioningStore::begin() {}
 
+void ProvisioningStore::clearAllUserState() {
+  Preferences prefs;
+  prefs.begin(kNamespace, false);
+  prefs.remove(kClaimTokenKey);
+  prefs.remove(kHardwareProfileHintKey);
+  prefs.remove(kOnboardingSessionIdKey);
+  prefs.remove(kReadyForTrackingKey);
+  prefs.end();
+}
+
 void ProvisioningStore::clearPendingClaim() {
   Preferences prefs;
   prefs.begin(kNamespace, false);
@@ -11,6 +21,23 @@ void ProvisioningStore::clearPendingClaim() {
   prefs.remove(kHardwareProfileHintKey);
   prefs.remove(kOnboardingSessionIdKey);
   prefs.end();
+}
+
+uint32_t ProvisioningStore::incrementResetEpoch() {
+  Preferences prefs;
+  prefs.begin(kNamespace, false);
+  const uint32_t nextEpoch = prefs.getULong(kResetEpochKey, 0) + 1;
+  prefs.putULong(kResetEpochKey, nextEpoch);
+  prefs.end();
+  return nextEpoch;
+}
+
+uint32_t ProvisioningStore::resetEpoch() const {
+  Preferences prefs;
+  prefs.begin(kNamespace, true);
+  const uint32_t epoch = prefs.getULong(kResetEpochKey, 0);
+  prefs.end();
+  return epoch;
 }
 
 bool ProvisioningStore::hasPendingClaim() const {
