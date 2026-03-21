@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 20, 2026
+Last updated: March 21, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -34,6 +34,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Important accepted coordination state should be committed without mixing in unrelated dirty files.
 - Accepted durable checkpoints should be pushed when appropriate because a GitHub remote exists for this repo.
 - Before risky redesigns, broad refactors, or overnight stopping points, prefer checkpoint commits and optional tags.
+- Implemented beta-scope product work is not discarded just because the coordinator verdict is `revise and retry`.
+- When a beta slice is implemented but not yet accepted, keep it checkpointed in git, keep it in the beta plan, and add the required verification or support follow-up explicitly.
 
 ## Current Repo Reality
 

@@ -1,6 +1,6 @@
 # AddOne Agent Coordination
 
-Last updated: March 20, 2026
+Last updated: March 21, 2026
 
 This file defines how AddOne uses the coordinator-led stage workflow.
 
@@ -29,6 +29,8 @@ This file defines how AddOne uses the coordinator-led stage workflow.
   - `Docs/Active_Work.md`
 - Workers may update scoped implementation files and scoped product or engineering docs named in the brief.
 - Workers do not advance a stage by themselves.
+- If a beta-scope product slice is implemented on the task branch, the coordinator treats it as part of the candidate beta surface even if acceptance is still pending proof.
+- `Revise and retry` means preserve the implementation checkpoint, record the missing proof or support work, and continue from that state unless the user explicitly wants rollback.
 
 ## UI Work Rule
 
@@ -94,6 +96,7 @@ If the report is stored under `Docs/agent-reports`, keep the existing frontmatte
 
 Do not advance a stage on implementation claims alone.
 If a remote exists, acceptance should also consider whether the durable checkpoint has been pushed or whether the reason it is not pushed is recorded.
+Do not treat `revise and retry` as a reason to discard implemented beta work; instead, preserve it, update the plan to include it, and define the exact next proof or support task.
 
 ## Commit Policy
 
@@ -104,3 +107,4 @@ If a remote exists, acceptance should also consider whether the durable checkpoi
 - Before risky multi-file changes or overnight stopping points, prefer checkpoint commits and optional tags.
 - Keep `main` as the stable official branch and start new implementation slices from a fresh branch off `main`.
 - Use worktrees only for explicit parallel tracks or when the user wants two active checkouts at once.
+- If a beta-scope slice is implemented but not yet accepted, prefer a clearly labeled checkpoint commit on the task branch so the work is saved and the follow-up proof pass starts from a stable base.
