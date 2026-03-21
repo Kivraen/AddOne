@@ -31,6 +31,11 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - Workers do not advance a stage by themselves.
 - If a beta-scope product slice is implemented on the task branch, the coordinator treats it as part of the candidate beta surface even if acceptance is still pending proof.
 - `Revise and retry` means preserve the implementation checkpoint, record the missing proof or support work, and continue from that state unless the user explicitly wants rollback.
+- User-facing execution work is iterative by default. A worker should not assume the first implementation pass is the final accepted result.
+- For visible product work, a task is only truly ready for coordinator review when:
+  - the user explicitly says the current result is acceptable, or
+  - the user explicitly wants a checkpoint review even though more iteration may follow.
+- If the user keeps refining a worker-owned slice after the first pass, the worker report must be refreshed so it reflects the actual final state of the branch, the user's feedback, and the decisions made during iteration.
 
 ## UI Work Rule
 
@@ -43,14 +48,15 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 1. Confirm the active stage and the next execution task that belongs to it.
 2. Generate or refresh a copy-paste brief for that task.
 3. Delegate narrow work with explicit success metrics, required proof, and non-negotiables.
-4. Review the returned report against the active stage note.
-5. Decide only one of:
+4. Keep user-facing execution work in iteration mode until the user approves the result or explicitly asks for a checkpoint review.
+5. Review the returned report against the active stage note.
+6. Decide only one of:
    - `accepted`
    - `revise and retry`
    - `blocked`
-6. Update project memory, stage notes, the stage register, and the active-work registry.
-7. Commit accepted or materially updated coordination state without mixing unrelated changes.
-8. Push the durable checkpoint if the remote is available, or record why it is not pushed yet.
+7. Update project memory, stage notes, the stage register, and the active-work registry.
+8. Commit accepted or materially updated coordination state without mixing unrelated changes.
+9. Push the durable checkpoint if the remote is available, or record why it is not pushed yet.
 
 ## Stage To Task Mapping
 
@@ -73,6 +79,7 @@ Every delegated brief must include:
 - active stage note path
 - scoped files and docs
 - report format
+- explicit iteration rule for user-facing work when the slice is likely to need aesthetic or usability feedback
 
 ## Required Report Format For Staged Work
 
@@ -87,6 +94,7 @@ Every staged worker report must include:
 7. `Recommendation`
 
 If the report is stored under `Docs/agent-reports`, keep the existing frontmatter and add the staged report block in the body.
+For iterative work, `Changes made`, `Evidence`, and `Recommendation` must reflect the final branch state after user feedback, not only the first pass.
 
 ## Review Rules
 
@@ -97,6 +105,7 @@ If the report is stored under `Docs/agent-reports`, keep the existing frontmatte
 Do not advance a stage on implementation claims alone.
 If a remote exists, acceptance should also consider whether the durable checkpoint has been pushed or whether the reason it is not pushed is recorded.
 Do not treat `revise and retry` as a reason to discard implemented beta work; instead, preserve it, update the plan to include it, and define the exact next proof or support task.
+If visible work changed materially after the original worker report, require a refreshed report before treating the checkpoint as coordinator-ready.
 
 ## Commit Policy
 

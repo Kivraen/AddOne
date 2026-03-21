@@ -36,6 +36,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Before risky redesigns, broad refactors, or overnight stopping points, prefer checkpoint commits and optional tags.
 - Implemented beta-scope product work is not discarded just because the coordinator verdict is `revise and retry`.
 - When a beta slice is implemented but not yet accepted, keep it checkpointed in git, keep it in the beta plan, and add the required verification or support follow-up explicitly.
+- User-facing task work is iterative by default. Do not treat the first worker pass as final if the user is still refining the result.
+- A worker report should describe the actual final state after user iteration, not just the first implementation pass.
 
 ## Current Repo Reality
 
