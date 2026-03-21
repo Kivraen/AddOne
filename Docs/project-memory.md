@@ -55,12 +55,13 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-012-stage-s3-beta-friends-verification-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-012-stage-s3-beta-friends-verification-pass.md)
-- Current execution task: [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md)
+- Next brief: [B-013-stage-s3-onboarding-and-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-013-stage-s3-onboarding-and-recovery-polish.md)
+- Current execution task: [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md)
 
 ## Current Blockers
 
-- `T-001` is implemented but still needs a verification-only pass before acceptance.
+- `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
+- `T-008` is now the active execution slice while that Friends proof dependency is unavailable.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
 - Onboarding and Wi-Fi recovery still need the final polish slice after the profile and friends work.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.

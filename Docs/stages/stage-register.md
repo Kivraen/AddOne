@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 20, 2026
+Last updated: March 21, 2026
 
 ## Current Stage Map
 
@@ -14,7 +14,7 @@ Last updated: March 20, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: [B-012-stage-s3-beta-friends-verification-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-012-stage-s3-beta-friends-verification-pass.md)
+- Next brief: [B-013-stage-s3-onboarding-and-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-013-stage-s3-onboarding-and-recovery-polish.md)
 
 ## Stage Notes
 
@@ -30,7 +30,8 @@ Last updated: March 20, 2026
 - Stage order is adaptive. The active stage changed on March 18, 2026 because the user reprioritized finishing the beta UI surface before more infra-only proof work.
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
-- `T-001` is implemented and now needs a verification-only pass before it can be accepted.
+- `T-001` is implemented and saved, but its final verification is blocked on second-device or second-account proof.
+- `T-008` is the current active execution slice while that Friends proof dependency is unavailable.
 - `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`

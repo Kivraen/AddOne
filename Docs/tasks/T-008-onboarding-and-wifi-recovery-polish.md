@@ -36,7 +36,7 @@ report_path: Docs/agent-reports/2026-03-19-s3-onboarding-and-wifi-recovery-polis
 Take onboarding from "real but still dense" to a clean beta-ready guided flow, and close any remaining Wi-Fi recovery polish that directly affects onboarding continuity or user confidence.
 
 ## Why Now
-The broad S3 visible-surface polish pass moved the main screen, routine/settings, appearance, and recovery forward substantially. The user wants onboarding and Wi-Fi recovery to remain the final visible UI polish slice, after the friends planning and friends implementation checkpoint are explicit.
+The broad S3 visible-surface polish pass moved the main screen, routine/settings, appearance, and recovery forward substantially. The user wants onboarding and Wi-Fi recovery to remain the final visible UI polish slice after the friends implementation is explicit. The Friends implementation is now checkpointed, but its final proof is blocked on second-device testing, so onboarding and recovery can move forward in the meantime.
 
 ## In Scope
 - Onboarding pacing, copy, and step-to-step clarity

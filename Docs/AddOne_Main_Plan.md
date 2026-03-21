@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 20, 2026
+Last locked: March 21, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -85,9 +85,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-012-stage-s3-beta-friends-verification-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-012-stage-s3-beta-friends-verification-pass.md)
+  [B-013-stage-s3-onboarding-and-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-013-stage-s3-onboarding-and-recovery-polish.md)
 - Current execution task:
-  [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md)
+  [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md)
 - Git durability note:
   `main` now points to the tested recovered baseline at `d589cdc`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
@@ -99,7 +99,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current scope drift:
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
-  - `Friends` now has the profile gate and a first implementation of code-sharing and live read-only shared boards, but `T-001` still needs a stricter verification pass before acceptance
+  - `Friends` now has the profile gate and a first implementation of code-sharing and live read-only shared boards, but `T-001` still needs second-device proof before acceptance
   - the main surfaced history flow is now the inline board editor from device settings, while the dedicated `/history` route still exists in code
 
 ### Backend and cloud
@@ -134,7 +134,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- keep onboarding and Wi-Fi recovery polish as the final visible UI polish slice after the friends checkpoint
+- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice while Friends proof is externally blocked, then finish Friends verification before closing `S3`
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 
