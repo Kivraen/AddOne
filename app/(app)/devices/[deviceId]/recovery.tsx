@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
 import { ScreenScrollView } from "@/components/layout/screen-frame";
@@ -106,6 +106,42 @@ function BodyText({ children }: { children: string }) {
     >
       {children}
     </Text>
+  );
+}
+
+function GuidanceCard({
+  body,
+  title,
+}: {
+  body: string;
+  title?: string;
+}) {
+  return (
+    <View
+      style={{
+        gap: 6,
+        borderRadius: theme.radius.sheet,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.textPrimary, 0.05),
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      {title ? (
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: theme.typography.label.fontSize,
+            lineHeight: theme.typography.label.lineHeight,
+          }}
+        >
+          {title}
+        </Text>
+      ) : null}
+      <BodyText>{body}</BodyText>
+    </View>
   );
 }
 
@@ -494,6 +530,12 @@ export default function DeviceRecoveryRoute() {
   }
 
   const step = canStartFreshSession ? 1 : showWifiForm ? 3 : 2;
+  const stepSubtitle =
+    step === 1
+      ? "Recovery only reconnects Wi‑Fi. It does not erase history or habit settings."
+      : step === 2
+        ? "Reconnect your phone to the board's temporary AddOne network first."
+        : "Choose the Wi‑Fi the board should rejoin, then wait for it to come back online.";
 
   return (
     <>
@@ -524,12 +566,13 @@ export default function DeviceRecoveryRoute() {
           >
             <View style={{ paddingBottom: RECOVERY_HEADER_BOTTOM_SPACE }}>
               <StepHeader step={step} title={step === 1 ? "Start recovery" : step === 2 ? "Join AddOne Wi‑Fi" : "Choose Wi‑Fi"} />
+              <BodyText>{stepSubtitle}</BodyText>
             </View>
 
             {step === 1 ? (
               <>
                 <View style={{ gap: RECOVERY_COPY_GAP }}>
-                  <BodyText>Use recovery when Wi‑Fi changes. History and settings stay intact.</BodyText>
+                  <GuidanceCard body="Use this when the board changed networks or stopped reconnecting on its own." title="When to use recovery" />
                   {missingRecoveryClaimContext ? <BodyText>Start a fresh session on this phone to continue.</BodyText> : null}
                 </View>
                 <ActionButton
@@ -543,11 +586,14 @@ export default function DeviceRecoveryRoute() {
             {step >= 2 ? (
               <>
                 <View style={{ gap: RECOVERY_COPY_GAP }}>
-                  <BodyText>
-                    {showWifiForm
-                      ? "Choose the network and password to reconnect the board."
-                      : `Join \`${deviceApSsid}\` in Wi‑Fi settings, then return here.`}
-                  </BodyText>
+                  <GuidanceCard
+                    body={
+                      showWifiForm
+                        ? "Choose the network and password the board should use next. If the network does not appear, type it manually."
+                        : `Join \`${deviceApSsid}\` in Wi‑Fi settings, then return here and confirm.`
+                    }
+                    title={showWifiForm ? "Next" : "Right now"}
+                  />
                 </View>
 
                 {!showWifiForm ? (
@@ -562,7 +608,7 @@ export default function DeviceRecoveryRoute() {
                       <View style={{ flex: 1 }}>
                         <ActionButton
                           disabled={isCheckingAp || isScanningNetworks || isBusy}
-                          label={isCheckingAp || isScanningNetworks ? "Checking…" : "I joined Wi‑Fi"}
+                          label={isCheckingAp || isScanningNetworks ? "Checking…" : "I joined AddOne Wi‑Fi"}
                           onPress={() => void handleCheckDeviceAp()}
                         />
                       </View>
@@ -758,7 +804,7 @@ export default function DeviceRecoveryRoute() {
                         <View style={{ flex: 1 }}>
                           <ActionButton
                             disabled={isSubmittingProvisioning || !preparedRequest || isAwaitingReconnect}
-                            label={isSubmittingProvisioning ? "Sending…" : isAwaitingReconnect ? "Connecting…" : waitingWarning ? "Try again" : "Connect"}
+                            label={isSubmittingProvisioning ? "Sending…" : isAwaitingReconnect ? "Connecting…" : waitingWarning ? "Try again" : "Reconnect board"}
                             onPress={() => void handleProvisionDeviceAp()}
                           />
                         </View>
@@ -779,27 +825,40 @@ export default function DeviceRecoveryRoute() {
                     </View>
 
                     {isAwaitingReconnect ? (
-                      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                        <ActivityIndicator color={theme.colors.textPrimary} />
-                        <BodyText>Trying to join Wi‑Fi…</BodyText>
-                      </View>
+                      <GuidanceCard
+                        body="Stay on this screen while the board tries to rejoin Wi‑Fi. If it falls back into setup mode, you can try again without losing the session."
+                        title="Trying to join Wi‑Fi…"
+                      />
                     ) : null}
                   </>
                 )}
 
-                {statusMessage ? <BodyText>{statusMessage}</BodyText> : null}
+                {statusMessage ? <GuidanceCard body={statusMessage} title="Status" /> : null}
 
                 {renderedRecoveryError ? (
-                  <Text
+                  <View
                     style={{
-                      color: theme.colors.statusErrorMuted,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
+                      gap: 6,
+                      borderRadius: theme.radius.sheet,
+                      borderWidth: 1,
+                      borderColor: withAlpha(theme.colors.statusErrorMuted, 0.2),
+                      backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.08),
+                      paddingHorizontal: 14,
+                      paddingVertical: 14,
                     }}
                   >
-                    {renderedRecoveryError}
-                  </Text>
+                    <FieldLabel>Trouble reconnecting</FieldLabel>
+                    <Text
+                      style={{
+                        color: theme.colors.statusErrorMuted,
+                        fontFamily: theme.typography.body.fontFamily,
+                        fontSize: theme.typography.body.fontSize,
+                        lineHeight: theme.typography.body.lineHeight,
+                      }}
+                    >
+                      {renderedRecoveryError}
+                    </Text>
+                  </View>
                 ) : null}
               </>
             ) : null}

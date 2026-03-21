@@ -59,6 +59,7 @@ class DeviceSettingsStore {
 public:
   void begin();
   bool applySync(const DeviceSettingsSyncPayload& payload, String& error);
+  bool clearToDefaults();
   const DeviceSettingsState& current() const { return settings_; }
   uint16_t dayResetMinutes() const;
   uint8_t resolveBrightness(float ambientNormalized01) const;

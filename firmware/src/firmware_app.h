@@ -50,6 +50,7 @@ private:
   bool applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason);
   void beginWifiReconnect_();
   bool bootReadyForTracking_() const;
+  void performFactoryReset_(const char* reason);
   static void syncTaskEntry_(void* context);
   bool copyRuntimeSnapshotPayload_(String& boardDaysJson,
                                    String& settingsJson,
@@ -112,7 +113,9 @@ private:
   unsigned long nextWifiReconnectAttemptAtMs_ = 0;
   unsigned long wifiReconnectAttemptStartedAtMs_ = 0;
   bool recoveryRequestedAtBoot_ = false;
+  bool factoryResetRequestedAtBoot_ = false;
   bool recoveryRequestedAtRuntime_ = false;
+  bool pendingFactoryReset_ = false;
   volatile bool runtimeSnapshotDirty_ = true;
   bool lastWifiConnected_ = false;
   bool wifiReconnectAttemptActive_ = false;

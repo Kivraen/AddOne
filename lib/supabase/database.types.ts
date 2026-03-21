@@ -67,6 +67,90 @@ export type Database = {
           },
         ]
       }
+      board_backups: {
+        Row: {
+          backed_up_at: string
+          board_days: Json
+          board_id: string
+          created_at: string
+          current_week_start: string
+          id: string
+          settings: Json
+          source_device_id: string | null
+          source_snapshot_hash: string | null
+          source_snapshot_revision: number
+          today_row: number
+          updated_at: string
+        }
+        Insert: {
+          backed_up_at?: string
+          board_days: Json
+          board_id: string
+          created_at?: string
+          current_week_start: string
+          id?: string
+          settings?: Json
+          source_device_id?: string | null
+          source_snapshot_hash?: string | null
+          source_snapshot_revision?: number
+          today_row: number
+          updated_at?: string
+        }
+        Update: {
+          backed_up_at?: string
+          board_days?: Json
+          board_id?: string
+          created_at?: string
+          current_week_start?: string
+          id?: string
+          settings?: Json
+          source_device_id?: string | null
+          source_snapshot_hash?: string | null
+          source_snapshot_revision?: number
+          today_row?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_backups_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: true
+            referencedRelation: "boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_backups_source_device_id_fkey"
+            columns: ["source_device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      boards: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          owner_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          owner_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          owner_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       device_day_events: {
         Row: {
           actor_user_id: string | null
@@ -412,6 +496,7 @@ export type Database = {
       devices: {
         Row: {
           ambient_auto: boolean
+          board_id: string | null
           brightness: number
           created_at: string
           day_reset_time: string
@@ -432,6 +517,7 @@ export type Database = {
           reward_enabled: boolean
           reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch: number
           timezone: string
           updated_at: string
           week_start: Database["public"]["Enums"]["device_week_start"]
@@ -439,6 +525,7 @@ export type Database = {
         }
         Insert: {
           ambient_auto?: boolean
+          board_id?: string | null
           brightness?: number
           created_at?: string
           day_reset_time?: string
@@ -459,6 +546,7 @@ export type Database = {
           reward_enabled?: boolean
           reward_trigger?: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type?: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch?: number
           timezone?: string
           updated_at?: string
           week_start?: Database["public"]["Enums"]["device_week_start"]
@@ -466,6 +554,7 @@ export type Database = {
         }
         Update: {
           ambient_auto?: boolean
+          board_id?: string | null
           brightness?: number
           created_at?: string
           day_reset_time?: string
@@ -486,12 +575,20 @@ export type Database = {
           reward_enabled?: boolean
           reward_trigger?: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type?: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch?: number
           timezone?: string
           updated_at?: string
           week_start?: Database["public"]["Enums"]["device_week_start"]
           weekly_target?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "devices_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "boards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "devices_reward_artwork_id_fkey"
             columns: ["reward_artwork_id"]
@@ -619,6 +716,7 @@ export type Database = {
         Args: { p_device_id: string; p_patch: Json; p_request_id?: string }
         Returns: Json
       }
+      create_board_for_owner: { Args: { p_owner_user_id: string }; Returns: string }
       apply_history_draft_from_app: {
         Args: {
           p_base_revision: number
@@ -652,6 +750,7 @@ export type Database = {
         Args: { p_device_auth_token: string; p_hardware_uid: string }
         Returns: {
           ambient_auto: boolean
+          board_id: string | null
           brightness: number
           created_at: string
           day_reset_time: string
@@ -672,6 +771,7 @@ export type Database = {
           reward_enabled: boolean
           reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch: number
           timezone: string
           updated_at: string
           week_start: Database["public"]["Enums"]["device_week_start"]
@@ -690,9 +790,11 @@ export type Database = {
           p_hardware_profile?: string
           p_hardware_uid: string
           p_name?: string
+          p_reset_epoch?: number
         }
         Returns: {
           ambient_auto: boolean
+          board_id: string | null
           brightness: number
           created_at: string
           day_reset_time: string
@@ -713,6 +815,7 @@ export type Database = {
           reward_enabled: boolean
           reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch: number
           timezone: string
           updated_at: string
           week_start: Database["public"]["Enums"]["device_week_start"]
@@ -732,9 +835,11 @@ export type Database = {
           p_hardware_uid: string
           p_name?: string
           p_owner_user_id: string
+          p_reset_epoch?: number
         }
         Returns: {
           ambient_auto: boolean
+          board_id: string | null
           brightness: number
           created_at: string
           day_reset_time: string
@@ -755,6 +860,7 @@ export type Database = {
           reward_enabled: boolean
           reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch: number
           timezone: string
           updated_at: string
           week_start: Database["public"]["Enums"]["device_week_start"]
@@ -792,6 +898,7 @@ export type Database = {
         }
         Returns: {
           ambient_auto: boolean
+          board_id: string | null
           brightness: number
           created_at: string
           day_reset_time: string
@@ -812,6 +919,7 @@ export type Database = {
           reward_enabled: boolean
           reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch: number
           timezone: string
           updated_at: string
           week_start: Database["public"]["Enums"]["device_week_start"]
@@ -858,6 +966,17 @@ export type Database = {
           display_name: string
           membership_id: string
           user_id: string
+        }[]
+      }
+      list_restorable_board_backups_for_user: {
+        Args: { p_device_id?: string }
+        Returns: {
+          backup_id: string
+          backed_up_at: string
+          board_id: string
+          board_name: string
+          source_device_id: string | null
+          source_device_name: string | null
         }[]
       }
       mark_device_onboarding_waiting: {
@@ -1007,6 +1126,7 @@ export type Database = {
           p_hardware_profile?: string
           p_hardware_uid: string
           p_name?: string
+          p_reset_epoch?: number
         }
         Returns: {
           bootstrap_day_reset_time: string | null
@@ -1043,6 +1163,7 @@ export type Database = {
         }
         Returns: {
           ambient_auto: boolean
+          board_id: string | null
           brightness: number
           created_at: string
           day_reset_time: string
@@ -1063,6 +1184,7 @@ export type Database = {
           reward_enabled: boolean
           reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
           reward_type: Database["public"]["Enums"]["device_reward_type"]
+          reset_epoch: number
           timezone: string
           updated_at: string
           week_start: Database["public"]["Enums"]["device_week_start"]
@@ -1126,8 +1248,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_device_factory_reset_from_app: {
+        Args: { p_device_id: string; p_request_id?: string }
+        Returns: Json
+      }
       request_runtime_snapshot_from_app: {
         Args: { p_device_id: string; p_request_id?: string }
+        Returns: Json
+      }
+      restore_board_backup_to_device: {
+        Args: { p_backup_id: string; p_device_id: string; p_request_id?: string }
         Returns: Json
       }
       rotate_device_share_code: {
@@ -1217,6 +1347,8 @@ export type Database = {
         | "apply_history_draft"
         | "apply_device_settings"
         | "enter_wifi_recovery"
+        | "factory_reset"
+        | "restore_board_backup"
       device_command_status:
         | "queued"
         | "delivered"
@@ -1377,6 +1509,8 @@ export const Constants = {
         "apply_history_draft",
         "apply_device_settings",
         "enter_wifi_recovery",
+        "factory_reset",
+        "restore_board_backup",
       ],
       device_command_status: [
         "queued",

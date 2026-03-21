@@ -102,14 +102,19 @@ void ButtonInput::pollTask_() {
   }
 }
 
-bool ButtonInput::recoveryHeldAtBoot() {
+unsigned long ButtonInput::bootHoldDurationMs() {
   pinMode(Config::kButtonPin, INPUT_PULLUP);
+  if (digitalRead(Config::kButtonPin) == HIGH) {
+    return 0;
+  }
+
   const unsigned long startedAt = millis();
-  while (millis() - startedAt < Config::kRecoveryHoldMs) {
+  while (millis() - startedAt < Config::kFactoryResetHoldMs) {
     if (digitalRead(Config::kButtonPin) == HIGH) {
-      return false;
+      return millis() - startedAt;
     }
     delay(10);
   }
-  return true;
+
+  return Config::kFactoryResetHoldMs;
 }

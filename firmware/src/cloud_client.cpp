@@ -249,7 +249,7 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
   return true;
 }
 
-bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& claim) {
+bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& claim, uint32_t resetEpoch) {
   if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
     return false;
   }
@@ -269,7 +269,9 @@ bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& c
   payload += escapeJson(Config::kFirmwareVersion);
   payload += "\",\"p_device_auth_token\":\"";
   payload += escapeJson(deviceAuthToken_);
-  payload += "\"}";
+  payload += "\",\"p_reset_epoch\":";
+  payload += String(resetEpoch);
+  payload += "}";
 
   String response;
   const bool ok = postRpc_("redeem_device_onboarding_claim", payload, response);

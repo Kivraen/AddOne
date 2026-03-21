@@ -35,6 +35,7 @@ public:
                          String& failureReason);
   bool bumpRuntimeRevision();
   bool checkWeekBoundary(const tm& nowDate);
+  bool clearToDefaults(const tm& nowDate);
   bool currentWeekStart(WeekDate& outDate) const;
   int8_t currentWeekSuccess() const { return grid_.success[0]; }
   const WeeklyGrid& grid() const { return grid_; }
@@ -42,6 +43,11 @@ public:
   uint8_t minimum() const { return minimum_; }
   uint32_t runtimeRevision() const { return runtimeRevision_; }
   bool queueLocalToggleToday(const tm& nowDate, bool& outIsDone);
+  bool restoreFromSnapshot(const String& boardDaysJson,
+                           const WeekDate& weekStart,
+                           uint8_t minimum,
+                           uint32_t nextRevision,
+                           String& failureReason);
   bool setMinimum(uint8_t minimum);
   bool syncDate(const tm& nowDate);
   uint8_t todayRow(const tm& nowDate) const;

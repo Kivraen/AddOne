@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
 import {
@@ -17,6 +17,7 @@ import {
   SettingsSwatchStrip,
 } from "@/components/settings/device-settings-scaffold";
 import { theme } from "@/constants/theme";
+import { useDeviceActions } from "@/hooks/use-devices";
 import { withAlpha } from "@/lib/color";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
 
@@ -69,6 +70,40 @@ function DraftActionButton({
 export default function DeviceSettingsOverviewRoute() {
   const device = useRoutedDevice();
   const router = useRouter();
+  const { isStartingFactoryReset, requestFactoryReset } = useDeviceActions();
+
+  function handleFactoryReset() {
+    Alert.alert(
+      "Factory reset device?",
+      "This wipes the board's local setup and Wi‑Fi so it behaves like a new unit again. Wi‑Fi recovery is lighter and keeps your current board attached.",
+      [
+        {
+          style: "cancel",
+          text: "Cancel",
+        },
+        {
+          style: "destructive",
+          text: "Factory reset",
+          onPress: () => {
+            void requestFactoryReset(device.id).then(
+              () => {
+                Alert.alert(
+                  "Factory reset started",
+                  "The board will restart into clean setup mode. When it comes back, you can onboard it again and choose restore or start fresh.",
+                );
+              },
+              (error: unknown) => {
+                Alert.alert(
+                  "Factory reset failed",
+                  error instanceof Error ? error.message : "The board could not start factory reset.",
+                );
+              },
+            );
+          },
+        },
+      ],
+    );
+  }
 
   return (
     <DeviceSettingsScaffold
@@ -164,6 +199,23 @@ export default function DeviceSettingsOverviewRoute() {
                 detail="Edit earlier days only when a manual fix is needed"
                 onPress={() => router.push(deviceHistoryPath(device.id))}
                 title="History"
+              />
+            </SettingsListSurface>
+          </View>
+
+          <View style={{ gap: OVERVIEW_SECTION_GAP }}>
+            <SettingsSectionTitle>Danger zone</SettingsSectionTitle>
+            <SettingsListSurface>
+              <SettingsRow
+                detail={
+                  device.isLive
+                    ? isStartingFactoryReset
+                      ? "Starting reset…"
+                      : "Wipes local setup and reopens onboarding. This is not the same as Wi‑Fi recovery."
+                    : "Factory reset from the app is only available while the board is online."
+                }
+                onPress={device.isLive && !isStartingFactoryReset ? handleFactoryReset : undefined}
+                title="Factory reset device"
               />
             </SettingsListSurface>
           </View>

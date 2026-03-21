@@ -564,88 +564,42 @@ export function HomeScreen() {
 
   if (!effectiveDevice || !palette) {
     return (
-      <ScreenScrollView bottomInset={theme.layout.tabScrollBottom} contentMaxWidth={theme.layout.narrowContentWidth}>
-        <ScreenSection style={{ paddingTop: 12 }}>
-          <View style={{ gap: 8 }}>
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              First device
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.display.fontFamily,
-                fontSize: theme.typography.display.fontSize,
-                lineHeight: theme.typography.display.lineHeight,
-              }}
-            >
-              Set up AddOne
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Connect your device, join its AddOne Wi-Fi, choose the home network, and finish the first settings pass.
-            </Text>
-          </View>
-
-          <GlassCard style={{ gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: theme.typography.label.fontSize,
-                lineHeight: theme.typography.label.lineHeight,
-              }}
-            >
-              Dark, quiet, and ready for the first board.
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              The app will guide setup first, then the main board becomes the daily home base for the device.
-            </Text>
-          </GlassCard>
-
+      <ScreenScrollView
+        bottomInset={theme.layout.tabScrollBottom}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+        contentMaxWidth={theme.layout.narrowContentWidth}
+      >
+        <View style={{ alignItems: "center", gap: 18, paddingVertical: 24 }}>
           <Pressable
             onPress={() => router.push("/onboarding")}
             style={{
               alignItems: "center",
               justifyContent: "center",
-              minHeight: 56,
+              width: 132,
+              height: 132,
               borderRadius: theme.radius.sheet,
-              backgroundColor: theme.colors.textPrimary,
+              borderCurve: "continuous",
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+              backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.22)",
             }}
           >
-            <Text
-              style={{
-                color: theme.colors.textInverse,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: theme.typography.label.fontSize,
-                lineHeight: theme.typography.label.lineHeight,
-              }}
-            >
-              Start setup
-            </Text>
+            <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
           </Pressable>
-        </ScreenSection>
+
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.title.fontFamily,
+              fontSize: theme.typography.title.fontSize,
+              lineHeight: theme.typography.title.lineHeight,
+              textAlign: "center",
+            }}
+          >
+            Connect your AddOne
+          </Text>
+        </View>
       </ScreenScrollView>
     );
   }

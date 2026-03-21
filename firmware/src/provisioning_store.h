@@ -7,7 +7,10 @@
 class ProvisioningStore {
 public:
   void begin();
+  void clearAllUserState();
   void clearPendingClaim();
+  uint32_t incrementResetEpoch();
+  uint32_t resetEpoch() const;
   bool hasPendingClaim() const;
   bool isReadyForTracking() const;
   bool loadPendingClaim(ProvisioningContract::PendingClaim& outClaim) const;
@@ -20,4 +23,5 @@ private:
   static constexpr const char* kHardwareProfileHintKey = "hwProfile";
   static constexpr const char* kOnboardingSessionIdKey = "sessionId";
   static constexpr const char* kReadyForTrackingKey = "readyTrack";
+  static constexpr const char* kResetEpochKey = "resetEpoch";
 };

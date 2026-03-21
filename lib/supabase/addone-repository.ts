@@ -8,6 +8,7 @@ import {
   DeviceShareRequest,
   DeviceViewer,
   HistoryDraftUpdate,
+  RestoreCandidate,
   SharedBoard,
   SyncState,
 } from "@/types/addone";
@@ -19,6 +20,8 @@ type DeviceRow = Tables<"devices"> & {
   last_runtime_revision?: number | null;
   last_snapshot_at?: string | null;
   last_snapshot_hash?: string | null;
+  board_id?: string | null;
+  reset_epoch?: number | null;
 };
 type MembershipRow = Tables<"device_memberships">;
 type RuntimeSnapshotRow = Tables<"device_runtime_snapshots">;
@@ -30,6 +33,7 @@ type ShareRequestRow = Tables<"device_share_requests">;
 type CreateDeviceOnboardingSessionRow = Database["public"]["Functions"]["create_device_onboarding_session"]["Returns"][number];
 type ShareRequestListRow = Database["public"]["Functions"]["list_device_share_requests"]["Returns"][number];
 type ViewerListRow = Database["public"]["Functions"]["list_device_viewers"]["Returns"][number];
+type RestoreCandidateRow = Database["public"]["Functions"]["list_restorable_board_backups_for_user"]["Returns"][number];
 
 type MembershipWithDevice = Pick<MembershipRow, "device_id" | "reminder_enabled" | "reminder_time"> & {
   device: DeviceRow | null;
@@ -186,6 +190,7 @@ function mapDeviceRowToAppDevice(input: {
   });
 
   return {
+    boardId: device.board_id ?? null,
     id: device.id,
     isLive: deviceSeemsOnline(device),
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
@@ -430,7 +435,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     membershipsResponse.error,
     (membershipsResponse.data ?? []) as MembershipWithDevice[],
     "Failed to load owned devices.",
-  ).filter((row) => row.device);
+  ).filter((row) => row.device && row.device.board_id);
 
   const devices = memberships.map((row) => row.device as DeviceRow);
   const deviceIds = devices.map((device) => device.id);
@@ -468,7 +473,7 @@ export async function fetchSharedBoards(userId: string) {
     membershipsResponse.error,
     (membershipsResponse.data ?? []) as Array<{ device_id: string; device: DeviceRow | null }>,
     "Failed to load shared boards.",
-  ).filter((row) => row.device);
+  ).filter((row) => row.device && row.device.board_id);
 
   const devices = memberships.map((row) => row.device as DeviceRow);
   const deviceIds = devices.map((device) => device.id);
@@ -552,6 +557,7 @@ export async function claimDevice(params: { hardwareProfile?: string; hardwareUi
     p_hardware_profile: params.hardwareProfile,
     p_hardware_uid: params.hardwareUid,
     p_name: params.name,
+    p_reset_epoch: 0,
   });
 
   return assertData(error, data as DeviceRow, "Failed to claim device.");
@@ -648,14 +654,17 @@ export async function redeemDeviceOnboardingClaimForTesting(params: {
   hardwareProfile?: string;
   hardwareUid: string;
   name?: string;
+  resetEpoch?: number;
 }) {
   const supabase = ensureSupabase();
   const { data, error } = await (supabase.rpc as any)("redeem_device_onboarding_claim", {
     p_claim_token: params.claimToken,
+    p_device_auth_token: undefined,
     p_firmware_version: params.firmwareVersion,
     p_hardware_profile: params.hardwareProfile,
     p_hardware_uid: params.hardwareUid,
     p_name: params.name,
+    p_reset_epoch: params.resetEpoch ?? 0,
   });
 
   return mapDeviceOnboardingSessionRow(
@@ -757,6 +766,66 @@ export async function enterWifiRecoveryFromApp(params: {
     error,
     data as { command_id: string; status: string },
     "Failed to request Wi‑Fi recovery mode.",
+  );
+}
+
+export async function requestDeviceFactoryResetFromApp(params: {
+  deviceId: string;
+  requestId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("request_device_factory_reset_from_app", {
+    p_device_id: params.deviceId,
+    p_request_id: params.requestId,
+  });
+
+  return assertData(
+    error,
+    data as { command_id: string; status: string },
+    "Failed to request factory reset.",
+  );
+}
+
+function mapRestoreCandidateRow(row: RestoreCandidateRow): RestoreCandidate {
+  return {
+    backupId: row.backup_id,
+    backedUpAt: row.backed_up_at,
+    boardId: row.board_id,
+    boardName: row.board_name,
+    sourceDeviceId: row.source_device_id,
+    sourceDeviceName: row.source_device_name,
+  };
+}
+
+export async function fetchRestorableBoardBackupsForUser(deviceId: string) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("list_restorable_board_backups_for_user", {
+    p_device_id: deviceId,
+  });
+
+  return assertData(
+    error,
+    (data ?? []) as RestoreCandidateRow[],
+    "Failed to load restorable board backups.",
+  ).map(mapRestoreCandidateRow);
+}
+
+export async function restoreBoardBackupToDevice(params: {
+  backupId: string;
+  deviceId: string;
+  requestId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("restore_board_backup_to_device", {
+    p_backup_id: params.backupId,
+    p_device_id: params.deviceId,
+    p_request_id: params.requestId,
+  });
+
+  return assertData(
+    error,
+    data as { board_id: string; command_id: string; status: string },
+    "Failed to restore the saved board to this device.",
   );
 }
 

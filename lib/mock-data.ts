@@ -6,6 +6,7 @@ function fillWeeks(rows: number[][]): boolean[][] {
 
 export const initialDevices: AddOneDevice[] = [
   {
+    boardId: "board-studio-01",
     id: "studio-01",
     isLive: true,
     lastSnapshotAt: new Date(Date.now() - 60_000).toISOString(),

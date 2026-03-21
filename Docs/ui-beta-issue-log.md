@@ -48,7 +48,7 @@ Use it to capture:
 
 ### Onboarding
 
-- The onboarding flow is real and guided, but it is still a state-dense step flow that needs polish around copy, pacing, and error handling.
+- The beta onboarding flow should keep one obvious next action per step, with helper copy explaining what happens next instead of stacking equal-weight buttons and raw status text in the same block.
 - We need a deliberate pass on:
   - Wi-Fi scan results and hidden-network fallback
   - waiting-for-device messaging
@@ -57,7 +57,8 @@ Use it to capture:
 
 ### Wi-Fi recovery
 
-- Wi-Fi recovery is implemented, but it still needs a trust pass on reconnect messaging, timeout clarity, and the manual-entry path.
+- Wi-Fi recovery should follow the same calm-step rule as onboarding: one clear immediate action, one short explanation of what happens next, and trust-preserving fallback copy when reconnect takes too long or drops back into setup mode.
+- Wi-Fi loss alone must not push an already provisioned offline-capable board into recovery. Recovery should only start from an explicit app action or runtime long-hold, while boot-time hold is reserved for full factory reset.
 - Wi-Fi recovery should stay focused on reconnecting Wi-Fi. It should reuse the device's current timezone under the hood and not surface a timezone picker in the beta recovery flow.
 - Once Wi-Fi recovery is started, the flow needs an explicit `Cancel recovery` action. Relying on navigation alone is not enough when there is an active local/cloud recovery session.
 - Wi-Fi recovery should avoid ambiguous status chips like `Ready for Wi-Fi` when the step title and helper copy already explain the action. Prefer direct instructions over extra status chrome.
