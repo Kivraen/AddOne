@@ -43,22 +43,21 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The realtime gateway exists and mirrors queued commands plus device-side runtime/presence events.
 - The recovered latest UI baseline is now restored and promoted to `main` at `d589cdc`.
 - A real TestFlight install from that baseline now works.
-- The `Friends` tab is still not implemented as the planned first-beta sharing surface, even though the backend already has sharing primitives.
+- The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
+- The `Friends` tab still needs the real first-beta sharing flow, even though the backend already has sharing primitives.
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
-- The current profile surface is still not the planned friend-facing identity model.
-- The backend profile model currently exposes `profiles.display_name` rather than a richer username or first/last-name shape.
+- The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
 
 ## Current Active Stage
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-010-stage-s3-profile-identity-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-010-stage-s3-profile-identity-and-account-surface.md)
-- Current execution task: [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md)
+- Next brief: [B-011-stage-s3-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-011-stage-s3-beta-friends-surface.md)
+- Current execution task: [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md)
 
 ## Current Blockers
 
-- The profile identity model and account surface are still the next missing dependency before the `Friends` beta flow can be implemented.
 - The `Friends` implementation itself is still pending after the planning lock.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
 - Onboarding and Wi-Fi recovery still need the final polish slice after the profile and friends work.

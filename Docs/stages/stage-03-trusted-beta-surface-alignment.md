@@ -45,7 +45,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 ## Evidence
 
 - `Friends` is currently visible placeholder UI in `components/app/friends-tab-content.tsx`.
-- `Profile` currently shows only the email or demo session plus sign-out in `components/app/profile-tab-content.tsx`.
+- `Profile` now includes the beta social-identity model, native photo entry points, and an account area that keeps email private but visible as auth-only context.
 - Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
 - Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
 - The accepted timezone audit in [2026-03-18-timezone-model-and-universal-flow-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) confirms that device timezone is the canonical scheduling setting, any future viewer/display timezone must stay separate, and unsupported zones currently fall back to Los Angeles rules on-device.
@@ -54,17 +54,17 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 ## Open Risks / Blockers
 
-- The current backend only has `profiles.display_name`, so expanding profile identity beyond that may require a schema decision.
+- The hosted profile-identity migration is applied, but hosted type generation was not freshly rerun after rollout because this shell lacked `SUPABASE_ACCESS_TOKEN`.
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
 - The current device offline or reconnect behavior is still unresolved and should be treated as a real validation problem after the remaining S3 product-shape work is done.
 
 ## Recommendation
 
-Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as accepted historical stage-entry work, treat the March 19 UI polish report as the current recovered baseline context, and treat [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) as accepted.
+Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as accepted historical stage-entry work, treat the March 19 UI polish report as the recovered baseline context, treat [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) as accepted, and treat [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md) as accepted.
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, implement [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md), then [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) to ship the first-beta sharing flow, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.
+Next, implement [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) to ship the first-beta sharing flow on top of the accepted social-profile gate from `T-009`, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.

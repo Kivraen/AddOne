@@ -12,7 +12,7 @@ import {
   SyncState,
 } from "@/types/addone";
 import { buildRuntimeBoardProjection, normalizeWeekStart } from "@/lib/runtime-board-projection";
-import { Database, Json, Tables, TablesUpdate } from "@/lib/supabase/database.types";
+import { Database, Json, Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/database.types";
 import { getSupabaseClient } from "@/lib/supabase";
 
 type DeviceRow = Tables<"devices"> & {
@@ -59,6 +59,49 @@ function displayNameFromEmail(email?: string | null) {
 
   const [name] = email.split("@");
   return name || "AddOne User";
+}
+
+function normalizeOptionalText(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function buildDisplayName(firstName: string, lastName: string) {
+  return `${firstName.trim()} ${lastName.trim()}`.trim();
+}
+
+export class UsernameConflictError extends Error {
+  constructor(message = "That username is already taken.") {
+    super(message);
+    this.name = "UsernameConflictError";
+  }
+}
+
+export class ProfileMigrationRequiredError extends Error {
+  constructor(message = "The profile backend needs the latest migration before this change can be saved.") {
+    super(message);
+    this.name = "ProfileMigrationRequiredError";
+  }
+}
+
+export function isUsernameConflictError(error: unknown): error is UsernameConflictError {
+  return error instanceof UsernameConflictError;
+}
+
+export function isProfileMigrationRequiredError(error: unknown): error is ProfileMigrationRequiredError {
+  return error instanceof ProfileMigrationRequiredError;
+}
+
+function isProfileMigrationMessage(message: string) {
+  return (
+    /schema cache/i.test(message) ||
+    /could not find the '?(first_name|last_name|username)'? column/i.test(message) ||
+    (/bucket/i.test(message) && /profile-avatars/i.test(message))
+  );
 }
 
 function stripSeconds(value: string | null | undefined, fallback = "00:00") {
@@ -290,6 +333,84 @@ export async function fetchProfile(userId: string): Promise<ProfileRow | null> {
   }
 
   return (data as ProfileRow | null) ?? null;
+}
+
+export async function saveProfile(params: {
+  profile: { avatarUrl: string | null; firstName: string; lastName: string; username: string };
+  userId: string;
+}): Promise<ProfileRow> {
+  const { profile, userId } = params;
+  const supabase = ensureSupabase();
+  const firstName = profile.firstName.trim();
+  const lastName = profile.lastName.trim();
+
+  const payload: TablesInsert<"profiles"> = {
+    avatar_url: profile.avatarUrl,
+    display_name: buildDisplayName(firstName, lastName),
+    first_name: firstName,
+    last_name: lastName,
+    updated_at: new Date().toISOString(),
+    user_id: userId,
+    username: normalizeUsername(profile.username),
+  };
+
+  const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("*").single();
+
+  if (error) {
+    const combinedMessage = `${error.message} ${error.details ?? ""}`;
+
+    if (isProfileMigrationMessage(combinedMessage)) {
+      throw new ProfileMigrationRequiredError();
+    }
+
+    if (error.code === "23505" && /username/i.test(combinedMessage)) {
+      throw new UsernameConflictError();
+    }
+
+    throw new Error(error.message);
+  }
+
+  return data as ProfileRow;
+}
+
+export async function uploadProfileAvatar(params: { mimeType?: string | null; uri: string; userId: string }) {
+  const supabase = ensureSupabase();
+  const response = await fetch(params.uri);
+
+  if (!response.ok) {
+    throw new Error("We couldn't read the selected photo.");
+  }
+
+  const path = `${params.userId}/avatar`;
+  const contentType = params.mimeType ?? response.headers.get("Content-Type") ?? "image/jpeg";
+  const file = await response.arrayBuffer();
+  const { error } = await supabase.storage.from("profile-avatars").upload(path, file, {
+    contentType,
+    upsert: true,
+  });
+
+  if (error) {
+    if (isProfileMigrationMessage(`${error.message}`)) {
+      throw new ProfileMigrationRequiredError();
+    }
+
+    throw new Error(error.message);
+  }
+
+  return supabase.storage.from("profile-avatars").getPublicUrl(path).data.publicUrl;
+}
+
+export async function removeProfileAvatar(userId: string) {
+  const supabase = ensureSupabase();
+  const { error } = await supabase.storage.from("profile-avatars").remove([`${userId}/avatar`]);
+
+  if (error) {
+    if (isProfileMigrationMessage(`${error.message}`)) {
+      throw new ProfileMigrationRequiredError();
+    }
+
+    throw new Error(error.message);
+  }
 }
 
 export async function fetchOwnedDevices(params: { userEmail?: string | null; userId: string }) {

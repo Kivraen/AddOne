@@ -506,22 +506,31 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string
+          first_name: string | null
+          last_name: string | null
           updated_at: string
           user_id: string
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
           display_name: string
+          first_name?: string | null
+          last_name?: string | null
           updated_at?: string
           user_id: string
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
           display_name?: string
+          first_name?: string | null
+          last_name?: string | null
           updated_at?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }

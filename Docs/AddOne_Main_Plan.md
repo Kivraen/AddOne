@@ -85,9 +85,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-010-stage-s3-profile-identity-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-010-stage-s3-profile-identity-and-account-surface.md)
+  [B-011-stage-s3-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-011-stage-s3-beta-friends-surface.md)
 - Current execution task:
-  [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md)
+  [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md)
 - Git durability note:
   `main` now points to the tested recovered baseline at `d589cdc`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
@@ -98,7 +98,8 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - App runtime reads from `device_runtime_snapshots` and listens for snapshot and device updates through Supabase realtime.
 - Current scope drift:
   - the home pager still exposes `Friends` and `Profile` tabs
-  - `Friends` is still placeholder UI and now needs to be aligned with the planned sharing workstream
+  - `Profile` now has the friend-facing social identity model and the Friends entry gate
+  - `Friends` now has the profile gate and beta lane placeholders, but the actual code-sharing and live shared-board flow still needs `T-001`
   - the main surfaced history flow is now the inline board editor from device settings, while the dedicated `/history` route still exists in code
 
 ### Backend and cloud

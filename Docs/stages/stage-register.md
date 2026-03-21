@@ -14,7 +14,7 @@ Last updated: March 20, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: [B-010-stage-s3-profile-identity-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-010-stage-s3-profile-identity-and-account-surface.md)
+- Next brief: [B-011-stage-s3-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-011-stage-s3-beta-friends-surface.md)
 
 ## Stage Notes
 
@@ -29,7 +29,8 @@ Last updated: March 20, 2026
 - Only one stage is active at a time unless the user explicitly asks for a parallel track.
 - Stage order is adaptive. The active stage changed on March 18, 2026 because the user reprioritized finishing the beta UI surface before more infra-only proof work.
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
-- `T-009` is the next concrete implementation slice inside `S3`.
+- `T-009` is now accepted.
+- `T-001` is the next concrete implementation slice inside `S3`.
 - `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`

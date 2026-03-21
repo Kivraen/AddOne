@@ -45,15 +45,17 @@ Purpose:
 Key fields:
 - `user_id`
 - `display_name`
+- `username`
 - `avatar_url`
-
-Likely next beta social-profile extension:
-- `username` unique and required before `Friends` unlocks
-- `first_name` optional
-- `last_name` optional
+- `first_name`
+- `last_name`
 
 Notes:
-- `display_name + @username` is the intended beta social identity surface.
+- `display_name` is derived from `first_name + last_name` for the beta social profile instead of being edited separately in the app.
+- `first_name + last_name + @username` is the intended beta social identity surface.
+- `username` is nullable at the table level until a user completes the beta social-profile gate, but when present it must be unique, lowercase-safe for `@handle` display, and accompanied by non-empty first and last name fields.
+- Profile photos now upload through a dedicated public storage bucket so the app can use native camera and photo-library flows instead of a pasted URL.
+- The profile write path now supports authenticated self-serve insert or update so the app can recover cleanly even if an older auth row missed the initial profile bootstrap.
 - Beta sharing should remain device-code plus owner-approval based, not open username discovery.
 
 ### `devices`

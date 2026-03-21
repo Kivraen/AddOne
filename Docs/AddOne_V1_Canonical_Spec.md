@@ -76,11 +76,13 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
   - owner approval for shared-board access
   - live browsing of approved friends' boards
 - Access to `Friends` requires a completed friend-facing social profile:
-  - required `display_name`
+  - required `first_name`
+  - required `last_name`
   - required unique `username`
-  - optional `avatar`
-  - optional `first_name`
-  - optional `last_name`
+  - optional profile photo from native library or camera flows
+- Friend-facing `display_name` should be derived from `first_name + last_name`, not managed as a separate freeform field.
+- `Friends` should show a profile gate and hand off incomplete users to the profile editor instead of exposing email as the visible identity.
+- Beta usernames are lowercase handles with unique enforcement; beta does not add username search or discovery.
 - Email remains the auth credential and account identifier, not the friend-facing social label.
 - Social profile completion should happen outside core device onboarding; onboarding remains focused on getting the device online and claimed.
 - Activity feed, reactions, comments, push notifications, and shared-goal challenge groups are future-facing unless explicitly pulled into scope later.

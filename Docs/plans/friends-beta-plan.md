@@ -92,13 +92,12 @@ The repo does **not** yet have a locked beta implementation for:
 - `Friends` should unlock only after the user completes a social profile.
 
 Recommended beta social profile:
-- required `display_name`
+- required `first_name`
+- required `last_name`
 - required unique `username`
-- optional `avatar`
-- optional `first_name`
-- optional `last_name`
+- optional profile photo selected through native library/camera flows
 
-`display_name + @username` is the intended long-term beta social identity surface.
+`display_name` should remain the derived storage field, with `first_name + last_name + @username` as the intended beta social identity surface.
 
 ### 2. Auth strategy
 

@@ -102,6 +102,29 @@ export interface DeviceSharingState {
   viewers: DeviceViewer[];
 }
 
+export interface SocialProfile {
+  avatarUrl: string | null;
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  updatedAt: string | null;
+  userId: string;
+  username: string | null;
+}
+
+export interface SocialProfilePhotoAsset {
+  mimeType?: string | null;
+  uri: string;
+}
+
+export interface SocialProfileUpdateInput {
+  avatarAsset?: SocialProfilePhotoAsset | null;
+  clearAvatar?: boolean;
+  firstName: string;
+  lastName: string;
+  username: string;
+}
+
 export interface HighlightTarget {
   row: number;
   col: number;

@@ -110,18 +110,17 @@ Use it to capture:
   - sign out
 - Beta auth should stay `email OTP`; we do not need a heavier auth system just to unlock the social layer.
 - `Friends` should be gated behind a friend-facing social profile rather than exposing raw email:
-  - required `display_name`
+  - required `first_name`
+  - required `last_name`
   - required unique `username`
-  - optional `avatar`
-  - optional `first_name`
-  - optional `last_name`
+  - optional profile photo
 - Social profile completion should happen when the user first enters `Friends`, not during core device onboarding.
-- Friend-facing UI should use `display_name + @username`; email stays private and account-only.
+- Friend-facing UI should use `first_name + last_name + @username`; `display_name` can remain the derived storage field; email stays private and account-only.
 - Current backend reality:
   - the repo already has `profiles.display_name`
   - the repo already has `profiles.avatar_url`
-  - the repo does not yet have a unique `username` field
-  - the username-backed social profile is planned, but not yet implemented
+  - beta profile identity now adds first-name, last-name, and unique username support
+  - profile photos should come from native library/camera flows backed by storage, not pasted avatar URLs
 
 ### Friends and social beta
 

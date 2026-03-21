@@ -13,7 +13,19 @@ module.exports = {
     experiments: {
       typedRoutes: true,
     },
-    plugins: ["expo-router", "@react-native-community/datetimepicker"],
+    plugins: [
+      "expo-router",
+      "@react-native-community/datetimepicker",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          cameraPermission: "AddOne uses the camera so you can take a profile photo.",
+          microphonePermission: false,
+          photosPermission: "AddOne uses your photo library so you can choose a profile photo.",
+        },
+      ],
+    ],
     ios: {
       bundleIdentifier: isBeta ? "studio.addone.beta" : "studio.addone.dev",
       infoPlist: {

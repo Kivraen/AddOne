@@ -41,11 +41,11 @@ The current profile surface only shows the signed-in email address. That is not 
 - Define and implement the first friend-facing social profile shape.
 - Require a completed social profile before `Friends` unlocks.
 - Lock the intended beta identity surface:
-  - required `display_name`
+  - required `first_name`
+  - required `last_name`
   - required unique `username`
+  - derived `display_name`
   - optional `avatar`
-  - optional `first_name`
-  - optional `last_name`
 - Keep email private and account-only.
 - Update the profile/account surface so it can:
   - display the current account state
@@ -83,6 +83,6 @@ The current profile surface only shows the signed-in email address. That is not 
 - The implementation does not accidentally widen into open user discovery or a broader social graph.
 
 ## Open Risks
-- The final exact balance between `display_name`, `username`, and optional legal-name fields still needs careful UX copy so the setup feels light.
+- The final copy balance between the derived `display_name`, `@username`, and required name fields still needs careful UX copy so the setup feels light.
 - If username rules are too strict or too early, the social-profile gate could feel heavier than necessary.
-- The backend currently has `display_name` and `avatar_url`, so username support likely needs one narrow schema extension.
+- The backend contract must keep email private and auth-only even as the social profile grows.
