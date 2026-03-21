@@ -249,6 +249,10 @@ Live project-management status now lives in [AddOne_Main_Plan.md](/Users/viktor/
 - Cloud mode now drives the main board from live device/account data, while demo mode remains as a deliberate mock fallback.
 - The app now invalidates live board/share queries from Supabase realtime changes so firmware-originated updates can surface without manual refresh.
 - `device_runtime_snapshots` are now in Supabase realtime publication, with only a light self-heal refetch kept in the app as backup.
+- `Friends` now uses the real code-based sharing flow:
+  - request board access by share code
+  - owner approval lane with pending requests and connected viewers
+  - read-only browsing of approved shared boards
 - Device cloud sync RPCs for claim redemption, heartbeat, command pull/ack, runtime snapshot upload, runtime refresh request, history draft apply, and live settings apply now exist in staging schema.
 - The app now applies optimistic board/history updates immediately for cloud-backed actions.
 - The current rebuild direction is `device-authoritative runtime state`: app requests live intents or drafts, and the cloud mirror catches up from device-confirmed apply or runtime snapshots.

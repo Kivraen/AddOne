@@ -147,6 +147,10 @@ Notes:
 Purpose:
 - one active share code per device for v1 code-based sharing
 
+Notes:
+- the beta `Friends` surface now reads and rotates this code directly instead of inventing a second sharing layer
+- rotating the code affects future requests, not already-approved viewers
+
 ### `device_share_requests`
 Purpose:
 - tracks code-based access requests waiting for owner approval
@@ -156,6 +160,10 @@ Statuses:
 - `approved`
 - `rejected`
 - `cancelled`
+
+Notes:
+- the beta `Friends` surface now uses the existing request, approve, and reject functions directly
+- no new schema or RPC layer was needed for the first Friends implementation slice
 
 ### `reward_artworks`
 Purpose:
@@ -252,6 +260,7 @@ The realtime transport layer adds:
 - MQTT presence / day-event topics so device-originated sync can stay off the blocking HTTP path when realtime is available
 
 These functions are important because they keep multi-table mutations atomic and reduce client-side mistakes.
+The first-beta `Friends` implementation now uses the existing share-code and approval RPCs directly, with no new sharing migration required in `T-001`.
 
 ## Security Model
 - Row-level security is enabled on all app tables.

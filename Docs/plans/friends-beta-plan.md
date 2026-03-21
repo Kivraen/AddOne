@@ -69,14 +69,13 @@ The repo already has useful sharing primitives:
 - pending access requests
 - approve / reject request
 - viewer list
+- those primitives are now sufficient for the first Friends implementation slice; `T-001` did not need a new backend schema or new RPC set
 
 The repo also already has a basic profile starting point:
 - `profiles.display_name`
 - `profiles.avatar_url`
 
 The repo does **not** yet have a locked beta implementation for:
-- unique usernames
-- social-profile gating inside the app
 - reactions
 - activity feed
 - comments / threads

@@ -44,7 +44,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 ## Evidence
 
-- `Friends` is currently visible placeholder UI in `components/app/friends-tab-content.tsx`.
+- `Friends` now has a first implementation of profile-gated sharing, owner controls, and read-only shared-board browsing in `components/app/friends-tab-content.tsx`, but the full manual-proof sweep is still incomplete.
 - `Profile` now includes the beta social-identity model, native photo entry points, and an account area that keeps email private but visible as auth-only context.
 - Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
 - Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
@@ -65,6 +65,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, implement [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) to ship the first-beta sharing flow on top of the accepted social-profile gate from `T-009`, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.
+Next, run a verification-only pass on [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) so the first-beta sharing flow can be accepted on top of the social-profile gate from `T-009`, while preserving [T-013-challenge-groups-and-shared-board-model.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-013-challenge-groups-and-shared-board-model.md) as the future shared-goal layer.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.

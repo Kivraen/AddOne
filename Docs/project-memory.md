@@ -44,7 +44,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The recovered latest UI baseline is now restored and promoted to `main` at `d589cdc`.
 - A real TestFlight install from that baseline now works.
 - The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
-- The `Friends` tab still needs the real first-beta sharing flow, even though the backend already has sharing primitives.
+- The first Friends sharing implementation now exists in the task branch, but it still needs a stricter verification pass before coordinator acceptance.
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
@@ -53,12 +53,12 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-011-stage-s3-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-011-stage-s3-beta-friends-surface.md)
+- Next brief: [B-012-stage-s3-beta-friends-verification-pass.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-012-stage-s3-beta-friends-verification-pass.md)
 - Current execution task: [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md)
 
 ## Current Blockers
 
-- The `Friends` implementation itself is still pending after the planning lock.
+- `T-001` is implemented but still needs a verification-only pass before acceptance.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
 - Onboarding and Wi-Fi recovery still need the final polish slice after the profile and friends work.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.

@@ -125,7 +125,11 @@ Use it to capture:
 ### Friends and social beta
 
 - `Friends` planning is now the next active product slice inside `S3`. Onboarding and Wi-Fi recovery polish are intentionally being held as the final visible UI polish slice after the friends checkpoint.
-- The `Friends` tab is visible, but it is still placeholder UI.
+- The `Friends` tab now has a real first-beta sharing surface:
+  - enter share code
+  - approve or reject pending requests
+  - view connected people
+  - browse approved boards read-only
 - The shared object in beta is the unit/grid, not a broad user-level social graph.
 - The first-beta sharing model is now:
   - one active rotatable share code per device
@@ -144,6 +148,9 @@ Use it to capture:
   - reactions
   - comments
   - push notifications
+- Current known follow-up after the first Friends implementation:
+  - viewer revocation is still a later management pass
+  - broader realtime invalidation polish may still need a later pass if the self-heal interval feels too soft in practice
 - Future social should still be preserved in the direction:
   - app-level activity log across connected boards
   - reactions

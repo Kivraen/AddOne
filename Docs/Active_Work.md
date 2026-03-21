@@ -10,7 +10,7 @@ The coordinator owns this file.
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-011-stage-s3-beta-friends-surface.md](briefs/B-011-stage-s3-beta-friends-surface.md)
+- Next brief: [B-012-stage-s3-beta-friends-verification-pass.md](briefs/B-012-stage-s3-beta-friends-verification-pass.md)
 - Rule: only `S3` work should be actively delegated until the coordinator accepts, blocks, or revises the stage.
 - Scoped parallel track approved on March 18, 2026: timezone audit and timezone implementation work may run in parallel inside `S3` because they directly affect onboarding, settings, recovery, and device-behavior decisions.
 - Narrow repo-health support work is also allowed inside `S3` when it directly restores proof quality for the active UI stage.
@@ -20,7 +20,7 @@ The coordinator owns this file.
 | Workstream | Trust | Summary | Owner | Notes |
 | --- | --- | --- | --- | --- |
 | Coordination system | Verified | Main plan, stage register, task briefs, report format, and dashboard foundation now exist. | Coordinator | Keep the docs and the dashboard aligned after every completed task. |
-| App beta surface | Stale | The product shell now has the friend-facing profile model and Friends gate in place. The next concrete dependency is the actual Friends sharing flow itself. | Coordinator | `S3` remains active until Friends, the timezone revision path, and the final onboarding polish slice are all explicit enough to accept. |
+| App beta surface | Implemented | The product shell now has the friend-facing profile model and the first Friends sharing implementation in place, but the Friends slice still needs a stricter proof pass before acceptance. | Coordinator | `S3` remains active until Friends, the timezone revision path, and the final onboarding polish slice are all explicit enough to accept. |
 | Timezone model | Verified | The current flow is now audited: device timezone is the canonical scheduling setting, a future viewer timezone must stay separate, and universal support is firmware-blocked today. | Coordinator | Choose a beta policy next: supported-zone picker and fallback messaging, or explicit firmware timezone expansion. |
 | Beta environment | Implemented | Hosted beta infrastructure is alive and the TestFlight distribution path now works, but the always-on device reconnect path is not yet trusted enough to close validation. | Coordinator | Queue `T-002` after the active UI stage is explicit enough to hand off cleanly, then use `T-003` to prove the real device path. |
 | Backend runtime mirror | Implemented | Snapshot-based runtime and gateway forwarding exist, but the full staged validation loop is still pending. | Coordinator | Re-check after `T-002` and `T-003`. |
@@ -31,7 +31,7 @@ The coordinator owns this file.
 | Task ID | Title | Subsystem | Status | Owner | Depends On | Task Brief | Latest Report | Success Gate | Next Coordinator Action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | T-000 | Project dashboard foundation | coordination | Closed | Codex | — | [T-000](tasks/T-000-project-dashboard-foundation.md) | [Report](agent-reports/2026-03-16-coordination-project-dashboard-foundation.md) | Strict gate | Accepted as historical coordination bootstrap work. |
-| T-001 | Beta Friends surface and social floor | app | Brief Ready | Unassigned | T-015, T-009 | [T-001](tasks/T-001-beta-friends-surface.md) | — | Strict gate | Start with [B-011](briefs/B-011-stage-s3-beta-friends-surface.md) to turn the profile-gated Friends lane into the real first-beta sharing flow. |
+| T-001 | Beta Friends surface and social floor | app | Ready for Verification | Unassigned | T-015, T-009 | [T-001](tasks/T-001-beta-friends-surface.md) | [Report](agent-reports/2026-03-16-app-beta-friends-surface.md) | Strict gate | `Revise and retry`: use [B-012](briefs/B-012-stage-s3-beta-friends-verification-pass.md) for a verification-only pass across all required Friends states. |
 | T-002 | Hosted beta bring-up | infra | Backlog | Unassigned | — | [T-002](tasks/T-002-hosted-beta-bring-up.md) | — | Strict gate | Return to this after the active UI stage is explicit enough to avoid cross-stage churn. |
 | T-003 | Real-device validation pass | firmware | Backlog | Unassigned | T-002 | [T-003](tasks/T-003-real-device-validation-pass.md) | — | Strict gate | Start after the hosted beta path is stable enough to support validation. |
 | T-004 | Truth cleanup after validation | docs | Backlog | Unassigned | T-001, T-002, T-003 | [T-004](tasks/T-004-truth-cleanup-after-validation.md) | — | Strict gate | Run after implementation and validation results are known. |
