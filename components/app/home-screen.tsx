@@ -362,7 +362,7 @@ function PulsingStatusDot({ color }: { color: string }) {
 
 function EmptyHomePrimaryAction({ onPress }: { onPress: () => void }) {
   return (
-    <View style={{ alignItems: "center", gap: 18 }}>
+    <View style={{ alignItems: "center", gap: 26 }}>
       <Pressable
         accessibilityLabel="Add Your AddOne"
         accessibilityRole="button"
