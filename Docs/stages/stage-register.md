@@ -14,7 +14,7 @@ Last updated: March 22, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: [B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md)
+- Next brief: [B-016-stage-s3-device-lifecycle-reset-and-first-add-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-016-stage-s3-device-lifecycle-reset-and-first-add-plan.md)
 
 ## Stage Notes
 
@@ -33,7 +33,8 @@ Last updated: March 22, 2026
 - `T-001` is implemented and saved, but its final verification is blocked on second-device or second-account proof.
 - `T-008` remains the current active parent slice while that Friends proof dependency is unavailable.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
-- `T-018` is the next execution task: destructive factory reset, account removal, and fresh add validation.
+- `T-019` is the next planning task: map the full device lifecycle and target add or reset flow before implementation.
+- `T-018` remains the next implementation task after that planning checkpoint.
 - `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`

@@ -60,15 +60,16 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md)
-- Current execution task: [T-018-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-018-factory-reset-remove-and-fresh-add-flow.md)
+- Next brief: [B-016-stage-s3-device-lifecycle-reset-and-first-add-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-016-stage-s3-device-lifecycle-reset-and-first-add-plan.md)
+- Current execution task: [T-019-device-lifecycle-factory-reset-and-first-add-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-019-device-lifecycle-factory-reset-and-first-add-plan.md)
 
 ## Current Blockers
 
 - `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
 - The March 22 recovery and `Start new habit` slice is implemented and verified, but the destructive `Factory reset and remove` path is still the next required hardware-backed follow-up.
-- `T-018` is the current focused execution pass inside `T-008`.
+- The next immediate step is planning, not implementation: map the full device lifecycle and agree the target first-add and destructive-reset flows before executing `T-018`.
+- `T-019` is the current focused planning pass inside `T-008`.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
 - Onboarding and Wi-Fi recovery still need the final polish slice after the destructive reset path is trustworthy.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
