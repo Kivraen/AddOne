@@ -13,6 +13,10 @@ constexpr unsigned long kRuntimeSnapshotSyncIntervalMs = 250;
 constexpr unsigned long kHeartbeatIntervalMs = 60000;
 constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
 constexpr unsigned long kRecoveryCommandCooldownMs = 15000;
+constexpr unsigned long kRecoveryVisualCloudGraceMs = 15000;
+constexpr unsigned long kRecoveryVisualCompletionMs = 1800;
+constexpr unsigned long kFactoryResetReconnectTimeoutMs = 6000;
+constexpr unsigned long kFactoryResetReconnectPollMs = 100;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
 
 bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
@@ -69,6 +73,23 @@ const char* stateName(FirmwareState state) {
       return "Reward";
     case FirmwareState::TimeInvalid:
       return "TimeInvalid";
+    default:
+      return "Unknown";
+  }
+}
+
+const char* recoveryVisualStageName(RecoveryVisualStage stage) {
+  switch (stage) {
+    case RecoveryVisualStage::PortalReady:
+      return "PortalReady";
+    case RecoveryVisualStage::CredentialsReceived:
+      return "CredentialsReceived";
+    case RecoveryVisualStage::WifiConnected:
+      return "WifiConnected";
+    case RecoveryVisualStage::CloudConnected:
+      return "CloudConnected";
+    case RecoveryVisualStage::RestoreApplied:
+      return "RestoreApplied";
     default:
       return "Unknown";
   }
@@ -220,23 +241,54 @@ bool FirmwareApp::tickWifiReconnectPolicy_(bool allowRecoveryEscalation) {
   return false;
 }
 
+unsigned long FirmwareApp::captureBootHoldDurationWithFeedback_() {
+  pinMode(Config::kButtonPin, INPUT_PULLUP);
+  if (digitalRead(Config::kButtonPin) == HIGH) {
+    return 0;
+  }
+
+  const unsigned long startedAtMs = millis();
+  for (;;) {
+    const unsigned long heldMs = millis() - startedAtMs;
+    const bool factoryResetReady = heldMs >= Config::kFactoryResetHoldMs;
+    const bool recoveryReady = heldMs >= Config::kRecoveryHoldMs;
+    const ResetHoldVisualStage stage =
+        factoryResetReady ? ResetHoldVisualStage::FactoryResetReady
+                          : recoveryReady ? ResetHoldVisualStage::RecoveryReady
+                                          : ResetHoldVisualStage::Holding;
+    boardRenderer_.renderResetHoldState(stage, Config::kDefaultBrightness);
+
+    if (digitalRead(Config::kButtonPin) == HIGH) {
+      return heldMs;
+    }
+
+    if (factoryResetReady) {
+      return Config::kFactoryResetHoldMs;
+    }
+
+    delay(16);
+  }
+}
+
 void FirmwareApp::begin() {
-  const unsigned long bootHoldDurationMs = ButtonInput::bootHoldDurationMs();
-  recoveryRequestedAtBoot_ = false;
+  boardRenderer_.begin();
+  const unsigned long bootHoldDurationMs = captureBootHoldDurationWithFeedback_();
+  recoveryRequestedAtBoot_ =
+      bootHoldDurationMs >= Config::kRecoveryHoldMs &&
+      bootHoldDurationMs < Config::kFactoryResetHoldMs;
   factoryResetRequestedAtBoot_ = bootHoldDurationMs >= Config::kFactoryResetHoldMs;
   buttonInput_.begin();
   deviceSettings_.begin();
   ambientLight_.begin();
-  boardRenderer_.begin();
   habitTracker_.begin();
   habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
   provisioningStore_.begin();
+  cloudClient_.begin(identity_);
   if (factoryResetRequestedAtBoot_) {
-    performFactoryReset_("Boot-time factory reset requested.");
+    performFactoryReset_("Boot-time factory reset requested.", true);
     return;
   }
   migrateReadyForTrackingFlag_();
-  cloudClient_.begin(identity_);
   realtimeClient_.begin(identity_);
   timeService_.begin();
   timeService_.applySettings(deviceSettings_.current());
@@ -303,6 +355,11 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   if (nextState == FirmwareState::Tracking) {
     runtimeSnapshotDirty_ = true;
   }
+  if (nextState == FirmwareState::SetupRecovery) {
+    recoveryVisualActive_ = true;
+    recoveryVisualStage_ = RecoveryVisualStage::PortalReady;
+    recoveryVisualUntilMs_ = 0;
+  }
   if (nextState != FirmwareState::Reward) {
     rewardEngine_.clear();
   }
@@ -313,12 +370,84 @@ void FirmwareApp::markRuntimeSnapshotDirty_() {
   runtimeSnapshotDirty_ = true;
 }
 
-void FirmwareApp::performFactoryReset_(const char* reason) {
-  Serial.printf("%s\n", reason);
+void FirmwareApp::setRecoveryVisualStage_(RecoveryVisualStage stage) {
+  if (recoveryVisualActive_ && recoveryVisualStage_ == stage) {
+    return;
+  }
 
+  recoveryVisualActive_ = true;
+  recoveryVisualStage_ = stage;
+  if (stage != RecoveryVisualStage::RestoreApplied) {
+    recoveryVisualUntilMs_ = 0;
+  }
+  Serial.printf("Recovery visual -> %s\n", recoveryVisualStageName(stage));
+}
+
+void FirmwareApp::startRecoveryVisualCompletion_() {
+  recoveryVisualActive_ = true;
+  recoveryVisualStage_ = RecoveryVisualStage::RestoreApplied;
+  recoveryVisualUntilMs_ = millis() + kRecoveryVisualCompletionMs;
+  Serial.printf("Recovery visual -> %s\n", recoveryVisualStageName(recoveryVisualStage_));
+}
+
+bool FirmwareApp::renderRecoveryVisualIfActive_(uint8_t brightness) {
+  if (!recoveryVisualActive_) {
+    return false;
+  }
+
+  if ((recoveryVisualStage_ == RecoveryVisualStage::CloudConnected ||
+       recoveryVisualStage_ == RecoveryVisualStage::RestoreApplied) &&
+      recoveryVisualUntilMs_ > 0 &&
+      millis() >= recoveryVisualUntilMs_) {
+    recoveryVisualActive_ = false;
+    recoveryVisualUntilMs_ = 0;
+    return false;
+  }
+
+  boardRenderer_.renderRecoveryState(recoveryVisualStage_, brightness);
+  return true;
+}
+
+bool FirmwareApp::tryReconnectForFactoryResetReport_(uint32_t nextResetEpoch) {
+  if (!cloudClient_.isConfigured() || !cloudClient_.hasPersistedDeviceAuthToken()) {
+    Serial.println("Skipping boot-time reset report: cloud auth is unavailable.");
+    return false;
+  }
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin();
+  Serial.println("Attempting Wi-Fi reconnect for boot-time reset report.");
+
+  const unsigned long startedAtMs = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startedAtMs < kFactoryResetReconnectTimeoutMs) {
+    delay(kFactoryResetReconnectPollMs);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Boot-time reset report skipped: Wi-Fi did not reconnect in time.");
+    return false;
+  }
+
+  const bool reported = cloudClient_.reportFactoryReset(nextResetEpoch);
+  Serial.printf("Boot-time reset report %s.\n", reported ? "sent" : "failed");
+  return reported;
+}
+
+void FirmwareApp::performFactoryReset_(const char* reason, bool allowReconnectForCloudReport) {
+  Serial.printf("%s\n", reason);
+  const uint32_t nextResetEpoch = provisioningStore_.resetEpoch() + 1;
+
+  bool reportedReset = false;
   if (WiFi.status() == WL_CONNECTED && cloudClient_.isConfigured()) {
     markRuntimeSnapshotDirty_();
     flushRuntimeSnapshot_();
+    reportedReset = cloudClient_.reportFactoryReset(nextResetEpoch);
+  } else if (allowReconnectForCloudReport) {
+    reportedReset = tryReconnectForFactoryResetReport_(nextResetEpoch);
+  }
+
+  if (!reportedReset) {
+    Serial.println("Factory reset proceeding without cloud reset report.");
   }
 
   tm resetBaseline{};
@@ -343,6 +472,7 @@ void FirmwareApp::performFactoryReset_(const char* reason) {
 
   provisioningStore_.incrementResetEpoch();
   provisioningStore_.clearAllUserState();
+  cloudClient_.clearPersistedDeviceAuthToken();
   pendingFactoryReset_ = false;
   recoveryRequestedAtRuntime_ = false;
   recoveryRequestedAtBoot_ = false;
@@ -696,13 +826,72 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     return true;
   }
 
+  if (command.kind == "reset_history") {
+    if (!hasAuthoritativeTime_()) {
+      failureReason = "Authoritative time is unavailable.";
+      return false;
+    }
+
+    if (!command.hasBaseRevision) {
+      failureReason = "reset_history payload missing base_revision.";
+      return false;
+    }
+
+    DynamicJsonDocument doc(1024);
+    DeserializationError error = deserializeJson(doc, command.payloadJson);
+    if (error) {
+      failureReason = "Failed to parse reset history payload.";
+      return false;
+    }
+
+    DeviceSettingsSyncPayload resetSettings{};
+    populateSettingsSyncPayload(doc.as<JsonObjectConst>(), resetSettings);
+
+    tm nowLogical{};
+    if (!timeService_.nowLogical(nowLogical)) {
+      failureReason = "Logical time is unavailable.";
+      return false;
+    }
+
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+      failureReason = "Device state busy.";
+      return false;
+    }
+
+    const bool settingsApplied = deviceSettings_.applySync(resetSettings, failureReason);
+    if (!settingsApplied) {
+      if (stateMutex_) {
+        xSemaphoreGive(stateMutex_);
+      }
+      if (failureReason.isEmpty()) {
+        failureReason = "Failed to apply reset history settings.";
+      }
+      return false;
+    }
+
+    timeService_.applySettings(deviceSettings_.current());
+    const uint8_t nextMinimum = deviceSettings_.current().weeklyTarget;
+    const bool resetApplied = habitTracker_.resetHistory(nowLogical, nextMinimum, command.baseRevision, failureReason);
+    if (stateMutex_) {
+      xSemaphoreGive(stateMutex_);
+    }
+
+    if (!resetApplied) {
+      return false;
+    }
+
+    markRuntimeSnapshotDirty_();
+    Serial.println("Reset board history from cloud.");
+    return true;
+  }
+
   if (command.kind == "restore_board_backup") {
     if (command.payloadJson.isEmpty()) {
       failureReason = "Restore payload is empty.";
       return false;
     }
 
-    DynamicJsonDocument doc(6144);
+    DynamicJsonDocument doc(12288);
     DeserializationError error = deserializeJson(doc, command.payloadJson);
     if (error) {
       failureReason = "Failed to parse restore payload.";
@@ -761,6 +950,7 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
 
     markRuntimeSnapshotDirty_();
+    startRecoveryVisualCompletion_();
     Serial.println("Restored board backup from cloud.");
     return true;
   }
@@ -965,15 +1155,15 @@ void FirmwareApp::tickSetupRecovery_() {
     recoveryRequestedAtRuntime_ = true;
   }
 
-  const bool pendingClaim = provisioningStore_.hasPendingClaim();
-  if (pendingClaim) {
+  const bool pendingClaimBeforeApLoop = provisioningStore_.hasPendingClaim();
+  if (pendingClaimBeforeApLoop) {
     tickWifiReconnectPolicy_(false);
   }
 
-  if (!pendingClaim && !apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
+  if (!pendingClaimBeforeApLoop && !apServer_.isRunning() && !apServer_.hasCompletedProvisioning()) {
     apServer_.begin(identity_, provisioningStore_);
     recoveryRequestedAtRuntime_ = false;
-  } else if ((recoveryRequestedAtRuntime_ || recoveryRequestedAtBoot_ || (pendingClaim && wifiReconnectExhausted_)) &&
+  } else if ((recoveryRequestedAtRuntime_ || recoveryRequestedAtBoot_ || (pendingClaimBeforeApLoop && wifiReconnectExhausted_)) &&
              !apServer_.isRunning() &&
              !apServer_.hasCompletedProvisioning()) {
     apServer_.begin(identity_, provisioningStore_);
@@ -981,16 +1171,28 @@ void FirmwareApp::tickSetupRecovery_() {
   }
 
   if (apServer_.isRunning()) {
+    if (apServer_.provisioningState() == ProvisioningContract::ProvisioningState::Busy) {
+      setRecoveryVisualStage_(RecoveryVisualStage::CredentialsReceived);
+    } else {
+      setRecoveryVisualStage_(RecoveryVisualStage::PortalReady);
+    }
     apServer_.loop();
   }
 
   const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-  boardRenderer_.renderRecoveryState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
+  if (!apServer_.isRunning() && (apServer_.hasCompletedProvisioning() || apServer_.isWifiConnected() || WiFi.status() == WL_CONNECTED)) {
+    setRecoveryVisualStage_(RecoveryVisualStage::WifiConnected);
+  }
+  boardRenderer_.renderRecoveryState(recoveryVisualStage_, brightness);
 
   if (!apServer_.hasCompletedProvisioning() || !apServer_.isWifiConnected()) {
     return;
   }
 
+  // Re-read the claim after the AP loop. A fast Wi-Fi join can complete in the
+  // same tick that accepted provisioning, and using the stale pre-loop value
+  // can incorrectly skip cloud claim redemption.
+  const bool pendingClaim = provisioningStore_.hasPendingClaim();
   if (!pendingClaim) {
     provisioningStore_.markReadyForTracking();
     ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
@@ -1025,6 +1227,8 @@ void FirmwareApp::tickSetupRecovery_() {
     provisioningStore_.clearPendingClaim();
     provisioningStore_.markReadyForTracking();
     markRuntimeSnapshotDirty_();
+    setRecoveryVisualStage_(RecoveryVisualStage::CloudConnected);
+    recoveryVisualUntilMs_ = millis() + kRecoveryVisualCloudGraceMs;
     ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
     if (hasAuthoritativeTime_()) {
       if (prepareTrackerForCurrentTime_()) {
@@ -1082,7 +1286,9 @@ void FirmwareApp::tickTracking_() {
       }
 
       const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-      boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
+      if (!renderRecoveryVisualIfActive_(brightness)) {
+        boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
+      }
       xSemaphoreGive(stateMutex_);
     }
   } else {

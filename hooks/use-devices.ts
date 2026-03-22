@@ -6,18 +6,22 @@ import {
   applyHistoryDraftFromApp,
   claimDevice,
   enterWifiRecoveryFromApp,
+  factoryResetAndRemoveDeviceFromApp,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
+  resetDeviceHistoryFromApp,
   requestDeviceFactoryResetFromApp,
   requestRuntimeSnapshotFromApp,
+  saveActiveHabitMetadataFromApp,
   setDayStateFromApp,
 } from "@/lib/supabase/addone-repository";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import { areCustomPalettesEqual, sanitizeCustomPalette } from "@/lib/device-settings";
+import { buildRestoreHistoryDraft, buildRestoreSettingsPatch } from "@/lib/onboarding-restore";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate } from "@/types/addone";
+import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, OnboardingRestoreSource, SyncState } from "@/types/addone";
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -50,6 +54,12 @@ function sleep(ms: number) {
 const DEVICE_SNAPSHOT_SELF_HEAL_MS = 30_000;
 const LIVE_WAIT_CACHE_POLL_MS = 100;
 const LIVE_WAIT_REFRESH_MS = 1_500;
+const CONNECTIVITY_CHECKING_MS = 10_000;
+const MANUAL_CONNECTIVITY_STALE_MS = 15_000;
+
+function isTransientNetworkFailureMessage(message: string) {
+  return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
+}
 
 function getDayStateByLocalDate(device: AddOneDevice, localDate: string) {
   const dateGrid = device.dateGrid ?? [];
@@ -97,12 +107,29 @@ function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsP
   return true;
 }
 
+function isRuntimeRevisionConflictError(message: string) {
+  return message.includes("Runtime revision conflict");
+}
+
+function latestDeviceActivityAt(device: AddOneDevice) {
+  const candidates = [device.lastSeenAt, device.lastSnapshotAt, device.lastSyncAt]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+
+  return candidates.length > 0 ? Math.max(...candidates) : 0;
+}
+
 export function useDevices() {
   const { isAuthenticated, mode, status, user, userEmail } = useAuth();
   const demoDevices = useAddOneStore((state) => state.devices);
   const demoActiveDeviceId = useAddOneStore((state) => state.activeDeviceId);
   const setDemoActiveDevice = useAddOneStore((state) => state.setActiveDevice);
   const cloudActiveDeviceId = useAppUiStore((state) => state.activeDeviceId);
+  const clearConnectivityIssue = useAppUiStore((state) => state.clearConnectivityIssue);
+  const connectivityIssueByDevice = useAppUiStore((state) => state.connectivityIssueByDevice);
+  const clearRuntimeConflictRecovery = useAppUiStore((state) => state.clearRuntimeConflictRecovery);
+  const recoveryNeededRevisionByDevice = useAppUiStore((state) => state.recoveryNeededRevisionByDevice);
   const setCloudActiveDeviceId = useAppUiStore((state) => state.setActiveDeviceId);
 
   const devicesQuery = useQuery({
@@ -112,9 +139,52 @@ export function useDevices() {
     // Keep a light self-heal refetch even with realtime enabled.
     refetchInterval: mode === "cloud" && status === "signedIn" ? DEVICE_SNAPSHOT_SELF_HEAL_MS : false,
     refetchIntervalInBackground: true,
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
-  const devices = mode === "demo" ? demoDevices : devicesQuery.data ?? [];
+  const baseDevices = mode === "demo" ? demoDevices : devicesQuery.data ?? [];
+  const devices = baseDevices.map((device) => {
+    const recoveryNeededRevision = recoveryNeededRevisionByDevice[device.id];
+    if (
+      recoveryNeededRevision === undefined ||
+      device.recoveryState !== "ready" ||
+      device.runtimeRevision !== recoveryNeededRevision
+    ) {
+      return device;
+    }
+
+    const syncState: SyncState = device.isLive ? "syncing" : "offline";
+
+    return {
+      ...device,
+      recoveryState: "needs_recovery" as const,
+      syncState,
+    };
+  });
+  const effectiveDevices = devices.map((device) => {
+    const connectivityIssue = connectivityIssueByDevice[device.id];
+    if (!connectivityIssue || device.recoveryState !== "ready") {
+      return device;
+    }
+
+    const timestampsChanged =
+      (device.lastSeenAt ?? null) !== connectivityIssue.lastSeenAt ||
+      (device.lastSnapshotAt ?? null) !== connectivityIssue.lastSnapshotAt ||
+      (device.lastSyncAt ?? null) !== connectivityIssue.lastSyncAt;
+    if (timestampsChanged) {
+      return device;
+    }
+
+    const syncState: SyncState = Date.now() - connectivityIssue.markedAt < CONNECTIVITY_CHECKING_MS ? "syncing" : "offline";
+
+    return {
+      ...device,
+      isLive: false,
+      syncState,
+    };
+  });
   const activeDeviceId = mode === "demo" ? demoActiveDeviceId : cloudActiveDeviceId;
 
   useEffect(() => {
@@ -122,24 +192,64 @@ export function useDevices() {
       return;
     }
 
-    if (devices.length === 0) {
+    for (const [deviceId, recoveryNeededRevision] of Object.entries(recoveryNeededRevisionByDevice)) {
+      const matchingDevice = baseDevices.find((device) => device.id === deviceId);
+      if (!matchingDevice) {
+        clearRuntimeConflictRecovery(deviceId);
+        continue;
+      }
+
+      if (matchingDevice.recoveryState !== "ready" || matchingDevice.runtimeRevision !== recoveryNeededRevision) {
+        clearRuntimeConflictRecovery(deviceId);
+      }
+    }
+  }, [baseDevices, clearRuntimeConflictRecovery, mode, recoveryNeededRevisionByDevice]);
+
+  useEffect(() => {
+    if (mode !== "cloud") {
+      return;
+    }
+
+    for (const [deviceId, connectivityIssue] of Object.entries(connectivityIssueByDevice)) {
+      const matchingDevice = baseDevices.find((device) => device.id === deviceId);
+      if (!matchingDevice || !connectivityIssue) {
+        clearConnectivityIssue(deviceId);
+        continue;
+      }
+
+      const timestampsChanged =
+        (matchingDevice.lastSeenAt ?? null) !== connectivityIssue.lastSeenAt ||
+        (matchingDevice.lastSnapshotAt ?? null) !== connectivityIssue.lastSnapshotAt ||
+        (matchingDevice.lastSyncAt ?? null) !== connectivityIssue.lastSyncAt;
+      if (timestampsChanged || matchingDevice.recoveryState !== "ready") {
+        clearConnectivityIssue(deviceId);
+      }
+    }
+  }, [baseDevices, clearConnectivityIssue, connectivityIssueByDevice, mode]);
+
+  useEffect(() => {
+    if (mode !== "cloud") {
+      return;
+    }
+
+    if (effectiveDevices.length === 0) {
       if (cloudActiveDeviceId !== null) {
         setCloudActiveDeviceId(null);
       }
       return;
     }
 
-    if (!cloudActiveDeviceId || !devices.some((device) => device.id === cloudActiveDeviceId)) {
-      setCloudActiveDeviceId(devices[0].id);
+    if (!cloudActiveDeviceId || !effectiveDevices.some((device) => device.id === cloudActiveDeviceId)) {
+      setCloudActiveDeviceId(effectiveDevices[0].id);
     }
-  }, [cloudActiveDeviceId, devices, mode, setCloudActiveDeviceId]);
+  }, [cloudActiveDeviceId, effectiveDevices, mode, setCloudActiveDeviceId]);
 
-  const activeDevice = devices.find((device) => device.id === activeDeviceId) ?? devices[0] ?? null;
+  const activeDevice = effectiveDevices.find((device) => device.id === activeDeviceId) ?? effectiveDevices[0] ?? null;
 
   return {
     activeDevice,
     activeDeviceId: activeDevice?.id ?? null,
-    devices,
+    devices: effectiveDevices,
     isAuthenticated,
     isLoading: mode === "cloud" ? devicesQuery.isLoading : false,
     mode,
@@ -151,7 +261,11 @@ export function useDeviceActions() {
   const { activeDevice, devices } = useDevices();
   const { mode, user, userEmail } = useAuth();
   const queryClient = useQueryClient();
+  const clearConnectivityIssue = useAppUiStore((state) => state.clearConnectivityIssue);
   const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
+  const clearRuntimeConflictRecovery = useAppUiStore((state) => state.clearRuntimeConflictRecovery);
+  const markConnectivityIssue = useAppUiStore((state) => state.markConnectivityIssue);
+  const markRuntimeConflictRecovery = useAppUiStore((state) => state.markRuntimeConflictRecovery);
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
   const [isAwaitingSettingsConfirmation, setIsAwaitingSettingsConfirmation] = useState(false);
 
@@ -170,10 +284,19 @@ export function useDeviceActions() {
       return [] as AddOneDevice[];
     }
 
-    return queryClient.fetchQuery({
-      queryFn: () => fetchOwnedDevices({ userEmail, userId: user.id }),
-      queryKey: addOneQueryKeys.devices(user.id),
-    });
+    try {
+      return await queryClient.fetchQuery({
+        queryFn: () => fetchOwnedDevices({ userEmail, userId: user.id }),
+        queryKey: addOneQueryKeys.devices(user.id),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTransientNetworkFailureMessage(message)) {
+        return queryClient.getQueryData<AddOneDevice[]>(addOneQueryKeys.devices(user.id)) ?? [];
+      }
+
+      throw error;
+    }
   };
 
   const getCachedDevices = () => {
@@ -189,15 +312,61 @@ export function useDeviceActions() {
       return;
     }
 
-    await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user.id) });
+    await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user.id) }, { cancelRefetch: false });
   };
 
-  const refreshDevices = async () => {
+  const refreshDevices = async (options?: { probeDeviceId?: string | null }) => {
     if (mode !== "cloud") {
-      return;
+      return {
+        markedConnectivityIssue: false,
+        probeDevice: null as AddOneDevice | null,
+      };
     }
 
-    await loadLatestDevices();
+    const probeDeviceId = options?.probeDeviceId ?? null;
+    const previousProbeDevice = probeDeviceId ? resolveDevice(probeDeviceId) : null;
+    const latestDevices = await loadLatestDevices();
+    const probeDevice = probeDeviceId ? latestDevices.find((device) => device.id === probeDeviceId) ?? null : null;
+
+    if (!probeDevice) {
+      if (probeDeviceId) {
+        clearConnectivityIssue(probeDeviceId);
+      }
+
+      return {
+        markedConnectivityIssue: false,
+        probeDevice: null as AddOneDevice | null,
+      };
+    }
+
+    const didAdvanceTimestamps =
+      !!previousProbeDevice &&
+      (
+        (probeDevice.lastSeenAt ?? null) !== (previousProbeDevice.lastSeenAt ?? null) ||
+        (probeDevice.lastSnapshotAt ?? null) !== (previousProbeDevice.lastSnapshotAt ?? null) ||
+        (probeDevice.lastSyncAt ?? null) !== (previousProbeDevice.lastSyncAt ?? null)
+      );
+    const latestActivityAgeMs = Date.now() - latestDeviceActivityAt(probeDevice);
+    const shouldMarkConnectivityIssue =
+      probeDevice.recoveryState === "ready" &&
+      probeDevice.isLive &&
+      !didAdvanceTimestamps &&
+      latestActivityAgeMs >= MANUAL_CONNECTIVITY_STALE_MS;
+
+    if (shouldMarkConnectivityIssue) {
+      markConnectivityIssue(probeDevice.id, {
+        lastSeenAt: probeDevice.lastSeenAt ?? null,
+        lastSnapshotAt: probeDevice.lastSnapshotAt ?? null,
+        lastSyncAt: probeDevice.lastSyncAt ?? null,
+      });
+    } else {
+      clearConnectivityIssue(probeDevice.id);
+    }
+
+    return {
+      markedConnectivityIssue: shouldMarkConnectivityIssue,
+      probeDevice,
+    };
   };
 
   const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
@@ -224,6 +393,25 @@ export function useDeviceActions() {
     }
 
     return device;
+  };
+
+  const markDeviceNeedsRecoveryFromConflict = (deviceId: string, runtimeRevision?: number) => {
+    markRuntimeConflictRecovery(deviceId, {
+      runtimeRevision: runtimeRevision ?? resolveDevice(deviceId)?.runtimeRevision ?? 0,
+    });
+  };
+
+  const markDeviceConnectivityIssueFromTimeout = (deviceId: string) => {
+    const device = resolveDevice(deviceId);
+    if (!device) {
+      return;
+    }
+
+    markConnectivityIssue(deviceId, {
+      lastSeenAt: device.lastSeenAt ?? null,
+      lastSnapshotAt: device.lastSnapshotAt ?? null,
+      lastSyncAt: device.lastSyncAt ?? null,
+    });
   };
 
   const readCommandFailure = async (commandId?: string | null) => {
@@ -288,9 +476,13 @@ export function useDeviceActions() {
 
     const failure = await readCommandFailure(options.commandId);
     if (failure) {
+      if (isRuntimeRevisionConflictError(failure)) {
+        markDeviceNeedsRecoveryFromConflict(deviceId, options.baseRevision);
+      }
       throw new Error(failure);
     }
 
+    markDeviceConnectivityIssueFromTimeout(deviceId);
     throw new Error(options.errorMessage ?? "The device did not mirror the latest state in time.");
   };
 
@@ -321,6 +513,15 @@ export function useDeviceActions() {
   const factoryResetMutation = useMutation({
     mutationFn: requestDeviceFactoryResetFromApp,
   });
+  const resetHistoryMutation = useMutation({
+    mutationFn: resetDeviceHistoryFromApp,
+  });
+  const saveHabitMetadataMutation = useMutation({
+    mutationFn: saveActiveHabitMetadataFromApp,
+  });
+  const removeFromAppMutation = useMutation({
+    mutationFn: factoryResetAndRemoveDeviceFromApp,
+  });
 
   const isBusy =
     claimMutation.isPending ||
@@ -330,9 +531,17 @@ export function useDeviceActions() {
     applySettingsMutation.isPending ||
     isAwaitingSettingsConfirmation ||
     wifiRecoveryMutation.isPending ||
-    factoryResetMutation.isPending;
+    factoryResetMutation.isPending ||
+    resetHistoryMutation.isPending ||
+    removeFromAppMutation.isPending;
 
-  const refreshRuntimeSnapshot = async (deviceId?: string) => {
+  const refreshRuntimeSnapshot = async (
+    deviceId?: string,
+    options?: {
+      errorMessage?: string;
+      timeoutMs?: number;
+    },
+  ) => {
     const targetDevice = await resolveFreshLiveDevice(deviceId);
     const previousSnapshotAt = targetDevice.lastSnapshotAt ?? "";
     const previousRevision = targetDevice.runtimeRevision;
@@ -346,11 +555,52 @@ export function useDeviceActions() {
       {
         baseRevision: previousRevision,
         commandId: result.command_id ?? null,
-        errorMessage: "The device did not publish a fresh runtime snapshot in time.",
+        errorMessage: options?.errorMessage ?? "The device did not publish a fresh runtime snapshot in time.",
         requireRevisionAdvance: false,
+        timeoutMs: options?.timeoutMs,
       },
       (device) => (device.lastSnapshotAt ?? "") !== previousSnapshotAt || device.runtimeRevision > previousRevision,
     );
+    clearConnectivityIssue(targetDevice.id);
+  };
+
+  const waitForDeviceAbsence = async (
+    deviceId: string,
+    options: {
+      commandId?: string | null;
+      errorMessage?: string;
+      timeoutMs?: number;
+    },
+  ) => {
+    const timeoutMs = options.timeoutMs ?? 20_000;
+    const startedAt = Date.now();
+    let lastRefreshAt = 0;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const latestDevices = getCachedDevices();
+      if (!latestDevices.some((device) => device.id === deviceId)) {
+        return;
+      }
+
+      if (Date.now() - lastRefreshAt >= LIVE_WAIT_REFRESH_MS) {
+        void invalidateCloudDevices();
+        lastRefreshAt = Date.now();
+      }
+
+      await sleep(LIVE_WAIT_CACHE_POLL_MS);
+    }
+
+    const finalDevices = await loadLatestDevices();
+    if (!finalDevices.some((device) => device.id === deviceId)) {
+      return;
+    }
+
+    const failure = await readCommandFailure(options.commandId);
+    if (failure) {
+      throw new Error(failure);
+    }
+
+    throw new Error(options.errorMessage ?? "The device is still attached to this account.");
   };
 
   const applySettingsPatch = async (patch: DeviceSettingsPatch, deviceId?: string) => {
@@ -371,6 +621,8 @@ export function useDeviceActions() {
       },
       (device) => deviceMatchesSettingsPatch(device, patch),
     );
+    clearConnectivityIssue(targetDevice.id);
+    clearRuntimeConflictRecovery(targetDevice.id);
     void invalidateCloudDevices();
   };
 
@@ -410,6 +662,76 @@ export function useDeviceActions() {
     }
   };
 
+  const restoreBoardFromSnapshot = async (source: OnboardingRestoreSource, deviceId?: string) => {
+    const issueRestore = async (allowRetry: boolean) => {
+      let targetDevice = await resolveFreshLiveDevice(deviceId);
+      await refreshRuntimeSnapshot(targetDevice.id);
+      targetDevice = await resolveFreshLiveDevice(targetDevice.id);
+
+      const settingsPatch = buildRestoreSettingsPatch(source, targetDevice);
+      if (settingsPatch) {
+        await applySettingsPatch(settingsPatch, targetDevice.id);
+        targetDevice = await resolveFreshLiveDevice(targetDevice.id);
+      }
+
+      await saveHabitMetadataMutation.mutateAsync({
+        dailyMinimum: source.settings.dailyMinimum,
+        deviceId: targetDevice.id,
+        habitName: source.settings.name,
+        weeklyTarget: source.settings.weeklyTarget,
+      });
+      await invalidateCloudDevices();
+
+      const updates = buildRestoreHistoryDraft(source);
+      if (updates.length === 0) {
+        void invalidateCloudDevices();
+        return;
+      }
+
+      try {
+        const baseRevision = targetDevice.runtimeRevision;
+        const result = await historyDraftMutation.mutateAsync({
+          baseRevision,
+          deviceId: targetDevice.id,
+          draftId: makeClientEventId(),
+          updates,
+        });
+
+        await waitForDeviceMatch(
+          targetDevice.id,
+          {
+            baseRevision,
+            commandId: result.command_id ?? null,
+            errorMessage: "The device did not confirm the restored board in time.",
+            requireRevisionAdvance: true,
+          },
+          (device) => deviceMatchesHistory(device, updates),
+        );
+        clearConnectivityIssue(targetDevice.id);
+        clearRuntimeConflictRecovery(targetDevice.id);
+        void invalidateCloudDevices();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to restore the saved board.";
+        if (allowRetry && isRuntimeRevisionConflictError(message)) {
+          try {
+            await refreshRuntimeSnapshot(targetDevice.id);
+          } catch {
+            await invalidateCloudDevices();
+          }
+          return issueRestore(false);
+        }
+
+        if (isRuntimeRevisionConflictError(message)) {
+          markDeviceNeedsRecoveryFromConflict(targetDevice.id, targetDevice.runtimeRevision);
+        }
+
+        throw error;
+      }
+    };
+
+    await issueRestore(true);
+  };
+
   if (mode === "demo") {
     return {
       applySettingsDraft,
@@ -420,12 +742,31 @@ export function useDeviceActions() {
       isRefreshingRuntimeSnapshot: false,
       isSavingHistoryDraft: false,
       isSavingSettings: false,
+      isRemovingDeviceFromApp: false,
+      isResettingHistory: false,
       isStartingFactoryReset: false,
       isStartingWifiRecovery: false,
+      factoryResetAndRemove: async (_deviceId?: string) => undefined,
+      resetHistory: async (_params?: {
+        dailyMinimum: string;
+        deviceId?: string;
+        habitName: string;
+        weeklyTarget: number;
+      }) => undefined,
       requestFactoryReset: async (_deviceId?: string) => undefined,
       requestWifiRecovery: async (_deviceId?: string) => undefined,
-      refreshDevices: async () => undefined,
+      refreshDevices: async () => ({
+        markedConnectivityIssue: false,
+        probeDevice: null as AddOneDevice | null,
+      }),
       refreshRuntimeSnapshot: async () => undefined,
+      saveActiveHabitMetadata: async (_params: {
+        dailyMinimum: string;
+        deviceId?: string;
+        habitName: string;
+        weeklyTarget: number;
+      }) => undefined,
+      restoreBoardFromSnapshot: async (_source: OnboardingRestoreSource, _deviceId?: string) => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleToday: async (_deviceId?: string) => {
         demoActions.toggleToday();
@@ -463,15 +804,68 @@ export function useDeviceActions() {
         },
         (device) => deviceMatchesHistory(device, updates),
       );
+      clearConnectivityIssue(targetDevice.id);
+      clearRuntimeConflictRecovery(targetDevice.id);
       void invalidateCloudDevices();
     },
     isApplyingToday: setDayStateMutation.isPending,
     isBusy,
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
     isSavingHistoryDraft: historyDraftMutation.isPending,
-    isSavingSettings: applySettingsMutation.isPending || isAwaitingSettingsConfirmation,
+    isSavingSettings: applySettingsMutation.isPending || saveHabitMetadataMutation.isPending || isAwaitingSettingsConfirmation,
+    isRemovingDeviceFromApp: removeFromAppMutation.isPending,
+    isResettingHistory: resetHistoryMutation.isPending,
     isStartingFactoryReset: factoryResetMutation.isPending,
     isStartingWifiRecovery: wifiRecoveryMutation.isPending,
+    factoryResetAndRemove: async (deviceId?: string) => {
+      const targetDevice = await resolveFreshLiveDevice(deviceId);
+      const result = await removeFromAppMutation.mutateAsync({
+        deviceId: targetDevice.id,
+        requestId: makeClientEventId(),
+      });
+
+      await waitForDeviceAbsence(targetDevice.id, {
+        commandId: result.command_id ?? null,
+        errorMessage: "The device did not leave this account in time.",
+      });
+      void invalidateCloudDevices();
+    },
+    resetHistory: async (params?: {
+      dailyMinimum: string;
+      deviceId?: string;
+      habitName: string;
+      weeklyTarget: number;
+    }) => {
+      const targetDevice = await resolveFreshLiveDevice(params?.deviceId);
+      const baseRevision = targetDevice.runtimeRevision;
+      const result = await resetHistoryMutation.mutateAsync({
+        dailyMinimum: params?.dailyMinimum ?? targetDevice.dailyMinimum,
+        deviceId: targetDevice.id,
+        habitName: params?.habitName ?? targetDevice.name,
+        requestId: makeClientEventId(),
+        weeklyTarget: params?.weeklyTarget ?? targetDevice.weeklyTarget,
+      });
+
+      await waitForDeviceMatch(
+        targetDevice.id,
+        {
+          baseRevision,
+          commandId: result.command_id ?? null,
+          errorMessage: "The device did not clear its history in time.",
+          requireRevisionAdvance: true,
+          timeoutMs: 20_000,
+        },
+        (device) =>
+          device.recordedDaysTotal === 0 &&
+          device.successfulWeeksTotal === 0 &&
+          device.name === (params?.habitName ?? targetDevice.name) &&
+          device.dailyMinimum === (params?.dailyMinimum ?? targetDevice.dailyMinimum) &&
+          device.weeklyTarget === (params?.weeklyTarget ?? targetDevice.weeklyTarget),
+      );
+      clearConnectivityIssue(targetDevice.id);
+      clearRuntimeConflictRecovery(targetDevice.id);
+      void invalidateCloudDevices();
+    },
     requestFactoryReset: async (deviceId?: string) => {
       const targetDevice = await resolveFreshLiveDevice(deviceId);
       await factoryResetMutation.mutateAsync({
@@ -488,6 +882,22 @@ export function useDeviceActions() {
     },
     refreshDevices,
     refreshRuntimeSnapshot,
+    saveActiveHabitMetadata: async (params: {
+      dailyMinimum: string;
+      deviceId?: string;
+      habitName: string;
+      weeklyTarget: number;
+    }) => {
+      const targetDevice = await resolveFreshLiveDevice(params.deviceId);
+      await saveHabitMetadataMutation.mutateAsync({
+        dailyMinimum: params.dailyMinimum,
+        deviceId: targetDevice.id,
+        habitName: params.habitName,
+        weeklyTarget: params.weeklyTarget,
+      });
+      void invalidateCloudDevices();
+    },
+    restoreBoardFromSnapshot,
     toggleHistoryCell: async () => undefined,
     toggleToday: async (deviceId?: string) => {
       const issueToggle = async (allowRetry: boolean) => {
@@ -526,17 +936,23 @@ export function useDeviceActions() {
             (device) => getDayStateByLocalDate(device, localDate) === desiredState,
           );
           clearPendingTodayState(targetDevice.id);
+          clearConnectivityIssue(targetDevice.id);
+          clearRuntimeConflictRecovery(targetDevice.id);
           void invalidateCloudDevices();
         } catch (error) {
           clearPendingTodayState(targetDevice.id);
           const message = error instanceof Error ? error.message : "Failed to change today's state.";
-          if (allowRetry && message.includes("Runtime revision conflict")) {
+          if (allowRetry && isRuntimeRevisionConflictError(message)) {
             try {
               await refreshRuntimeSnapshot(targetDevice.id);
             } catch {
               await invalidateCloudDevices();
             }
             return issueToggle(false);
+          }
+
+          if (isRuntimeRevisionConflictError(message)) {
+            markDeviceNeedsRecoveryFromConflict(targetDevice.id, targetDevice.runtimeRevision);
           }
 
           throw error;

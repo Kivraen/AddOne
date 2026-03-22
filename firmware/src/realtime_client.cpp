@@ -8,9 +8,9 @@
 
 namespace {
 constexpr unsigned long kReconnectIntervalMs = 3000;
-constexpr size_t kCommandJsonCapacityFloor = 3072;
-constexpr size_t kCommandJsonCapacityHeadroom = 1024;
-constexpr uint16_t kMqttBufferSize = 6144;
+constexpr size_t kCommandJsonCapacityFloor = 12288;
+constexpr size_t kCommandJsonCapacityHeadroom = 2048;
+constexpr uint16_t kMqttBufferSize = 12288;
 
 String escapeJson(const String& input) {
   String output;
@@ -296,6 +296,11 @@ bool RealtimeClient::replaceExistingQueuedCommand_(const CloudClient::DeviceComm
       return true;
     }
 
+    if (command.kind == "reset_history" && queued.kind == "reset_history") {
+      queued = command;
+      return true;
+    }
+
     if (command.kind == "restore_board_backup" && queued.kind == "restore_board_backup") {
       queued = command;
       return true;
@@ -343,7 +348,7 @@ bool RealtimeClient::publishJson_(const String& topic, const String& payload) {
 }
 
 bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCommand& outCommand) const {
-  const size_t jsonCapacity = payload.length() + kCommandJsonCapacityHeadroom;
+  const size_t jsonCapacity = payload.length() * 2U + kCommandJsonCapacityHeadroom;
   DynamicJsonDocument doc(jsonCapacity > kCommandJsonCapacityFloor ? jsonCapacity : kCommandJsonCapacityFloor);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {

@@ -14,12 +14,13 @@ public:
   bool hasCompletedProvisioning() const { return completedProvisioning_; }
   bool isWifiConnected() const;
   bool isRunning() const { return running_; }
+  ProvisioningContract::ProvisioningState provisioningState() const { return provisioningState_; }
   void loop();
   void resetForRecovery();
   void stop();
 
 private:
-  String buildNetworksJson_();
+  String buildNetworksJson_(int* visibleNetworkCount = nullptr);
   void handleInfo_();
   void handleNetworks_();
   void handleRoot_();

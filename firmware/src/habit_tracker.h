@@ -43,6 +43,7 @@ public:
   uint8_t minimum() const { return minimum_; }
   uint32_t runtimeRevision() const { return runtimeRevision_; }
   bool queueLocalToggleToday(const tm& nowDate, bool& outIsDone);
+  bool resetHistory(const tm& nowDate, uint8_t minimum, uint32_t expectedRevision, String& failureReason);
   bool restoreFromSnapshot(const String& boardDaysJson,
                            const WeekDate& weekStart,
                            uint8_t minimum,

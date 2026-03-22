@@ -104,7 +104,7 @@ export function sanitizeCustomPalette(customPalette?: Partial<BoardPalette>) {
   return sanitized;
 }
 
-export function createSettingsDraftFromDevice(device: AddOneDevice, minimumGoal = ""): DeviceSettingsDraft {
+export function createSettingsDraftFromDevice(device: AddOneDevice, minimumGoal = device.dailyMinimum): DeviceSettingsDraft {
   return {
     autoBrightness: device.autoBrightness,
     brightness: device.brightness,

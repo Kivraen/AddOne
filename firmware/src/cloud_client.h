@@ -32,11 +32,13 @@ public:
 
   void begin(const DeviceIdentity& identity);
   bool ackCommand(const String& commandId, CommandAckStatus status, const String& lastError = "");
+  void clearPersistedDeviceAuthToken();
   const String& deviceAuthToken();
   bool heartbeat();
   bool hasPersistedDeviceAuthToken() const;
   bool isConfigured() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);
+  bool reportFactoryReset(uint32_t resetEpoch);
   bool redeemPendingClaim(const ProvisioningContract::PendingClaim& claim, uint32_t resetEpoch);
   bool uploadRuntimeSnapshot(uint32_t revision,
                              const HabitTracker::WeekDate& currentWeekStart,
@@ -48,6 +50,7 @@ public:
 private:
   const char* ackStatusName_(CommandAckStatus status) const;
   bool ensureDeviceAuthToken_();
+  bool registerDeviceAuthToken_();
   bool postRpc_(const char* rpcName, const String& payload, String& responseBody);
 
   String deviceAuthToken_{};

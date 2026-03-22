@@ -252,7 +252,11 @@ void ApServer::handleInfo_() {
 }
 
 void ApServer::handleNetworks_() {
-  sendJson_(200, buildNetworksJson_());
+  int networkCount = 0;
+  String json = buildNetworksJson_(&networkCount);
+  Serial.printf("AP Wi-Fi scan request returning %d networks.\n", networkCount);
+
+  sendJson_(200, json);
 }
 
 void ApServer::handleSession_() {
@@ -335,10 +339,27 @@ void ApServer::handleSession_() {
   sendJson_(200, buildSessionResponseJson_(true, "connect_to_cloud", true, "Provisioning accepted."));
 }
 
-String ApServer::buildNetworksJson_() {
-  const int networkCount = WiFi.scanNetworks(false, false);
+String ApServer::buildNetworksJson_(int* visibleNetworkCount) {
+  int networkCount = 0;
+  for (int attempt = 1; attempt <= 3; attempt += 1) {
+    networkCount = WiFi.scanNetworks(false, false);
+    if (networkCount > 0) {
+      if (attempt > 1) {
+        Serial.printf("AP Wi-Fi scan succeeded on retry %d with %d networks.\n", attempt, networkCount);
+      }
+      break;
+    }
+
+    if (attempt < 3) {
+      Serial.printf("AP Wi-Fi scan returned %d networks on attempt %d. Retrying.\n", networkCount, attempt);
+      WiFi.scanDelete();
+      delay(1200);
+    }
+  }
+
   String json = "{\"schema_version\":1,\"networks\":[";
   bool first = true;
+  int visibleCount = 0;
 
   for (int index = 0; index < networkCount; index += 1) {
     const String ssid = WiFi.SSID(index);
@@ -373,10 +394,14 @@ String ApServer::buildNetworksJson_() {
     json += "\"";
     json += "}";
     first = false;
+    visibleCount++;
   }
 
   json += "]}";
   WiFi.scanDelete();
+  if (visibleNetworkCount) {
+    *visibleNetworkCount = visibleCount;
+  }
   return json;
 }
 

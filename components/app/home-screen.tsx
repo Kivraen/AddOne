@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, Text, View, useWindowDimensions } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -23,16 +23,16 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary-action-button";
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
+import { useOnboarding } from "@/hooks/use-onboarding";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
-import { connectionGraceState } from "@/lib/device-connection";
 import { getDeviceAccentColor } from "@/lib/device-accent";
+import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { homeMinimumGoalLabel } from "@/lib/habit-details";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { formatWeekdayFromLocalDate } from "@/lib/runtime-board-projection";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { useDeviceHabitMetadataStore } from "@/store/device-habit-metadata-store";
 import { AddOneDevice } from "@/types/addone";
 
 const HOME_INSIGHT_MAX_LINES = 3;
@@ -41,21 +41,51 @@ const HOME_INSIGHT_TRANSITION_DURATION = 360;
 const HOME_INSIGHT_ENTRY_OFFSET = 16;
 const HOME_INSIGHT_EXIT_OFFSET = 10;
 
-type HomeHeaderConnectionState = "online" | "verifying-board" | "checking-connection" | "offline";
+type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline";
 type HomeInsight = { eyebrow: string; message: string };
 
-function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState {
-  const baseConnectionState = connectionGraceState(device);
-
-  if (baseConnectionState === "online") {
-    return device.needsSnapshotRefresh ? "verifying-board" : "online";
+function resolvePendingSetupCopy(status: "awaiting_ap" | "awaiting_cloud" | "claimed") {
+  if (status === "awaiting_ap") {
+    return {
+      body: "Setup already started. Join the AddOne Wi‑Fi on this phone and continue from the setup flow.",
+      buttonLabel: "Resume setup",
+      title: "Board setup in progress",
+    };
   }
 
-  if (baseConnectionState === "checking") {
+  if (status === "awaiting_cloud") {
+    return {
+      body: "The board is trying your home Wi‑Fi and finishing its first cloud claim.",
+      buttonLabel: "Open setup",
+      title: "Connecting your board",
+    };
+  }
+
+  return {
+    body: "The board is claimed. Open setup to finish the last details and load the first full snapshot.",
+    buttonLabel: "Finish setup",
+    title: "Almost ready",
+  };
+}
+
+function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState {
+  if (needsDeviceRecovery(device)) {
+    return "needs-recovery";
+  }
+
+  if (isDeviceRecovering(device)) {
+    return "recovering";
+  }
+
+  if (!device.isLive) {
+    return device.syncState === "syncing" ? "checking-connection" : "offline";
+  }
+
+  if (device.syncState === "syncing") {
     return "checking-connection";
   }
 
-  return "offline";
+  return device.needsSnapshotRefresh ? "verifying-board" : "online";
 }
 
 function boardButtonState(device: AddOneDevice, isApplyingToday: boolean, isLocked = false): PrimaryActionState {
@@ -63,7 +93,7 @@ function boardButtonState(device: AddOneDevice, isApplyingToday: boolean, isLock
     return "syncing";
   }
 
-  if (!device.isLive) {
+  if (!isDeviceControlReady(device)) {
     return "disabled";
   }
 
@@ -85,9 +115,8 @@ function withPendingTodayState(device: AddOneDevice, pendingTodayState?: boolean
 }
 
 function visibleBoardStats(device: AddOneDevice) {
-  let completed = 0;
+  let visibleCompleted = 0;
   let visibleDays = 0;
-  let successfulWeeks = 0;
 
   for (let col = 0; col < device.days.length; col += 1) {
     const isPastWeek = col > device.today.weekIndex;
@@ -96,27 +125,35 @@ function visibleBoardStats(device: AddOneDevice) {
     const completedThisWeek = device.days[col].slice(0, visibleRows).filter(Boolean).length;
 
     visibleDays += visibleRows;
-    completed += completedThisWeek;
-
-    if (visibleRows > 0 && completedThisWeek >= device.weeklyTarget) {
-      successfulWeeks += 1;
-    }
+    visibleCompleted += completedThisWeek;
   }
 
   return {
-    completed,
-    fillPercentage: visibleDays === 0 ? 0 : Math.round((completed / visibleDays) * 100),
-    successfulWeeks,
+    fillPercentage: visibleDays === 0 ? 0 : Math.round((visibleCompleted / visibleDays) * 100),
   };
 }
 
-function boardInsight(device: AddOneDevice, stats: { completed: number; fillPercentage: number }, currentWeekCompleted: number): HomeInsight {
+function boardInsight(device: AddOneDevice, stats: { fillPercentage: number }, currentWeekCompleted: number): HomeInsight {
   const remainingThisWeek = Math.max(device.weeklyTarget - currentWeekCompleted, 0);
+
+  if (needsDeviceRecovery(device)) {
+    return {
+      eyebrow: "Board note",
+      message: `Recovery reconnects the board without changing your ${device.recordedDaysTotal}-day history.`,
+    };
+  }
+
+  if (isDeviceRecovering(device)) {
+    return {
+      eyebrow: "Board note",
+      message: "Recovery is still finishing. Controls stay locked until the restored board is fully back.",
+    };
+  }
 
   if (!device.isLive) {
     return {
       eyebrow: "Board note",
-      message: `Recovery reconnects the device without changing your ${stats.completed}-day history.`,
+      message: `The board is offline. Your ${device.recordedDaysTotal}-day history is still preserved and ready for recovery.`,
     };
   }
 
@@ -475,25 +512,26 @@ export function HomeScreen() {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
-  const { isApplyingToday, refreshRuntimeSnapshot, toggleToday } = useDeviceActions();
-  const minimumGoal = useDeviceHabitMetadataStore((state) => (activeDeviceId ? state.minimumGoalByDeviceId[activeDeviceId] ?? "" : ""));
+  const { isLoading: isOnboardingLoading, session: onboardingSession } = useOnboarding();
+  const { isApplyingToday, refreshDevices, refreshRuntimeSnapshot, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
   const clearBoardEditorOpen = useAppUiStore((state) => state.clearBoardEditorOpen);
   const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
   const todayActionLockRef = useRef(false);
   const [todayActionInFlight, setTodayActionInFlight] = useState(false);
+  const [manualRefreshInFlight, setManualRefreshInFlight] = useState(false);
   const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
   const staleRefreshKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!pendingBoardEditorOpen || !activeDevice?.isLive) {
+    if (!pendingBoardEditorOpen || !activeDevice || !isDeviceControlReady(activeDevice)) {
       return;
     }
 
     clearBoardEditorOpen();
     router.push(deviceHistoryPath(activeDevice.id));
-  }, [activeDevice?.isLive, clearBoardEditorOpen, pendingBoardEditorOpen, router]);
+  }, [activeDevice, clearBoardEditorOpen, pendingBoardEditorOpen, router]);
 
   const effectiveDevice = useMemo(() => {
     if (!activeDevice) {
@@ -502,9 +540,18 @@ export function HomeScreen() {
 
     return withPendingTodayState(activeDevice, activePendingTodayState);
   }, [activeDevice, activePendingTodayState]);
+  const pendingOnboardingStatus =
+    !effectiveDevice && onboardingSession && !onboardingSession.isExpired
+      ? onboardingSession.status === "awaiting_ap" ||
+        onboardingSession.status === "awaiting_cloud" ||
+        onboardingSession.status === "claimed"
+        ? onboardingSession.status
+        : null
+      : null;
+  const pendingSetupCopy = pendingOnboardingStatus ? resolvePendingSetupCopy(pendingOnboardingStatus) : null;
 
   useEffect(() => {
-    if (!activeDevice?.isLive || !activeDevice.needsSnapshotRefresh) {
+    if (!activeDevice || !isDeviceControlReady(activeDevice) || !activeDevice.needsSnapshotRefresh) {
       staleRefreshKeyRef.current = null;
       setStaleRefreshInFlight(false);
       return;
@@ -526,12 +573,7 @@ export function HomeScreen() {
         setStaleRefreshInFlight(false);
       });
   }, [
-    activeDevice?.id,
-    activeDevice?.isLive,
-    activeDevice?.lastSnapshotAt,
-    activeDevice?.logicalToday,
-    activeDevice?.needsSnapshotRefresh,
-    activeDevice?.runtimeRevision,
+    activeDevice,
     refreshRuntimeSnapshot,
   ]);
 
@@ -542,9 +584,43 @@ export function HomeScreen() {
   const deviceAccentColor = useMemo(() => getDeviceAccentColor(effectiveDevice), [effectiveDevice]);
   const cells = useMemo(() => (effectiveDevice ? buildBoardCells(effectiveDevice) : []), [effectiveDevice]);
 
-  if (isLoading) {
+  async function handleManualRefresh() {
+    if (manualRefreshInFlight) {
+      return;
+    }
+
+    setManualRefreshInFlight(true);
+    try {
+      const refreshResult = await refreshDevices({
+        probeDeviceId: activeDevice?.id ?? null,
+      });
+
+      if (
+        refreshResult.probeDevice?.recoveryState === "ready" &&
+        refreshResult.probeDevice.isLive &&
+        !refreshResult.markedConnectivityIssue
+      ) {
+        try {
+          await refreshRuntimeSnapshot(refreshResult.probeDevice.id, {
+            errorMessage: "The board did not answer the refresh check in time.",
+            timeoutMs: 6_500,
+          });
+        } catch (error) {
+          console.warn("Failed to refresh device reachability from home", error);
+        }
+      }
+    } finally {
+      setManualRefreshInFlight(false);
+    }
+  }
+
+  if (isLoading || (!effectiveDevice && isOnboardingLoading)) {
     return (
-      <ScreenScrollView bottomInset={theme.layout.tabScrollBottom} contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
+      <ScreenScrollView
+        bottomInset={theme.layout.tabScrollBottom}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+        refreshControl={<RefreshControl onRefresh={() => void handleManualRefresh()} refreshing={manualRefreshInFlight} tintColor={theme.colors.textSecondary} />}
+      >
         <View style={{ alignItems: "center", gap: 14, paddingVertical: 36 }}>
           <ActivityIndicator color={theme.colors.textPrimary} />
           <Text
@@ -555,7 +631,7 @@ export function HomeScreen() {
               lineHeight: theme.typography.body.lineHeight,
             }}
           >
-            Loading your board…
+            {effectiveDevice ? "Loading your board…" : "Checking your AddOne…"}
           </Text>
         </View>
       </ScreenScrollView>
@@ -568,37 +644,111 @@ export function HomeScreen() {
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         contentMaxWidth={theme.layout.narrowContentWidth}
+        refreshControl={<RefreshControl onRefresh={() => void handleManualRefresh()} refreshing={manualRefreshInFlight} tintColor={theme.colors.textSecondary} />}
       >
-        <View style={{ alignItems: "center", gap: 18, paddingVertical: 24 }}>
-          <Pressable
-            onPress={() => router.push("/onboarding")}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 132,
-              height: 132,
-              borderRadius: theme.radius.sheet,
-              borderCurve: "continuous",
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              backgroundColor: withAlpha(theme.colors.bgBase, 0.72),
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.22)",
-            }}
-          >
-            <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
-          </Pressable>
+        <View style={{ alignItems: "center", gap: 28, paddingVertical: 24 }}>
+          {pendingSetupCopy ? (
+            <GlassCard style={{ gap: 18, paddingHorizontal: 20, paddingVertical: 22 }}>
+              <View style={{ alignItems: "center", gap: 14 }}>
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    borderWidth: 1,
+                    borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                    backgroundColor: withAlpha(theme.colors.bgBase, 0.62),
+                  }}
+                >
+                  <ActivityIndicator color={theme.colors.textPrimary} />
+                </View>
+                <View style={{ alignItems: "center", gap: 8 }}>
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.title.fontFamily,
+                      fontSize: theme.typography.title.fontSize,
+                      lineHeight: theme.typography.title.lineHeight,
+                      textAlign: "center",
+                    }}
+                  >
+                    {pendingSetupCopy.title}
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                      textAlign: "center",
+                    }}
+                  >
+                    {pendingSetupCopy.body}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => router.push("/onboarding")}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: 56,
+                  borderRadius: theme.radius.card,
+                  borderCurve: "continuous",
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.16 : 0.12),
+                  backgroundColor: pressed ? withAlpha(theme.colors.textPrimary, 0.92) : theme.colors.textPrimary,
+                  transform: [{ scale: pressed ? 0.988 : 1 }],
+                })}
+              >
+                <Text
+                  style={{
+                    color: theme.colors.bgBase,
+                    fontFamily: theme.typography.label.fontFamily,
+                    fontSize: theme.typography.label.fontSize,
+                    lineHeight: theme.typography.label.lineHeight,
+                  }}
+                >
+                  {pendingSetupCopy.buttonLabel}
+                </Text>
+              </Pressable>
+            </GlassCard>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => router.push("/onboarding?auto=1")}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 132,
+                  height: 132,
+                  borderRadius: theme.radius.sheet,
+                  borderCurve: "continuous",
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.18 : 0.14),
+                  backgroundColor: withAlpha(theme.colors.bgBase, pressed ? 0.78 : 0.72),
+                  boxShadow: `0px 20px 40px rgba(0, 0, 0, 0.22), 0px 0px 42px ${withAlpha(theme.colors.textPrimary, 0.075)}`,
+                  transform: [{ scale: pressed ? 0.988 : 1 }],
+                })}
+              >
+                <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
+              </Pressable>
 
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-              textAlign: "center",
-            }}
-          >
-            Connect your AddOne
-          </Text>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.title.fontFamily,
+                  fontSize: theme.typography.title.fontSize,
+                  lineHeight: theme.typography.title.lineHeight,
+                  textAlign: "center",
+                }}
+              >
+                Connect your AddOne
+              </Text>
+            </>
+          )}
         </View>
       </ScreenScrollView>
     );
@@ -618,13 +768,22 @@ export function HomeScreen() {
   const dividerColor = withAlpha(theme.colors.textPrimary, 0.08);
   const insight = boardInsight(device, stats, currentWeekCompleted);
   const headerStatusState = headerConnectionState(device);
-  const headerStatusColor = headerStatusState === "verifying-board" ? theme.colors.accentAmber : theme.colors.accentSuccess;
+  const headerStatusColor =
+    headerStatusState === "online"
+      ? theme.colors.accentSuccess
+      : headerStatusState === "checking-connection" || headerStatusState === "offline"
+        ? theme.colors.textMuted
+        : theme.colors.accentAmber;
   const headerContextMessage =
     headerStatusState === "verifying-board"
       ? "Verifying the current board…"
+      : headerStatusState === "recovering"
+        ? "Recovery is finishing. Controls come back after the restored board syncs."
+        : headerStatusState === "needs-recovery"
+          ? "This board needs recovery before it can be controlled."
       : headerStatusState === "offline"
           ? "Board looks offline. Open Recovery to reconnect Wi-Fi."
-          : homeMinimumGoalLabel(minimumGoal);
+          : homeMinimumGoalLabel(device.dailyMinimum);
   const headerContextKey = `${headerStatusState}:${headerContextMessage ?? "empty"}`;
 
   return (
@@ -632,6 +791,7 @@ export function HomeScreen() {
       bottomInset={homeBottomInset}
       contentContainerStyle={{ flexGrow: 1 }}
       contentMaxWidth={theme.layout.maxContentWidth}
+      refreshControl={<RefreshControl onRefresh={() => void handleManualRefresh()} refreshing={manualRefreshInFlight} tintColor={theme.colors.textSecondary} />}
     >
       <View style={{ minHeight: contentMinHeight, gap: 16 }}>
         <View style={{ gap: 8 }}>
@@ -670,7 +830,7 @@ export function HomeScreen() {
                 justifyContent: "flex-end",
               }}
             >
-              {headerStatusState === "offline" ? (
+              {headerStatusState === "offline" || headerStatusState === "needs-recovery" || headerStatusState === "recovering" ? (
                 <HeaderChip icon="wifi-outline" label="Recovery" onPress={() => router.push(deviceRecoveryPath(device.id))} />
               ) : headerStatusState === "checking-connection" ? (
                 <HeaderChip color={theme.colors.accentSuccess} pulse />
@@ -726,9 +886,9 @@ export function HomeScreen() {
           <View style={{ alignItems: "stretch", flexDirection: "row" }}>
             <MetricTile label="This week" value={`${currentWeekCompleted}/${device.weeklyTarget}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
-            <MetricTile label="Weeks" value={`${stats.successfulWeeks}`} />
+            <MetricTile label="Weeks" value={`${device.successfulWeeksTotal}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
-            <MetricTile label="Recorded" value={`${stats.completed}d`} />
+            <MetricTile label="Recorded" value={`${device.recordedDaysTotal}d`} />
           </View>
         </View>
 

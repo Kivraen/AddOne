@@ -2,59 +2,94 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { ApProvisioningDraft } from "@/types/addone";
-
-const EMPTY_AP_PROVISIONING_DRAFT: ApProvisioningDraft = {
-  wifiPassword: "",
-  wifiSsid: "",
-};
+import { DeviceRecoveryState, OnboardingRestoreSource } from "@/types/addone";
 
 interface AppUiState {
   activeDeviceId: string | null;
-  activeApProvisioningDraft: ApProvisioningDraft;
   activeOnboardingClaimToken: string | null;
+  activeOnboardingRestoreSource: OnboardingRestoreSource | null;
   activeOnboardingSessionId: string | null;
+  connectivityIssueByDevice: Record<
+    string,
+    | {
+        lastSeenAt: string | null;
+        lastSnapshotAt: string | null;
+        lastSyncAt: string | null;
+        markedAt: number;
+      }
+    | undefined
+  >;
   hasHydrated: boolean;
   pendingBoardEditorOpen: boolean;
   pendingTodayStateByDevice: Record<string, boolean | undefined>;
-  clearApProvisioningDraft: () => void;
+  recoveryNeededRevisionByDevice: Record<string, number | undefined>;
   clearBoardEditorOpen: () => void;
+  clearConnectivityIssue: (deviceId: string) => void;
   clearOnboardingSession: () => void;
   clearPendingTodayState: (deviceId: string) => void;
+  clearRuntimeConflictRecovery: (deviceId: string) => void;
+  markConnectivityIssue: (
+    deviceId: string,
+    params: {
+      lastSeenAt: string | null;
+      lastSnapshotAt: string | null;
+      lastSyncAt: string | null;
+    },
+  ) => void;
+  markRuntimeConflictRecovery: (deviceId: string, params: { recoveryState?: DeviceRecoveryState; runtimeRevision: number }) => void;
   requestBoardEditorOpen: () => void;
-  setActiveApProvisioningDraft: (patch: Partial<ApProvisioningDraft>) => void;
+  setActiveOnboardingRestoreSource: (source: OnboardingRestoreSource | null) => void;
   setActiveOnboardingSession: (params: { claimToken?: string | null; sessionId: string | null }) => void;
   setActiveDeviceId: (deviceId: string | null) => void;
   setPendingTodayState: (deviceId: string, isDone: boolean) => void;
 }
 
 const PERSISTED_APP_UI_STATE = {
-  activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
   activeDeviceId: null,
   activeOnboardingClaimToken: null,
+  activeOnboardingRestoreSource: null,
   activeOnboardingSessionId: null,
+  recoveryNeededRevisionByDevice: {} as Record<string, number | undefined>,
 };
 
 export const useAppUiStore = create<AppUiState>()(
   persist(
     (set) => ({
       ...PERSISTED_APP_UI_STATE,
+      connectivityIssueByDevice: {},
       hasHydrated: false,
       pendingBoardEditorOpen: false,
       pendingTodayStateByDevice: {},
-      clearApProvisioningDraft: () =>
-        set({
-          activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
-        }),
       clearBoardEditorOpen: () =>
         set({
           pendingBoardEditorOpen: false,
         }),
+      clearConnectivityIssue: (deviceId) =>
+        set((state) => {
+          if (!(deviceId in state.connectivityIssueByDevice)) {
+            return state;
+          }
+
+          const next = { ...state.connectivityIssueByDevice };
+          delete next[deviceId];
+          return { connectivityIssueByDevice: next };
+        }),
       clearOnboardingSession: () =>
-        set({
-          activeApProvisioningDraft: EMPTY_AP_PROVISIONING_DRAFT,
-          activeOnboardingClaimToken: null,
-          activeOnboardingSessionId: null,
+        set((state) => {
+          const onboardingAlreadyClear =
+            state.activeOnboardingClaimToken === null &&
+            state.activeOnboardingRestoreSource === null &&
+            state.activeOnboardingSessionId === null;
+
+          if (onboardingAlreadyClear) {
+            return state;
+          }
+
+          return {
+            activeOnboardingClaimToken: null,
+            activeOnboardingRestoreSource: null,
+            activeOnboardingSessionId: null,
+          };
         }),
       clearPendingTodayState: (deviceId) =>
         set((state) => {
@@ -62,21 +97,66 @@ export const useAppUiStore = create<AppUiState>()(
           delete next[deviceId];
           return { pendingTodayStateByDevice: next };
         }),
+      clearRuntimeConflictRecovery: (deviceId) =>
+        set((state) => {
+          if (!(deviceId in state.recoveryNeededRevisionByDevice)) {
+            return state;
+          }
+
+          const next = { ...state.recoveryNeededRevisionByDevice };
+          delete next[deviceId];
+          return { recoveryNeededRevisionByDevice: next };
+        }),
+      markConnectivityIssue: (deviceId, params) =>
+        set((state) => ({
+          connectivityIssueByDevice: {
+            ...state.connectivityIssueByDevice,
+            [deviceId]: {
+              lastSeenAt: params.lastSeenAt,
+              lastSnapshotAt: params.lastSnapshotAt,
+              lastSyncAt: params.lastSyncAt,
+              markedAt: Date.now(),
+            },
+          },
+        })),
+      markRuntimeConflictRecovery: (deviceId, params) =>
+        set((state) => {
+          const nextRevision = Math.max(0, params.runtimeRevision);
+          if (state.recoveryNeededRevisionByDevice[deviceId] === nextRevision) {
+            return state;
+          }
+
+          return {
+            recoveryNeededRevisionByDevice: {
+              ...state.recoveryNeededRevisionByDevice,
+              [deviceId]: nextRevision,
+            },
+          };
+        }),
       requestBoardEditorOpen: () =>
         set({
           pendingBoardEditorOpen: true,
         }),
-      setActiveApProvisioningDraft: (patch) =>
-        set((state) => ({
-          activeApProvisioningDraft: {
-            ...state.activeApProvisioningDraft,
-            ...patch,
-          },
-        })),
+      setActiveOnboardingRestoreSource: (source) =>
+        set((state) => {
+          if (state.activeOnboardingRestoreSource === source) {
+            return state;
+          }
+
+          return {
+            activeOnboardingRestoreSource: source,
+          };
+        }),
       setActiveOnboardingSession: ({ claimToken = null, sessionId }) =>
-        set({
-          activeOnboardingClaimToken: claimToken,
-          activeOnboardingSessionId: sessionId,
+        set((state) => {
+          if (state.activeOnboardingClaimToken === claimToken && state.activeOnboardingSessionId === sessionId) {
+            return state;
+          }
+
+          return {
+            activeOnboardingClaimToken: claimToken,
+            activeOnboardingSessionId: sessionId,
+          };
         }),
       setActiveDeviceId: (deviceId) => set({ activeDeviceId: deviceId }),
       setPendingTodayState: (deviceId, isDone) =>
@@ -93,10 +173,11 @@ export const useAppUiStore = create<AppUiState>()(
       },
       name: "addone-app-ui",
       partialize: (state) => ({
-        activeApProvisioningDraft: state.activeApProvisioningDraft,
         activeDeviceId: state.activeDeviceId,
         activeOnboardingClaimToken: state.activeOnboardingClaimToken,
+        activeOnboardingRestoreSource: state.activeOnboardingRestoreSource,
         activeOnboardingSessionId: state.activeOnboardingSessionId,
+        recoveryNeededRevisionByDevice: state.recoveryNeededRevisionByDevice,
       }),
       storage: createJSONStorage(() => AsyncStorage),
     },
@@ -106,9 +187,11 @@ export const useAppUiStore = create<AppUiState>()(
 export async function resetPersistedAppUiState() {
   useAppUiStore.setState({
     ...PERSISTED_APP_UI_STATE,
+    connectivityIssueByDevice: {},
     hasHydrated: true,
     pendingBoardEditorOpen: false,
     pendingTodayStateByDevice: {},
+    recoveryNeededRevisionByDevice: {},
   });
   await useAppUiStore.persist.clearStorage();
 }

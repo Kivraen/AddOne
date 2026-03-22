@@ -75,7 +75,15 @@ String generateDeviceAuthToken() {
 
 void CloudClient::begin(const DeviceIdentity& identity) {
   identity_ = &identity;
-  ensureDeviceAuthToken_();
+}
+
+void CloudClient::clearPersistedDeviceAuthToken() {
+  deviceAuthToken_ = "";
+
+  Preferences prefs;
+  prefs.begin(kCloudPrefsNamespace, false);
+  prefs.remove(kDeviceAuthTokenKey);
+  prefs.end();
 }
 
 const String& CloudClient::deviceAuthToken() {
@@ -167,7 +175,8 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
     return false;
   }
 
-  DynamicJsonDocument doc(2048 + (maxCommands * 384));
+  const size_t responseCapacity = response.length() * 2U + 2048U;
+  DynamicJsonDocument doc(responseCapacity < 12288U ? 12288U : responseCapacity);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
     Serial.printf("Failed to parse command payload: %s\n", error.c_str());
@@ -249,6 +258,24 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
   return true;
 }
 
+bool CloudClient::reportFactoryReset(uint32_t resetEpoch) {
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_reset_epoch\":";
+  payload += String(resetEpoch);
+  payload += "}";
+
+  String response;
+  return postRpc_("report_device_factory_reset", payload, response);
+}
+
 bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& claim, uint32_t resetEpoch) {
   if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
     return false;
@@ -274,7 +301,29 @@ bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& c
   payload += "}";
 
   String response;
-  const bool ok = postRpc_("redeem_device_onboarding_claim", payload, response);
+  bool ok = postRpc_("redeem_device_onboarding_claim", payload, response);
+  if (!ok &&
+      response.indexOf("redeem_device_onboarding_claim") >= 0 &&
+      response.indexOf("p_reset_epoch") >= 0 &&
+      response.indexOf("schema cache") >= 0) {
+    Serial.println("Claim RPC missing p_reset_epoch on backend; retrying legacy signature.");
+
+    String legacyPayload = "{";
+    legacyPayload += "\"p_claim_token\":\"";
+    legacyPayload += escapeJson(String(claim.claimToken));
+    legacyPayload += "\",\"p_hardware_uid\":\"";
+    legacyPayload += escapeJson(identity_->hardwareUid());
+    legacyPayload += "\",\"p_hardware_profile\":\"";
+    legacyPayload += escapeJson(claim.hardwareProfileHint[0] == '\0' ? String(Config::kHardwareProfile) : String(claim.hardwareProfileHint));
+    legacyPayload += "\",\"p_firmware_version\":\"";
+    legacyPayload += escapeJson(Config::kFirmwareVersion);
+    legacyPayload += "\",\"p_device_auth_token\":\"";
+    legacyPayload += escapeJson(deviceAuthToken_);
+    legacyPayload += "\"}";
+
+    ok = postRpc_("redeem_device_onboarding_claim", legacyPayload, response);
+  }
+
   if (ok) {
     Serial.printf("Cloud claim redeemed for session %s\n", claim.onboardingSessionId);
   }
@@ -362,6 +411,26 @@ bool CloudClient::ensureDeviceAuthToken_() {
   return !deviceAuthToken_.isEmpty();
 }
 
+bool CloudClient::registerDeviceAuthToken_() {
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_hardware_profile\":\"";
+  payload += escapeJson(Config::kHardwareProfile);
+  payload += "\",\"p_firmware_version\":\"";
+  payload += escapeJson(Config::kFirmwareVersion);
+  payload += "\"}";
+
+  String response;
+  return postRpc_("register_factory_device", payload, response);
+}
+
 bool CloudClient::postRpc_(const char* rpcName, const String& payload, String& responseBody) {
   if (!rpcName || !identity_ || !isConfigured()) {
     return false;
@@ -388,6 +457,41 @@ bool CloudClient::postRpc_(const char* rpcName, const String& payload, String& r
   Serial.printf("Cloud RPC %s -> HTTP %d\n", rpcName, code);
   if (responseBody.length() > 0) {
     Serial.printf("Cloud RPC %s response: %s\n", rpcName, responseBody.c_str());
+  }
+
+  const bool authFailed =
+      code >= 400 &&
+      strcmp(rpcName, "register_factory_device") != 0 &&
+      (responseBody.indexOf("Device authentication failed.") >= 0 ||
+       responseBody.indexOf("Device auth token is not registered.") >= 0);
+  if (authFailed) {
+    Serial.println("Cloud RPC auth failed; re-registering device token.");
+    if (registerDeviceAuthToken_()) {
+      WiFiClientSecure retryClient;
+      retryClient.setInsecure();
+
+      HTTPClient retryHttp;
+      if (!retryHttp.begin(retryClient, buildRpcUrl(rpcName))) {
+        Serial.printf("Cloud RPC retry begin failed: %s\n", rpcName);
+        return false;
+      }
+
+      retryHttp.setTimeout(8000);
+      retryHttp.addHeader("Content-Type", "application/json");
+      retryHttp.addHeader("apikey", CloudConfig::kSupabaseAnonKey);
+      retryHttp.addHeader("Authorization", String("Bearer ") + CloudConfig::kSupabaseAnonKey);
+
+      const int retryCode = retryHttp.POST(payload);
+      responseBody = retryHttp.getString();
+      retryHttp.end();
+
+      Serial.printf("Cloud RPC %s retry -> HTTP %d\n", rpcName, retryCode);
+      if (responseBody.length() > 0) {
+        Serial.printf("Cloud RPC %s retry response: %s\n", rpcName, responseBody.c_str());
+      }
+
+      return retryCode >= 200 && retryCode < 300;
+    }
   }
 
   return code >= 200 && code < 300;

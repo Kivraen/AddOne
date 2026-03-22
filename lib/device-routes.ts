@@ -18,3 +18,7 @@ export function deviceRecoveryPath(deviceId: string) {
 export function deviceHistoryPath(deviceId: string) {
   return `/devices/${deviceId}/history` as Href;
 }
+
+export function deviceResetHistoryPath(deviceId: string) {
+  return `/devices/${deviceId}/settings/reset-history` as Href;
+}

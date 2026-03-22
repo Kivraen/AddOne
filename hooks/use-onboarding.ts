@@ -21,6 +21,37 @@ const ONBOARDING_POLL_INTERVAL_MS = 3000;
 const DEMO_ONBOARDING_CLAIM_TOKEN = "demo-claim-token";
 const DEMO_ONBOARDING_SESSION_ID = "demo-onboarding-session";
 
+function isCancelledErrorLike(error: unknown) {
+  if (error instanceof Error && error.name === "CancelledError") {
+    return true;
+  }
+
+  if (typeof error === "object" && error !== null && "name" in error && (error as { name?: unknown }).name === "CancelledError") {
+    return true;
+  }
+
+  return typeof error === "string" && error.includes("CancelledError");
+}
+
+function ignoreCancelledError(task: () => Promise<unknown>, label: string) {
+  try {
+    const promise = task();
+    void promise.catch((error) => {
+      if (isCancelledErrorLike(error)) {
+        return;
+      }
+
+      console.warn(`[use-onboarding] ${label} failed`, error);
+    });
+  } catch (error) {
+    if (isCancelledErrorLike(error)) {
+      return;
+    }
+
+    console.warn(`[use-onboarding] ${label} failed`, error);
+  }
+}
+
 function buildDemoSession(input: {
   claimToken?: string | null;
   claimedAt?: string | null;
@@ -48,9 +79,18 @@ function buildDemoSession(input: {
   };
 }
 
-export function useOnboarding() {
+export function useOnboarding(options?: {
+  autoResumeLatestActiveSession?: boolean;
+  discardLocalSessionWhenExpiresSoonMs?: number | null;
+  persistLocalSession?: boolean;
+  resumeStoredLocalSession?: boolean;
+}) {
   const { mode, status, user } = useAuth();
   const queryClient = useQueryClient();
+  const autoResumeLatestActiveSession = options?.autoResumeLatestActiveSession ?? true;
+  const discardLocalSessionWhenExpiresSoonMs = options?.discardLocalSessionWhenExpiresSoonMs ?? null;
+  const persistLocalSession = options?.persistLocalSession ?? true;
+  const resumeStoredLocalSession = options?.resumeStoredLocalSession ?? true;
   const demoDeviceId = useAddOneStore((state) => state.activeDeviceId);
   const activeOnboardingClaimToken = useAppUiStore((state) => state.activeOnboardingClaimToken);
   const activeOnboardingSessionId = useAppUiStore((state) => state.activeOnboardingSessionId);
@@ -58,23 +98,34 @@ export function useOnboarding() {
   const setActiveDeviceId = useAppUiStore((state) => state.setActiveDeviceId);
   const setActiveOnboardingSession = useAppUiStore((state) => state.setActiveOnboardingSession);
   const [demoSession, setDemoSession] = useState<DeviceOnboardingSession | null>(null);
+  const [localCloudClaimToken, setLocalCloudClaimToken] = useState<string | null>(null);
+  const [localCloudSessionId, setLocalCloudSessionId] = useState<string | null>(null);
 
   const latestActiveSessionQuery = useQuery({
-    enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
+    enabled: autoResumeLatestActiveSession && mode === "cloud" && status === "signedIn" && !!user?.id,
     queryFn: () => fetchLatestActiveDeviceOnboardingSession(user!.id),
     queryKey: addOneQueryKeys.activeOnboardingSession(user?.id),
   });
 
-  const sessionId = mode === "demo" ? demoSession?.id ?? null : activeOnboardingSessionId ?? latestActiveSessionQuery.data?.id ?? null;
+  const sessionId =
+    mode === "demo"
+      ? demoSession?.id ?? null
+      : localCloudSessionId ??
+        (resumeStoredLocalSession ? activeOnboardingSessionId : null) ??
+        (autoResumeLatestActiveSession ? latestActiveSessionQuery.data?.id ?? null : null);
 
   useEffect(() => {
+    if (!persistLocalSession) {
+      return;
+    }
+
     if (!activeOnboardingSessionId && latestActiveSessionQuery.data?.id) {
       setActiveOnboardingSession({
         claimToken: null,
         sessionId: latestActiveSessionQuery.data.id,
       });
     }
-  }, [activeOnboardingSessionId, latestActiveSessionQuery.data?.id, setActiveOnboardingSession]);
+  }, [activeOnboardingSessionId, latestActiveSessionQuery.data?.id, persistLocalSession, setActiveOnboardingSession]);
 
   const onboardingSessionQuery = useQuery({
     enabled: mode === "cloud" && status === "signedIn" && !!sessionId,
@@ -95,6 +146,54 @@ export function useOnboarding() {
     mode === "demo"
       ? demoSession
       : onboardingSessionQuery.data ?? (sessionId === latestActiveSessionQuery.data?.id ? latestActiveSessionQuery.data : null);
+
+  useEffect(() => {
+    if (mode !== "cloud" || !activeOnboardingSessionId || !session || session.id !== activeOnboardingSessionId) {
+      return;
+    }
+
+    const shouldClearTerminalSession =
+      session.isExpired ||
+      session.status === "expired" ||
+      session.status === "cancelled" ||
+      session.status === "failed";
+    if (shouldClearTerminalSession) {
+      queryClient.setQueryData(addOneQueryKeys.activeOnboardingSession(user?.id), null);
+      setLocalCloudClaimToken(null);
+      setLocalCloudSessionId(null);
+      clearOnboardingSession();
+      return;
+    }
+  }, [activeOnboardingSessionId, clearOnboardingSession, mode, queryClient, session, user?.id]);
+
+  useEffect(() => {
+    if (
+      mode !== "cloud" ||
+      !activeOnboardingSessionId ||
+      !session ||
+      session.id !== activeOnboardingSessionId ||
+      session.isExpired ||
+      session.status === "claimed" ||
+      !discardLocalSessionWhenExpiresSoonMs
+    ) {
+      return;
+    }
+
+    const remainingMs = new Date(session.expiresAt).getTime() - Date.now();
+    if (!Number.isFinite(remainingMs) || remainingMs > discardLocalSessionWhenExpiresSoonMs) {
+      return;
+    }
+
+    setLocalCloudClaimToken(null);
+    setLocalCloudSessionId(null);
+    clearOnboardingSession();
+  }, [
+    activeOnboardingSessionId,
+    clearOnboardingSession,
+    discardLocalSessionWhenExpiresSoonMs,
+    mode,
+    session,
+  ]);
 
   const restoreCandidatesQuery = useQuery({
     enabled: mode === "cloud" && status === "signedIn" && session?.status === "claimed" && !!session?.deviceId,
@@ -131,8 +230,18 @@ export function useOnboarding() {
     }
 
     setActiveDeviceId(session.deviceId);
-    void queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) });
-    void queryClient.invalidateQueries({ queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) });
+    ignoreCancelledError(
+      () => queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) }, { cancelRefetch: false }),
+      "invalidate devices",
+    );
+    ignoreCancelledError(
+      () =>
+        queryClient.invalidateQueries(
+          { queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) },
+          { cancelRefetch: false },
+        ),
+      "invalidate active onboarding session",
+    );
   }, [queryClient, session?.deviceId, session?.status, setActiveDeviceId, user?.id]);
 
   const createSessionMutation = useMutation({
@@ -152,12 +261,23 @@ export function useOnboarding() {
         return;
       }
 
-      setActiveOnboardingSession({
-        claimToken: nextSession.claimToken ?? null,
-        sessionId: nextSession.id,
-      });
+      setLocalCloudClaimToken(nextSession.claimToken ?? null);
+      setLocalCloudSessionId(nextSession.id);
+      if (persistLocalSession) {
+        setActiveOnboardingSession({
+          claimToken: nextSession.claimToken ?? null,
+          sessionId: nextSession.id,
+        });
+      }
       queryClient.setQueryData(addOneQueryKeys.onboardingSession(nextSession.id), nextSession);
-      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) });
+      ignoreCancelledError(
+        () =>
+          queryClient.invalidateQueries(
+            { queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) },
+            { cancelRefetch: false },
+          ),
+        "invalidate active onboarding session",
+      );
     },
   });
 
@@ -206,10 +326,19 @@ export function useOnboarding() {
         return;
       }
 
+      setLocalCloudClaimToken(null);
+      setLocalCloudSessionId(null);
       queryClient.setQueryData(addOneQueryKeys.onboardingSession(nextSession.id), nextSession);
       queryClient.setQueryData(addOneQueryKeys.activeOnboardingSession(user?.id), null);
       clearOnboardingSession();
-      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) });
+      ignoreCancelledError(
+        () =>
+          queryClient.invalidateQueries(
+            { queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) },
+            { cancelRefetch: false },
+          ),
+        "invalidate active onboarding session",
+      );
     },
   });
 
@@ -239,8 +368,18 @@ export function useOnboarding() {
         setActiveDeviceId(nextSession.deviceId);
       }
 
-      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) });
-      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) });
+      ignoreCancelledError(
+        () =>
+          queryClient.invalidateQueries(
+            { queryKey: addOneQueryKeys.activeOnboardingSession(user?.id) },
+            { cancelRefetch: false },
+          ),
+        "invalidate active onboarding session",
+      );
+      ignoreCancelledError(
+        () => queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) }, { cancelRefetch: false }),
+        "invalidate devices",
+      );
     },
   });
 
@@ -261,15 +400,30 @@ export function useOnboarding() {
         return;
       }
 
-      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) });
-      await queryClient.invalidateQueries({ queryKey: addOneQueryKeys.restoreCandidates(variables.deviceId, user?.id) });
+      ignoreCancelledError(
+        () => queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user?.id) }, { cancelRefetch: false }),
+        "invalidate devices",
+      );
+      ignoreCancelledError(
+        () =>
+          queryClient.invalidateQueries(
+            { queryKey: addOneQueryKeys.restoreCandidates(variables.deviceId, user?.id) },
+            { cancelRefetch: false },
+          ),
+        "invalidate restore candidates",
+      );
     },
   });
 
   return {
     cancelSession: cancelMutation.mutateAsync,
-    claimToken: mode === "demo" ? demoSession?.claimToken ?? null : activeOnboardingClaimToken,
+    claimToken:
+      mode === "demo"
+        ? demoSession?.claimToken ?? null
+        : localCloudClaimToken ?? (resumeStoredLocalSession ? activeOnboardingClaimToken : null),
     clearLocalOnboardingSession: () => {
+      setLocalCloudClaimToken(null);
+      setLocalCloudSessionId(null);
       clearOnboardingSession();
       setDemoSession(null);
     },

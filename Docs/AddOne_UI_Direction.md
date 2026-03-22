@@ -13,6 +13,7 @@ This file answers the harder question: what good AddOne UI should feel like.
 Use these current surfaces as the strongest visual anchors for AddOne:
 
 - [components/app/home-screen.tsx](/Users/viktor/Desktop/DevProjects/Codex/AddOne/components/app/home-screen.tsx)
+- [app/(app)/onboarding/index.tsx](/Users/viktor/Desktop/DevProjects/Codex/AddOne/app/(app)/onboarding/index.tsx)
 - [components/app/friends-tab-content.tsx](/Users/viktor/Desktop/DevProjects/Codex/AddOne/components/app/friends-tab-content.tsx)
 - [components/settings/device-settings-scaffold.tsx](/Users/viktor/Desktop/DevProjects/Codex/AddOne/components/settings/device-settings-scaffold.tsx)
 - [components/app/profile-tab-content.tsx](/Users/viktor/Desktop/DevProjects/Codex/AddOne/components/app/profile-tab-content.tsx)
@@ -113,11 +114,15 @@ Do not use outdated or generic web-style UI just because it is easy.
 - Related things sit close together
 - Unrelated things get room
 - If a screen feels confusing, spacing is often part of the problem
+- AddOne should not crowd calm screens just because there is room to fit more on them
+- If a screen has only one title, one instruction block, and one action, give each of those elements enough air to stand on its own
 
 Do not crowd:
 - field label + field + helper text
 - title + body + action
 - lists with dividers
+- instruction steps + primary button
+- top-page identity + current-step content
 
 ### Typography
 
@@ -125,6 +130,9 @@ Do not crowd:
 - Headings should be short and readable
 - Body copy should stay compact
 - Helper copy should be visually quiet
+- Page identity and step identity must not compete with each other
+- The route or product title should usually be smaller and quieter than the current step title
+- If two titles feel equal in weight, the hierarchy is wrong
 
 ### Icons and controls
 
@@ -191,9 +199,31 @@ Prefer:
 - one decision per step
 - one action per step
 - obvious forward motion
+- a smaller page header and a larger current-step title
+- roomy cards with clear vertical spacing between title, instructions, and action
+- numbered instruction steps when the user needs to leave the app, open Settings, or complete a short physical sequence
+- one short CTA label that describes the next transition, for example `Next step`
 
 Avoid:
 - one screen that asks the user to join Wi-Fi, choose Wi-Fi, enter credentials, and understand status all at once
+- duplicate hierarchy where the page title and step title feel equally important
+- badges, helper cards, or footer text that repeat what the main instruction already says
+- squeezing a short onboarding screen into a dense card just because it technically fits
+
+### Instructional Steps
+
+When a screen is mostly giving directions, the instructions should be formatted for scanning first and reading second.
+
+Prefer:
+- 2 to 4 numbered steps
+- direct verbs such as `Open`, `Join`, `Come back`, `Tap`
+- one primary button underneath the steps
+- low-priority metadata such as expiry or timeout information below the card
+
+Avoid:
+- paragraph instructions when the task is sequential
+- explanatory body copy above and below the same instruction set
+- status copy that does not change what the user should do next
 
 ### Settings
 
@@ -224,9 +254,9 @@ Avoid:
 
 ## Known Bad Direction
 
-The current onboarding flow is the clearest negative example.
+The earlier onboarding direction is the clearest negative example.
 
-Why it is weak:
+Why it was weak:
 
 - too much text
 - too many responsibilities per page
@@ -238,6 +268,8 @@ Specific anti-patterns to avoid:
 - a “Begin setup” page that mostly explains the obvious instead of moving forward
 - a Wi-Fi page that combines AP-join instructions, home-network selection, and credential entry without enough step separation
 - screens that require reading several paragraphs to understand the next move
+- a step card where the title, instruction block, button, and footer are packed too tightly to feel calm
+- a route header and step header that read like two competing page titles
 
 ## Implementation Rules For UI Agents
 
@@ -249,6 +281,9 @@ When changing UI:
 - make the primary action unmistakable
 - verify spacing and coherence after the change, not only the main element itself
 - if a control is hard to see, fix contrast, scale, hierarchy, or glow before adding more explanatory copy
+- if the screen is instructional, ask whether the user could follow it by scanning three short lines instead of reading a paragraph
+- if the page header and current step are both large, reduce the page header before reducing the step title
+- if a simple step feels cheap or cramped, increase spacing before adding decorative treatment
 
 If there are multiple valid options, choose the one that is:
 

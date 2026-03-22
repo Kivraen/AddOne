@@ -19,7 +19,8 @@ import {
 import { theme } from "@/constants/theme";
 import { useDeviceActions } from "@/hooks/use-devices";
 import { withAlpha } from "@/lib/color";
-import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
+import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
+import { deviceHistoryPath, deviceRecoveryPath, deviceResetHistoryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
 
 const OVERVIEW_SECTION_GAP = 12;
 
@@ -70,12 +71,21 @@ function DraftActionButton({
 export default function DeviceSettingsOverviewRoute() {
   const device = useRoutedDevice();
   const router = useRouter();
-  const { isStartingFactoryReset, requestFactoryReset } = useDeviceActions();
+  const {
+    factoryResetAndRemove,
+    isRemovingDeviceFromApp,
+    isResettingHistory,
+  } = useDeviceActions();
+  const controlReady = isDeviceControlReady(device);
 
-  function handleFactoryReset() {
+  function handleResetHistory() {
+    router.push(deviceResetHistoryPath(device.id));
+  }
+
+  function handleFactoryResetAndRemove() {
     Alert.alert(
-      "Factory reset device?",
-      "This wipes the board's local setup and Wi‑Fi so it behaves like a new unit again. Wi‑Fi recovery is lighter and keeps your current board attached.",
+      "Factory reset and remove?",
+      "This is the transfer flow. The board wipes its local setup, leaves this app, and will need to be added again by the next owner.",
       [
         {
           style: "cancel",
@@ -83,19 +93,19 @@ export default function DeviceSettingsOverviewRoute() {
         },
         {
           style: "destructive",
-          text: "Factory reset",
+          text: "Reset and remove",
           onPress: () => {
-            void requestFactoryReset(device.id).then(
+            void factoryResetAndRemove(device.id).then(
               () => {
                 Alert.alert(
-                  "Factory reset started",
-                  "The board will restart into clean setup mode. When it comes back, you can onboard it again and choose restore or start fresh.",
+                  "Device removed",
+                  "The board is wiping itself and has been removed from this app.",
                 );
               },
               (error: unknown) => {
                 Alert.alert(
-                  "Factory reset failed",
-                  error instanceof Error ? error.message : "The board could not start factory reset.",
+                  "Remove failed",
+                  error instanceof Error ? error.message : "The board could not be removed from this app.",
                 );
               },
             );
@@ -187,17 +197,25 @@ export default function DeviceSettingsOverviewRoute() {
             <SettingsListSurface>
               <SettingsRow
                 detail={
-                  device.isLive
-                    ? "Use recovery Wi-Fi when reconnection is needed"
-                    : "Reconnect this board with recovery Wi-Fi"
+                  needsDeviceRecovery(device)
+                    ? "This board was reset or lost its state. Reconnect it before using controls."
+                    : isDeviceRecovering(device)
+                      ? "Recovery is still finishing. Keep the board on Wi‑Fi until it settles."
+                      : device.isLive
+                        ? "Use recovery Wi‑Fi when reconnection is needed"
+                        : "Reconnect this board with recovery Wi‑Fi"
                 }
                 onPress={() => router.push(deviceRecoveryPath(device.id))}
                 title="Recovery"
               />
               <SettingsDivider />
               <SettingsRow
-                detail="Edit earlier days only when a manual fix is needed"
-                onPress={() => router.push(deviceHistoryPath(device.id))}
+                detail={
+                  controlReady
+                    ? "Edit earlier days only when a manual fix is needed"
+                    : "History edits unlock again after the board is online and recovery is complete."
+                }
+                onPress={controlReady ? () => router.push(deviceHistoryPath(device.id)) : undefined}
                 title="History"
               />
             </SettingsListSurface>
@@ -208,14 +226,26 @@ export default function DeviceSettingsOverviewRoute() {
             <SettingsListSurface>
               <SettingsRow
                 detail={
-                  device.isLive
-                    ? isStartingFactoryReset
-                      ? "Starting reset…"
-                      : "Wipes local setup and reopens onboarding. This is not the same as Wi‑Fi recovery."
-                    : "Factory reset from the app is only available while the board is online."
+                  controlReady
+                    ? isResettingHistory
+                      ? "Resetting history…"
+                      : "Clears the current habit era and starts a blank board without removing this device."
+                    : "History reset is only available while the board is online and ready."
                 }
-                onPress={device.isLive && !isStartingFactoryReset ? handleFactoryReset : undefined}
-                title="Factory reset device"
+                onPress={controlReady && !isResettingHistory ? handleResetHistory : undefined}
+                title="Reset history"
+              />
+              <SettingsDivider />
+              <SettingsRow
+                detail={
+                  device.isLive
+                    ? isRemovingDeviceFromApp
+                      ? "Removing device…"
+                      : "Use this only when the board is leaving this account. It wipes the device and removes it from the app."
+                    : "Factory reset and remove is only available while the board is online."
+                }
+                onPress={device.isLive && !isRemovingDeviceFromApp ? handleFactoryResetAndRemove : undefined}
+                title="Factory reset and remove"
               />
             </SettingsListSurface>
           </View>

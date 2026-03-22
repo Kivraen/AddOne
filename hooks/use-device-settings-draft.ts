@@ -11,8 +11,8 @@ import {
   normalizeDraft,
   validateSettingsDraft,
 } from "@/lib/device-settings";
-import { normalizeMinimumGoalForSave } from "@/lib/habit-details";
-import { useDeviceHabitMetadataStore } from "@/store/device-habit-metadata-store";
+import { isDeviceControlReady } from "@/lib/device-recovery";
+import { normalizeHabitNameForSave, normalizeMinimumGoalForSave } from "@/lib/habit-details";
 import { useDeviceSettingsDraftStore } from "@/store/device-settings-draft-store";
 import { usePaletteHistoryStore } from "@/store/palette-history-store";
 import { AddOneDevice } from "@/types/addone";
@@ -35,9 +35,7 @@ function deviceSettingsSourceKey(device: AddOneDevice, minimumGoal: string) {
 }
 
 export function useDeviceSettingsDraft(device: AddOneDevice) {
-  const { applySettingsDraft, isSavingSettings } = useDeviceActions();
-  const currentMinimumGoal = useDeviceHabitMetadataStore((state) => state.minimumGoalByDeviceId[device.id] ?? "");
-  const setMinimumGoal = useDeviceHabitMetadataStore((state) => state.setMinimumGoal);
+  const { applySettingsDraft, isSavingSettings, saveActiveHabitMetadata } = useDeviceActions();
   const rememberAppliedPalette = usePaletteHistoryStore((state) => state.rememberAppliedPalette);
   const {
     baseDraft,
@@ -58,6 +56,7 @@ export function useDeviceSettingsDraft(device: AddOneDevice) {
     statusMessage,
     syncFromDeviceIfClean,
   } = useDeviceSettingsDraftStore();
+  const currentMinimumGoal = device.dailyMinimum;
   const currentSourceKey = deviceSettingsSourceKey(device, currentMinimumGoal);
 
   useEffect(() => {
@@ -77,13 +76,17 @@ export function useDeviceSettingsDraft(device: AddOneDevice) {
     [resolvedBaseDraft, resolvedDraft],
   );
   const minimumGoalDirty = normalizeMinimumGoalForSave(resolvedBaseDraft.minimumGoal) !== normalizeMinimumGoalForSave(resolvedDraft.minimumGoal);
+  const habitMetadataDirty =
+    minimumGoalDirty ||
+    normalizeHabitNameForSave(resolvedBaseDraft.habitName) !== normalizeHabitNameForSave(resolvedDraft.habitName) ||
+    resolvedBaseDraft.weeklyTarget !== resolvedDraft.weeklyTarget;
   const isDirty = !areSettingsDraftsEqual(resolvedBaseDraft, resolvedDraft);
   const previewPalette = useMemo(() => getDraftPalette(resolvedDraft), [resolvedDraft]);
   const summary = useMemo(() => buildDraftSummary(resolvedDraft), [resolvedDraft]);
-  const canApply = validation.isValid && !isSavingSettings && (patch ? device.isLive : minimumGoalDirty);
+  const canApply = validation.isValid && !isSavingSettings && (patch ? isDeviceControlReady(device) : habitMetadataDirty);
 
   const apply = async () => {
-    if (!patch && !minimumGoalDirty) {
+    if (!patch && !habitMetadataDirty) {
       return false;
     }
 
@@ -93,8 +96,13 @@ export function useDeviceSettingsDraft(device: AddOneDevice) {
       if (patch) {
         await applySettingsDraft(patch, device.id);
       }
-      if (minimumGoalDirty) {
-        setMinimumGoal(device.id, resolvedDraft.minimumGoal);
+      if (habitMetadataDirty) {
+        await saveActiveHabitMetadata({
+          dailyMinimum: resolvedDraft.minimumGoal,
+          deviceId: device.id,
+          habitName: normalizeHabitNameForSave(resolvedDraft.habitName),
+          weeklyTarget: resolvedDraft.weeklyTarget,
+        });
       }
       markCommitted(currentSourceKey);
       if (patch?.palette_custom !== undefined || patch?.palette_preset !== undefined) {

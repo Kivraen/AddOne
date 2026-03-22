@@ -4,9 +4,28 @@ export type RewardTrigger = "daily" | "weekly";
 export type PixelGridMode = "display" | "edit" | "preview" | "shared";
 export type PixelCellState = "future" | "socket" | "done" | "weekSuccess" | "weekFail";
 export type WeekStart = "locale" | "monday" | "sunday";
+export type DeviceRecoveryState = "ready" | "needs_recovery" | "recovering";
 export type DeviceOnboardingStatus = "awaiting_ap" | "awaiting_cloud" | "claimed" | "expired" | "cancelled" | "failed";
 export type DeviceApProvisioningState = "ready" | "busy" | "provisioned";
 export type DeviceApProvisioningNextStep = "connect_to_cloud" | "retry";
+export type SetupFlowKind = "onboarding" | "recovery";
+export type SetupFlowStage =
+  | "intro"
+  | "join_device_ap"
+  | "scan_home_wifi"
+  | "choose_home_wifi"
+  | "reconnecting_board"
+  | "restoring_board"
+  | "success"
+  | "failure";
+export type SetupFlowFailureCode =
+  | "ap_not_joined"
+  | "wifi_join_failed"
+  | "scan_empty"
+  | "cloud_claim_timeout"
+  | "restore_failed"
+  | "session_stale";
+export type SetupFlowProgressState = "active" | "complete" | "pending";
 
 export interface DeviceApScannedNetwork {
   authMode?: string | null;
@@ -34,9 +53,11 @@ export interface TodayPointer {
 
 export interface AddOneDevice {
   boardId: string | null;
+  dailyMinimum: string;
   id: string;
   name: string;
   ownerName: string;
+  recoveryState: DeviceRecoveryState;
   syncState: SyncState;
   isLive: boolean;
   lastSnapshotAt: string | null;
@@ -58,6 +79,9 @@ export interface AddOneDevice {
   reminderEnabled: boolean;
   reminderTime: string;
   firmwareVersion: string;
+  historyEraStartedAt: string | null;
+  recordedDaysTotal: number;
+  successfulWeeksTotal: number;
   days: boolean[][];
   dateGrid?: string[][];
   logicalToday: string;
@@ -69,14 +93,18 @@ export interface AddOneDevice {
 export interface Board {
   id: string;
   ownerUserId: string;
+  activeHistoryEra: number;
   archivedAt: string | null;
+  historyEraStartedAt: string | null;
 }
 
 export interface BoardBackup {
   id: string;
   boardId: string;
+  backupDay?: string;
   boardDays: boolean[][];
   currentWeekStart: string;
+  historyEra?: number;
   todayRow: number;
   backedUpAt: string;
   sourceDeviceId: string | null;
@@ -91,6 +119,30 @@ export interface RestoreCandidate {
   backedUpAt: string;
   sourceDeviceId: string | null;
   sourceDeviceName: string | null;
+}
+
+export interface OnboardingRestoreSource {
+  boardId: string | null;
+  capturedAt: string;
+  dateGrid?: string[][];
+  days: boolean[][];
+  logicalToday: string;
+  settings: {
+    autoBrightness: boolean;
+    brightness: number;
+    customPalette?: Partial<BoardPalette>;
+    dailyMinimum: string;
+    name: string;
+    paletteId: string;
+    resetTime: string;
+    rewardEnabled: boolean;
+    rewardTrigger: RewardTrigger;
+    rewardType: RewardType;
+    timezone: string;
+    weeklyTarget: number;
+  };
+  sourceDeviceId: string;
+  sourceDeviceName: string;
 }
 
 export type RestoreChoice = "restore" | "fresh";
@@ -176,6 +228,25 @@ export interface DeviceOnboardingSession {
   waitingForDeviceAt: string | null;
 }
 
+export interface SetupFlowFailureState {
+  code: SetupFlowFailureCode;
+  message: string;
+  retryable: boolean;
+  title: string;
+}
+
+export interface SetupFlowOverlayState {
+  body: string;
+  title: string;
+  tone: "error" | "neutral" | "success";
+}
+
+export interface SetupFlowProgressRow {
+  key: "submit" | "join" | "restore" | "finish";
+  label: string;
+  state: SetupFlowProgressState;
+}
+
 export interface ApProvisioningDraft {
   wifiPassword: string;
   wifiSsid: string;
@@ -208,6 +279,7 @@ export interface ApProvisioningValidationResult {
 
 export interface DeviceApProvisioningInfo {
   device_ap_ssid: string;
+  failure_code?: SetupFlowFailureCode | null;
   firmware_version: string | null;
   hardware_profile: string | null;
   last_failure_reason?: string | null;

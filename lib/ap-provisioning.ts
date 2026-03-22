@@ -62,7 +62,7 @@ export function validateApProvisioningDraft(params: {
   }
 
   if (!trimOrEmpty(params.draft.wifiSsid)) {
-    errors.wifiSsid = "Enter the home Wi-Fi network name.";
+    errors.wifiSsid = "Choose a Wi‑Fi network.";
   } else if (trimOrEmpty(params.draft.wifiSsid).length > 32) {
     errors.wifiSsid = "Wi-Fi names longer than 32 characters are not supported in v1.";
   }

@@ -29,14 +29,14 @@ source_docs:
   - Docs/AddOne_V1_Canonical_Spec.md
   - Docs/ui-beta-issue-log.md
 success_gate: Strict gate
-report_path: Docs/agent-reports/2026-03-19-s3-onboarding-and-wifi-recovery-polish.md
+report_path: Docs/agent-reports/2026-03-22-recovery-and-reset-history-start-new-habit.md
 ---
 
 ## Objective
 Take onboarding from "real but still dense" to a clean beta-ready guided flow, and close any remaining Wi-Fi recovery polish that directly affects onboarding continuity or user confidence.
 
 ## Why Now
-The broad S3 visible-surface polish pass moved the main screen, routine/settings, appearance, and recovery forward substantially. The user wants onboarding and Wi-Fi recovery to remain the final visible UI polish slice after the friends implementation is explicit. The Friends implementation is now checkpointed, but its final proof is blocked on second-device testing, so onboarding and recovery can move forward in the meantime.
+The broad S3 visible-surface polish pass moved the main screen, routine/settings, appearance, and recovery forward substantially. The user wants onboarding and Wi-Fi recovery to remain the final visible UI polish slice after the friends implementation is explicit. The Friends implementation is now checkpointed, but its final proof is blocked on second-device testing, so onboarding and recovery can move forward in the meantime. The March 22 follow-up stabilized the shared setup flow on real hardware and implemented `Reset history` as `Start new habit`; the next bounded step is destructive factory reset plus account removal and fresh re-add validation.
 
 ## In Scope
 - Onboarding pacing, copy, and step-to-step clarity

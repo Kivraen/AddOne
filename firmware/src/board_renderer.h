@@ -6,11 +6,26 @@
 #include "device_settings.h"
 #include "habit_tracker.h"
 
+enum class RecoveryVisualStage : uint8_t {
+  PortalReady = 0,
+  CredentialsReceived = 1,
+  WifiConnected = 2,
+  CloudConnected = 3,
+  RestoreApplied = 4,
+};
+
+enum class ResetHoldVisualStage : uint8_t {
+  Holding = 0,
+  RecoveryReady = 1,
+  FactoryResetReady = 2,
+};
+
 class BoardRenderer {
 public:
   void begin();
+  void renderResetHoldState(ResetHoldVisualStage stage, uint8_t brightness);
   void render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness);
-  void renderRecoveryState(bool apRunning, bool wifiConnected, uint8_t brightness);
+  void renderRecoveryState(RecoveryVisualStage stage, uint8_t brightness);
   void renderReward(const DeviceSettingsState& settings,
                     RewardType rewardType,
                     const tm* localNow,

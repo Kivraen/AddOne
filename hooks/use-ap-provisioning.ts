@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { buildApProvisioningRequest, validateApProvisioningDraft } from "@/lib/ap-provisioning";
-import { useAppUiStore } from "@/store/app-ui-store";
+import { ApProvisioningDraft } from "@/types/addone";
 
 interface UseApProvisioningParams {
   claimToken: string | null;
@@ -14,9 +14,10 @@ export function useApProvisioning({
   hardwareProfileHint = null,
   onboardingSessionId,
 }: UseApProvisioningParams) {
-  const draft = useAppUiStore((state) => state.activeApProvisioningDraft);
-  const clearDraft = useAppUiStore((state) => state.clearApProvisioningDraft);
-  const setDraft = useAppUiStore((state) => state.setActiveApProvisioningDraft);
+  const [draft, setDraft] = useState<ApProvisioningDraft>({
+    wifiPassword: "",
+    wifiSsid: "",
+  });
 
   const validation = useMemo(
     () =>
@@ -42,11 +43,23 @@ export function useApProvisioning({
   }, [claimToken, draft, hardwareProfileHint, onboardingSessionId, validation.isValid]);
 
   return {
-    clearDraft,
+    clearDraft: () =>
+      setDraft({
+        wifiPassword: "",
+        wifiSsid: "",
+      }),
     draft,
     preparedRequest,
-    setWifiPassword: (wifiPassword: string) => setDraft({ wifiPassword }),
-    setWifiSsid: (wifiSsid: string) => setDraft({ wifiSsid }),
+    setWifiPassword: (wifiPassword: string) =>
+      setDraft((current) => ({
+        ...current,
+        wifiPassword,
+      })),
+    setWifiSsid: (wifiSsid: string) =>
+      setDraft((current) => ({
+        ...current,
+        wifiSsid,
+      })),
     validation,
   };
 }

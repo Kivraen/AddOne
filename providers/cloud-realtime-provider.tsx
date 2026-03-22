@@ -7,6 +7,37 @@ import { useAuth } from "@/hooks/use-auth";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import { getSupabaseClient } from "@/lib/supabase";
 
+function isCancelledErrorLike(error: unknown) {
+  if (error instanceof Error && error.name === "CancelledError") {
+    return true;
+  }
+
+  if (typeof error === "object" && error !== null && "name" in error && (error as { name?: unknown }).name === "CancelledError") {
+    return true;
+  }
+
+  return typeof error === "string" && error.includes("CancelledError");
+}
+
+function ignoreCancelledError(task: () => Promise<unknown>, label: string) {
+  try {
+    const promise = task();
+    void promise.catch((error) => {
+      if (isCancelledErrorLike(error)) {
+        return;
+      }
+
+      console.warn(`[cloud-realtime] ${label} failed`, error);
+    });
+  } catch (error) {
+    if (isCancelledErrorLike(error)) {
+      return;
+    }
+
+    console.warn(`[cloud-realtime] ${label} failed`, error);
+  }
+}
+
 export function CloudRealtimeProvider({ children }: PropsWithChildren) {
   const { mode, status, user } = useAuth();
   const { devices } = useDevices();
@@ -27,7 +58,10 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
     const channels: RealtimeChannel[] = [];
 
     const invalidateDevices = () => {
-      void queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user.id) });
+      ignoreCancelledError(
+        () => queryClient.invalidateQueries({ queryKey: addOneQueryKeys.devices(user.id) }, { cancelRefetch: false }),
+        "invalidate devices",
+      );
     };
 
     const membershipChannel = supabase

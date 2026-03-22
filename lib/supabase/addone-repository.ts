@@ -4,6 +4,7 @@ import {
   BoardPalette,
   DeviceSettingsPatch,
   DeviceOnboardingSession,
+  DeviceRecoveryState,
   DeviceSharingState,
   DeviceShareRequest,
   DeviceViewer,
@@ -22,6 +23,8 @@ type DeviceRow = Tables<"devices"> & {
   last_snapshot_hash?: string | null;
   board_id?: string | null;
   reset_epoch?: number | null;
+  recovery_state?: DeviceRecoveryState | null;
+  last_factory_reset_at?: string | null;
 };
 type MembershipRow = Tables<"device_memberships">;
 type RuntimeSnapshotRow = Tables<"device_runtime_snapshots">;
@@ -34,6 +37,15 @@ type CreateDeviceOnboardingSessionRow = Database["public"]["Functions"]["create_
 type ShareRequestListRow = Database["public"]["Functions"]["list_device_share_requests"]["Returns"][number];
 type ViewerListRow = Database["public"]["Functions"]["list_device_viewers"]["Returns"][number];
 type RestoreCandidateRow = Database["public"]["Functions"]["list_restorable_board_backups_for_user"]["Returns"][number];
+type DeviceHistoryMetricRow = {
+  current_daily_minimum: string | null;
+  current_habit_name: string | null;
+  current_weekly_target: number | null;
+  device_id: string;
+  history_era_started_at: string | null;
+  recorded_days_total: number | null;
+  successful_weeks_total: number | null;
+};
 
 type MembershipWithDevice = Pick<MembershipRow, "device_id" | "reminder_enabled" | "reminder_time"> & {
   device: DeviceRow | null;
@@ -108,6 +120,18 @@ function isProfileMigrationMessage(message: string) {
   );
 }
 
+function isMissingRestoreBackendMessage(message: string) {
+  return /list_restorable_board_backups_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
+}
+
+function isMissingHistoryMetricsBackendMessage(message: string) {
+  return /list_device_history_metrics_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
+}
+
+function isTransientNetworkFailureMessage(message: string) {
+  return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
+}
+
 function stripSeconds(value: string | null | undefined, fallback = "00:00") {
   if (!value) {
     return fallback;
@@ -148,7 +172,24 @@ function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_a
   return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
 }
 
+function normalizeRecoveryState(value?: string | null): DeviceRecoveryState {
+  if (value === "needs_recovery" || value === "recovering") {
+    return value;
+  }
+
+  return "ready";
+}
+
 function deriveSyncState(device: DeviceRow): SyncState {
+  const recoveryState = normalizeRecoveryState(device.recovery_state);
+  if (recoveryState === "needs_recovery") {
+    return deviceSeemsOnline(device) ? "syncing" : "offline";
+  }
+
+  if (recoveryState === "recovering") {
+    return "syncing";
+  }
+
   if (deviceSeemsOnline(device)) {
     return "online";
   }
@@ -171,10 +212,11 @@ function paletteIdForDevice(device: DeviceRow) {
 function mapDeviceRowToAppDevice(input: {
   currentUserName: string;
   device: DeviceRow;
+  metrics?: DeviceHistoryMetricRow | null;
   membership: MembershipWithDevice;
   snapshot?: RuntimeSnapshotRow | null;
 }): AddOneDevice {
-  const { currentUserName, device, membership, snapshot } = input;
+  const { currentUserName, device, membership, metrics, snapshot } = input;
   const normalizedWeekStart = normalizeWeekStart(device.week_start);
   const projection = buildRuntimeBoardProjection({
     resetTime: device.day_reset_time,
@@ -191,16 +233,21 @@ function mapDeviceRowToAppDevice(input: {
 
   return {
     boardId: device.board_id ?? null,
+    dailyMinimum: metrics?.current_daily_minimum ?? "",
     id: device.id,
     isLive: deviceSeemsOnline(device),
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
     lastSeenAt: device.last_seen_at,
     lastSyncAt: device.last_sync_at,
-    name: device.name,
+    historyEraStartedAt: metrics?.history_era_started_at ?? null,
+    name: metrics?.current_habit_name?.trim() || device.name,
     ownerName: currentUserName,
+    recoveryState: normalizeRecoveryState(device.recovery_state),
+    recordedDaysTotal: Number(metrics?.recorded_days_total ?? 0),
     runtimeRevision: Number(snapshot?.revision ?? device.last_runtime_revision ?? 0),
+    successfulWeeksTotal: Number(metrics?.successful_weeks_total ?? 0),
     syncState: deriveSyncState(device),
-    weeklyTarget: device.weekly_target,
+    weeklyTarget: Number(metrics?.current_weekly_target ?? device.weekly_target),
     weekStart: normalizedWeekStart,
     timezone: device.timezone,
     resetTime: stripSeconds(device.day_reset_time),
@@ -270,7 +317,30 @@ async function fetchLatestRuntimeSnapshots(deviceIds: string[]) {
     .in("device_id", deviceIds)
     .order("revision", { ascending: false });
 
+  if (error && isTransientNetworkFailureMessage(error.message)) {
+    return [] as RuntimeSnapshotRow[];
+  }
+
   return assertData(error, (data ?? []) as RuntimeSnapshotRow[], "Failed to load device runtime snapshots.");
+}
+
+async function fetchOwnedDeviceHistoryMetrics() {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("list_device_history_metrics_for_user");
+
+  if (error && isMissingHistoryMetricsBackendMessage(error.message)) {
+    return [] as DeviceHistoryMetricRow[];
+  }
+
+  if (error && isTransientNetworkFailureMessage(error.message)) {
+    return [] as DeviceHistoryMetricRow[];
+  }
+
+  return assertData(
+    error,
+    (data ?? []) as DeviceHistoryMetricRow[],
+    "Failed to load device history metrics.",
+  );
 }
 
 async function fetchProfiles(userIds: string[]) {
@@ -280,6 +350,11 @@ async function fetchProfiles(userIds: string[]) {
 
   const supabase = ensureSupabase();
   const { data, error } = await supabase.from("profiles").select("*").in("user_id", userIds);
+
+  if (error && isTransientNetworkFailureMessage(error.message)) {
+    return [] as ProfileRow[];
+  }
+
   return assertData(error, (data ?? []) as ProfileRow[], "Failed to load profiles.");
 }
 
@@ -435,7 +510,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     membershipsResponse.error,
     (membershipsResponse.data ?? []) as MembershipWithDevice[],
     "Failed to load owned devices.",
-  ).filter((row) => row.device && row.device.board_id);
+  ).filter((row) => row.device);
 
   const devices = memberships.map((row) => row.device as DeviceRow);
   const deviceIds = devices.map((device) => device.id);
@@ -444,9 +519,16 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     return [] as AddOneDevice[];
   }
 
-  const snapshots = await fetchLatestRuntimeSnapshots(deviceIds);
+  const [snapshots, historyMetrics] = await Promise.all([
+    fetchLatestRuntimeSnapshots(deviceIds),
+    fetchOwnedDeviceHistoryMetrics(),
+  ]);
   const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
     accumulator[row.device_id] ??= row;
+    return accumulator;
+  }, {});
+  const metricsByDevice = historyMetrics.reduce<Record<string, DeviceHistoryMetricRow>>((accumulator, row) => {
+    accumulator[row.device_id] = row;
     return accumulator;
   }, {});
 
@@ -454,6 +536,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     mapDeviceRowToAppDevice({
       currentUserName,
       device: membership.device as DeviceRow,
+      metrics: metricsByDevice[membership.device_id] ?? null,
       membership,
       snapshot: snapshotByDevice[membership.device_id] ?? null,
     }),
@@ -473,7 +556,7 @@ export async function fetchSharedBoards(userId: string) {
     membershipsResponse.error,
     (membershipsResponse.data ?? []) as Array<{ device_id: string; device: DeviceRow | null }>,
     "Failed to load shared boards.",
-  ).filter((row) => row.device && row.device.board_id);
+  ).filter((row) => row.device);
 
   const devices = memberships.map((row) => row.device as DeviceRow);
   const deviceIds = devices.map((device) => device.id);
@@ -657,7 +740,7 @@ export async function redeemDeviceOnboardingClaimForTesting(params: {
   resetEpoch?: number;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("redeem_device_onboarding_claim", {
+  let { data, error } = await (supabase.rpc as any)("redeem_device_onboarding_claim", {
     p_claim_token: params.claimToken,
     p_device_auth_token: undefined,
     p_firmware_version: params.firmwareVersion,
@@ -666,6 +749,17 @@ export async function redeemDeviceOnboardingClaimForTesting(params: {
     p_name: params.name,
     p_reset_epoch: params.resetEpoch ?? 0,
   });
+
+  if (error?.message?.includes("p_reset_epoch") && error.message.includes("schema cache")) {
+    ({ data, error } = await (supabase.rpc as any)("redeem_device_onboarding_claim", {
+      p_claim_token: params.claimToken,
+      p_device_auth_token: undefined,
+      p_firmware_version: params.firmwareVersion,
+      p_hardware_profile: params.hardwareProfile,
+      p_hardware_uid: params.hardwareUid,
+      p_name: params.name,
+    }));
+  }
 
   return mapDeviceOnboardingSessionRow(
     assertData(error, data as DeviceOnboardingSessionRow, "Failed to redeem the onboarding claim."),
@@ -786,6 +880,73 @@ export async function requestDeviceFactoryResetFromApp(params: {
   );
 }
 
+export async function resetDeviceHistoryFromApp(params: {
+  dailyMinimum: string;
+  deviceId: string;
+  habitName: string;
+  requestId: string;
+  weeklyTarget: number;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("reset_device_history_from_app", {
+    p_daily_minimum: params.dailyMinimum,
+    p_device_id: params.deviceId,
+    p_habit_name: params.habitName,
+    p_request_id: params.requestId,
+    p_weekly_target: params.weeklyTarget,
+  });
+
+  return assertData(
+    error,
+    data as { command_id: string; history_era: number; status: string },
+    "Failed to reset device history.",
+  );
+}
+
+export async function saveActiveHabitMetadataFromApp(params: {
+  dailyMinimum: string;
+  deviceId: string;
+  habitName: string;
+  weeklyTarget: number;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("update_active_habit_metadata_from_app", {
+    p_daily_minimum: params.dailyMinimum,
+    p_device_id: params.deviceId,
+    p_habit_name: params.habitName,
+    p_weekly_target: params.weeklyTarget,
+  });
+
+  return assertData(
+    error,
+    data as {
+      daily_minimum: string | null;
+      device_id: string;
+      habit_name: string;
+      history_era: number;
+      weekly_target: number;
+    },
+    "Failed to save the current habit details.",
+  );
+}
+
+export async function factoryResetAndRemoveDeviceFromApp(params: {
+  deviceId: string;
+  requestId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("factory_reset_and_remove_device_from_app", {
+    p_device_id: params.deviceId,
+    p_request_id: params.requestId,
+  });
+
+  return assertData(
+    error,
+    data as { command_id: string; status: string },
+    "Failed to remove the device from the app.",
+  );
+}
+
 function mapRestoreCandidateRow(row: RestoreCandidateRow): RestoreCandidate {
   return {
     backupId: row.backup_id,
@@ -802,6 +963,10 @@ export async function fetchRestorableBoardBackupsForUser(deviceId: string) {
   const { data, error } = await (supabase.rpc as any)("list_restorable_board_backups_for_user", {
     p_device_id: deviceId,
   });
+
+  if (error && isMissingRestoreBackendMessage(error.message)) {
+    return [];
+  }
 
   return assertData(
     error,

@@ -7,12 +7,17 @@ function fillWeeks(rows: number[][]): boolean[][] {
 export const initialDevices: AddOneDevice[] = [
   {
     boardId: "board-studio-01",
+    dailyMinimum: "Walk for 15 minutes",
     id: "studio-01",
     isLive: true,
     lastSnapshotAt: new Date(Date.now() - 60_000).toISOString(),
+    historyEraStartedAt: new Date(Date.now() - 180 * 24 * 60 * 60_000).toISOString(),
+    recordedDaysTotal: 547,
     name: "Studio Walk",
     ownerName: "Viktor",
+    recoveryState: "ready",
     runtimeRevision: 42,
+    successfulWeeksTotal: 73,
     syncState: "online",
     weeklyTarget: 5,
     weekStart: "monday",

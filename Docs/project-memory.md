@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 21, 2026
+Last updated: March 22, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -54,21 +54,23 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
+- The March 22 setup follow-up stabilized the shared onboarding or recovery controller on real hardware, fixed wrong-password retry behavior, and implemented `Reset history` as `Start new habit` with backend era preservation.
 
 ## Current Active Stage
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-014-stage-s3-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-014-stage-s3-add-device-entry-flow-first-screen.md)
-- Current execution task: [T-017-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-017-add-device-entry-flow-first-screen.md)
+- Next brief: [B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md)
+- Current execution task: [T-018-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-018-factory-reset-remove-and-fresh-add-flow.md)
 
 ## Current Blockers
 
 - `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
-- `T-017` is the current focused execution pass inside `T-008`, starting with the no-owned-device add-device entry screen.
+- The March 22 recovery and `Start new habit` slice is implemented and verified, but the destructive `Factory reset and remove` path is still the next required hardware-backed follow-up.
+- `T-018` is the current focused execution pass inside `T-008`.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
-- Onboarding and Wi-Fi recovery still need the final polish slice after the profile and friends work.
+- Onboarding and Wi-Fi recovery still need the final polish slice after the destructive reset path is trustworthy.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
 - `main` is now fully backed up on GitHub, so there is no current backup gap.
 

@@ -52,6 +52,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 - The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install from `d589cdc`.
 - The first Friends implementation is checkpointed on the task branch, but its final acceptance still depends on second-device or second-account proof.
+- The March 22 setup follow-up is implemented and hardware-validated: shared onboarding or recovery flow stabilization, wrong-password retry handling, and `Reset history` as `Start new habit` are now checkpoint candidates rather than chat-only work.
 
 ## Open Risks / Blockers
 
@@ -66,6 +67,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, execute [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) while the final [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) proof is blocked on second-device testing, beginning with the focused [T-017-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-017-add-device-entry-flow-first-screen.md) pass. Then return to the Friends verification-only pass and accept it before closing `S3`.
+Next, execute [T-018-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-018-factory-reset-remove-and-fresh-add-flow.md) inside the broader [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) parent while the final [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) proof is blocked on second-device testing. Then return to the Friends verification-only pass and accept it before closing `S3`.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.

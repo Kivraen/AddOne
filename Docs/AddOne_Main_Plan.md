@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 21, 2026
+Last locked: March 22, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -85,9 +85,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-014-stage-s3-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-014-stage-s3-add-device-entry-flow-first-screen.md)
+  [B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md)
 - Current execution task:
-  [T-017-add-device-entry-flow-first-screen.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-017-add-device-entry-flow-first-screen.md)
+  [T-018-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-018-factory-reset-remove-and-fresh-add-flow.md)
 - Git durability note:
   `main` now points to the tested recovered baseline at `d589cdc`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
@@ -95,6 +95,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 
 ### App
 - Real cloud-backed app exists with auth, onboarding, Wi-Fi recovery, board-first home, settings `Draft + Apply`, and history `Draft + Save`.
+- The shared setup flow is now stabilized on real hardware, and `Reset history` now means `Start new habit` with backend era preservation.
 - App runtime reads from `device_runtime_snapshots` and listens for snapshot and device updates through Supabase realtime.
 - Current scope drift:
   - the home pager still exposes `Friends` and `Profile` tabs
@@ -134,7 +135,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice while Friends proof is externally blocked, starting with the add-device entry flow and then broadening through the rest of onboarding before returning to Friends verification
+- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice while Friends proof is externally blocked, with the current next step being destructive factory reset plus account removal and fresh add validation before returning to broader onboarding polish and Friends verification
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 

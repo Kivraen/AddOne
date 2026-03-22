@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 21, 2026
+Last updated: March 22, 2026
 
 ## Current Stage Map
 
@@ -14,7 +14,7 @@ Last updated: March 21, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: [B-013-stage-s3-onboarding-and-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-013-stage-s3-onboarding-and-recovery-polish.md)
+- Next brief: [B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-015-stage-s3-factory-reset-remove-and-fresh-add-flow.md)
 
 ## Stage Notes
 
@@ -31,7 +31,9 @@ Last updated: March 21, 2026
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
 - `T-001` is implemented and saved, but its final verification is blocked on second-device or second-account proof.
-- `T-008` is the current active execution slice while that Friends proof dependency is unavailable.
+- `T-008` remains the current active parent slice while that Friends proof dependency is unavailable.
+- The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
+- `T-018` is the next execution task: destructive factory reset, account removal, and fresh add validation.
 - `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`

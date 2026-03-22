@@ -88,6 +88,7 @@ bool ProvisioningStore::savePendingClaim(const ProvisioningContract::PendingClai
   prefs.putString(kHardwareProfileHintKey, claim.hardwareProfileHint);
   const bool okProfile = true;
   const bool okSession = prefs.putString(kOnboardingSessionIdKey, claim.onboardingSessionId) > 0;
+  prefs.remove(kReadyForTrackingKey);
   prefs.end();
 
   return okClaim && okProfile && okSession;

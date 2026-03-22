@@ -120,6 +120,34 @@ function NetworkRow({
   );
 }
 
+export function WifiNetworkList({
+  isScanning = false,
+  maxItems = 6,
+  networks,
+  onSelect,
+  selectedSsid,
+}: {
+  isScanning?: boolean;
+  maxItems?: number;
+  networks: DeviceApScannedNetwork[];
+  onSelect: (network: DeviceApScannedNetwork) => void;
+  selectedSsid: string;
+}) {
+  return (
+    <View style={{ gap: 8 }}>
+      {networks.slice(0, maxItems).map((network) => (
+        <NetworkRow
+          key={network.ssid}
+          disabled={isScanning}
+          network={network}
+          onPress={() => onSelect(network)}
+          selected={selectedSsid === network.ssid}
+        />
+      ))}
+    </View>
+  );
+}
+
 interface WifiNetworkPickerProps {
   isScanning: boolean;
   networks: DeviceApScannedNetwork[];

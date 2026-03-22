@@ -113,6 +113,25 @@ bool HabitTracker::clearToDefaults(const tm& nowDate) {
   return persist_();
 }
 
+bool HabitTracker::resetHistory(const tm& nowDate, uint8_t minimum, uint32_t expectedRevision, String& failureReason) {
+  if (!ensureInitialized_(nowDate)) {
+    failureReason = "Tracker is not initialized.";
+    return false;
+  }
+
+  checkWeekBoundary(nowDate);
+
+  if (runtimeRevision_ != expectedRevision) {
+    failureReason = "Runtime revision conflict.";
+    return false;
+  }
+
+  initEmpty_(nowDate);
+  minimum_ = constrain(minimum, 1, Config::kDaysPerWeek);
+  runtimeRevision_ = expectedRevision + 1;
+  return persist_();
+}
+
 bool HabitTracker::currentWeekStart(WeekDate& outDate) const {
   if (!initialized_ || !isValidWeekDate_(lastWeekStart_)) {
     return false;

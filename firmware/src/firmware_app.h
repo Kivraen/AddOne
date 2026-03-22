@@ -50,7 +50,8 @@ private:
   bool applyCloudCommand_(const CloudClient::DeviceCommand& command, String& failureReason);
   void beginWifiReconnect_();
   bool bootReadyForTracking_() const;
-  void performFactoryReset_(const char* reason);
+  unsigned long captureBootHoldDurationWithFeedback_();
+  void performFactoryReset_(const char* reason, bool allowReconnectForCloudReport = false);
   static void syncTaskEntry_(void* context);
   bool copyRuntimeSnapshotPayload_(String& boardDaysJson,
                                    String& settingsJson,
@@ -73,13 +74,17 @@ private:
   void pollCommands_();
   void processRealtimeCommands_();
   bool prepareTrackerForCurrentTime_();
+  bool renderRecoveryVisualIfActive_(uint8_t brightness);
   void resetWifiReconnectPolicy_();
+  void setRecoveryVisualStage_(RecoveryVisualStage stage);
+  void startRecoveryVisualCompletion_();
   void syncTask_();
   void tickReward_();
   void tickSetupRecovery_();
   void tickTracking_();
   void tickTimeInvalid_();
   bool tickWifiReconnectPolicy_(bool allowRecoveryEscalation);
+  bool tryReconnectForFactoryResetReport_(uint32_t nextResetEpoch);
   unsigned long wifiReconnectBackoffMs_(uint8_t attemptNumber) const;
   void markRuntimeSnapshotDirty_();
 
@@ -120,5 +125,8 @@ private:
   bool lastWifiConnected_ = false;
   bool wifiReconnectAttemptActive_ = false;
   bool wifiReconnectExhausted_ = false;
+  bool recoveryVisualActive_ = false;
   uint8_t wifiReconnectAttemptCount_ = 0;
+  RecoveryVisualStage recoveryVisualStage_ = RecoveryVisualStage::PortalReady;
+  unsigned long recoveryVisualUntilMs_ = 0;
 };

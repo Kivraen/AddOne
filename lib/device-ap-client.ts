@@ -4,9 +4,20 @@ import {
   DeviceApProvisioningInfo,
   DeviceApProvisioningResponse,
   DeviceApScannedNetwork,
+  SetupFlowFailureCode,
 } from "@/types/addone";
 import { buildDeviceApInfoUrl, buildDeviceApNetworksUrl } from "@/lib/ap-provisioning";
 import { runtimeConfig } from "@/lib/env";
+
+export class DeviceApClientError extends Error {
+  code: SetupFlowFailureCode;
+
+  constructor(code: SetupFlowFailureCode, message: string) {
+    super(message);
+    this.code = code;
+    this.name = "DeviceApClientError";
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -20,11 +31,13 @@ function isProvisioningNextStep(value: unknown): value is DeviceApProvisioningRe
   return value === "connect_to_cloud" || value === "retry";
 }
 
-async function fetchDeviceJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchDeviceJson<T>(url: string, init?: RequestInit, options?: { timeoutMs?: number }): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
-  }, runtimeConfig.deviceApTimeoutMs);
+  }, options?.timeoutMs ?? runtimeConfig.deviceApTimeoutMs);
+  const isProvisioningSubmit = (init?.method ?? "GET").toUpperCase() === "POST";
+  const disconnectedMessage = "Confirm the phone is still joined to AddOne Wi‑Fi, then try again.";
 
   try {
     const response = await fetch(url, {
@@ -38,7 +51,17 @@ async function fetchDeviceJson<T>(url: string, init?: RequestInit): Promise<T> {
     });
 
     const rawText = await response.text();
-    const data = rawText ? (JSON.parse(rawText) as unknown) : null;
+    let data: unknown = null;
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText) as unknown;
+      } catch {
+        throw new DeviceApClientError(
+          isProvisioningSubmit ? "wifi_join_failed" : "ap_not_joined",
+          "The AddOne network returned an invalid response. Try again.",
+        );
+      }
+    }
 
     if (!response.ok) {
       const message =
@@ -46,13 +69,27 @@ async function fetchDeviceJson<T>(url: string, init?: RequestInit): Promise<T> {
           ? data.message
           : `AddOne AP returned ${response.status}.`;
 
-      throw new Error(message);
+      throw new DeviceApClientError("wifi_join_failed", message);
     }
 
     return data as T;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Timed out waiting for the AddOne AP. Confirm the phone is joined to the device Wi-Fi.");
+      throw new DeviceApClientError(
+        "ap_not_joined",
+        "Timed out waiting for the AddOne AP. Confirm the phone is joined to the device Wi-Fi.",
+      );
+    }
+
+    if (error instanceof DeviceApClientError) {
+      throw error;
+    }
+
+    if (error instanceof Error && /network request failed|load failed/i.test(error.message)) {
+      throw new DeviceApClientError(
+        "ap_not_joined",
+        disconnectedMessage,
+      );
     }
 
     throw error;
@@ -76,6 +113,7 @@ function mapProvisioningInfo(data: unknown): DeviceApProvisioningInfo {
 
   return {
     device_ap_ssid: data.device_ap_ssid,
+    failure_code: typeof data.last_failure_reason === "string" && data.last_failure_reason.length > 0 ? "wifi_join_failed" : null,
     firmware_version: typeof data.firmware_version === "string" ? data.firmware_version : null,
     hardware_profile: typeof data.hardware_profile === "string" ? data.hardware_profile : null,
     last_failure_reason: typeof data.last_failure_reason === "string" ? data.last_failure_reason : null,
@@ -139,9 +177,15 @@ export async function fetchDeviceApProvisioningInfo() {
 }
 
 export async function fetchDeviceApNetworks() {
-  const data = await fetchDeviceJson<unknown>(buildDeviceApNetworksUrl(), {
-    method: "GET",
-  });
+  const data = await fetchDeviceJson<unknown>(
+    buildDeviceApNetworksUrl(),
+    {
+      method: "GET",
+    },
+    {
+      timeoutMs: 15_000,
+    },
+  );
 
   return mapNetworkScanResponse(data);
 }

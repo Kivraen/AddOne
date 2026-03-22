@@ -6,6 +6,12 @@
 #include "config.h"
 
 namespace {
+const CRGB kRecoveryCenterColor = CRGB(70, 146, 255);
+const CRGB kRecoveryCompletedColor = CRGB(88, 176, 255);
+const CRGB kRecoveryActiveColor = CRGB(246, 249, 255);
+const CRGB kRecoverySuccessColor = CRGB(120, 224, 138);
+const CRGB kResetRecoveryReadyColor = CRGB(60, 214, 215);
+const CRGB kResetFactoryReadyColor = CRGB(255, 108, 84);
 const CRGB kWifiReadyColor = CRGB(199, 144, 74);
 const CRGB kWifiConnectedColor = CRGB(143, 211, 106);
 const CRGB kTimeErrorColor = CRGB(228, 110, 88);
@@ -26,6 +32,21 @@ const uint8_t kDigitGlyphs[10][kDigitRows] = {
     {0b111, 0b101, 0b111, 0b101, 0b111}, // 8
     {0b111, 0b101, 0b111, 0b001, 0b111}, // 9
 };
+
+struct RecoveryPixel {
+  uint8_t row;
+  uint8_t col;
+};
+
+CRGB pulseColor(const CRGB& base, uint8_t minScale, uint8_t maxScale) {
+  CRGB result = base;
+  const uint16_t phase = static_cast<uint16_t>((millis() / 16UL) % 512UL);
+  const uint16_t triangle = phase < 256U ? phase : (511U - phase);
+  const uint8_t scale = static_cast<uint8_t>(minScale + ((static_cast<uint16_t>(maxScale - minScale) * triangle) / 255U));
+  result.nscale8_video(scale);
+  return result;
+}
+
 } // namespace
 
 void BoardRenderer::begin() {
@@ -105,6 +126,36 @@ void BoardRenderer::applyCustomPalette_(Palette& palette, const DeviceSettingsSt
   if (custom["weekFail"].is<const char*>()) {
     palette.weekFail = colorFromHex_(custom["weekFail"], palette.weekFail);
   }
+}
+
+void BoardRenderer::renderResetHoldState(ResetHoldVisualStage stage, uint8_t brightness) {
+  clear_();
+
+  const uint8_t centerRow = Config::kPanelRows / 2;
+  const uint8_t centerCol = Config::kPanelCols / 2;
+
+  if (stage == ResetHoldVisualStage::FactoryResetReady) {
+    const CRGB center = pulseColor(kResetFactoryReadyColor, 150, 255);
+    const CRGB petals = pulseColor(kResetFactoryReadyColor, 120, 220);
+    setPixel_(centerRow, centerCol, center);
+    setPixel_(centerRow, static_cast<uint8_t>(centerCol - 1), petals);
+    setPixel_(static_cast<uint8_t>(centerRow - 1), centerCol, petals);
+    setPixel_(centerRow, static_cast<uint8_t>(centerCol + 1), petals);
+    setPixel_(static_cast<uint8_t>(centerRow + 1), centerCol, petals);
+  } else if (stage == ResetHoldVisualStage::RecoveryReady) {
+    const CRGB center = pulseColor(kResetRecoveryReadyColor, 150, 255);
+    const CRGB petals = pulseColor(kResetRecoveryReadyColor, 120, 220);
+    setPixel_(centerRow, centerCol, center);
+    setPixel_(centerRow, static_cast<uint8_t>(centerCol - 1), petals);
+    setPixel_(static_cast<uint8_t>(centerRow - 1), centerCol, petals);
+    setPixel_(centerRow, static_cast<uint8_t>(centerCol + 1), petals);
+    setPixel_(static_cast<uint8_t>(centerRow + 1), centerCol, petals);
+  } else {
+    setPixel_(centerRow, centerCol, pulseColor(kRecoveryCenterColor, 132, 255));
+  }
+
+  FastLED.setBrightness(brightness);
+  FastLED.show();
 }
 
 void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness) {
@@ -225,21 +276,41 @@ void BoardRenderer::drawExclamationGlyph_(const CRGB& color) {
   setPixel_(4, 11, color);
 }
 
-void BoardRenderer::renderRecoveryState(bool apRunning, bool wifiConnected, uint8_t brightness) {
+void BoardRenderer::renderRecoveryState(RecoveryVisualStage stage, uint8_t brightness) {
   clear_();
 
-  drawWifiGlyph_(wifiConnected ? kWifiConnectedColor : kWifiReadyColor);
+  const uint8_t centerRow = Config::kPanelRows / 2;
+  const uint8_t centerCol = Config::kPanelCols / 2;
+  const RecoveryPixel petals[4] = {
+      {centerRow, static_cast<uint8_t>(centerCol - 1)},
+      {static_cast<uint8_t>(centerRow - 1), centerCol},
+      {centerRow, static_cast<uint8_t>(centerCol + 1)},
+      {static_cast<uint8_t>(centerRow + 1), centerCol},
+  };
 
-  if (apRunning) {
-    setPixel_(1, 4, kWifiReadyColor);
-    setPixel_(2, 4, kWifiReadyColor);
+  setPixel_(centerRow, centerCol, pulseColor(kRecoveryCenterColor, 132, 255));
+
+  if (stage == RecoveryVisualStage::RestoreApplied) {
+    for (const RecoveryPixel& petal : petals) {
+      setPixel_(petal.row, petal.col, pulseColor(kRecoverySuccessColor, 160, 255));
+    }
+    FastLED.setBrightness(brightness);
+    FastLED.show();
+    return;
   }
 
-  if (wifiConnected) {
-    setPixel_(5, 16, kWifiConnectedColor);
-    setPixel_(6, 17, kWifiConnectedColor);
-    setPixel_(4, 18, kWifiConnectedColor);
-    setPixel_(5, 18, kWifiConnectedColor);
+  const int8_t activeIndex =
+      stage == RecoveryVisualStage::CredentialsReceived ? 0 :
+      stage == RecoveryVisualStage::WifiConnected ? 1 :
+      stage == RecoveryVisualStage::CloudConnected ? 2 : -1;
+
+  for (uint8_t index = 0; index < 4; ++index) {
+    const RecoveryPixel& petal = petals[index];
+    if (static_cast<int8_t>(index) < activeIndex) {
+      setPixel_(petal.row, petal.col, kRecoveryCompletedColor);
+    } else if (static_cast<int8_t>(index) == activeIndex) {
+      setPixel_(petal.row, petal.col, pulseColor(kRecoveryActiveColor, 150, 255));
+    }
   }
 
   FastLED.setBrightness(brightness);
