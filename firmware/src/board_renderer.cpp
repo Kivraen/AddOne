@@ -76,16 +76,16 @@ uint16_t BoardRenderer::logicalToIndex_(uint8_t row, uint8_t col) const {
 
 BoardRenderer::Palette BoardRenderer::paletteForPreset_(const char* presetId) {
   if (presetId && strcmp(presetId, "amber") == 0) {
-    return Palette{CRGB(246, 211, 154), CRGB(227, 169, 93), CRGB(248, 229, 190), CRGB(143, 78, 70), CRGB(216, 176, 107)};
+    return Palette{CRGB(255, 210, 63), CRGB(227, 169, 93), CRGB(248, 229, 190), CRGB(255, 90, 31), CRGB(255, 179, 0)};
   }
   if (presetId && strcmp(presetId, "ice") == 0) {
-    return Palette{CRGB(217, 238, 245), CRGB(167, 217, 232), CRGB(232, 247, 253), CRGB(94, 112, 136), CRGB(120, 199, 216)};
+    return Palette{CRGB(234, 249, 255), CRGB(167, 217, 232), CRGB(232, 247, 253), CRGB(63, 99, 255), CRGB(56, 214, 255)};
   }
   if (presetId && strcmp(presetId, "rose") == 0) {
-    return Palette{CRGB(243, 215, 216), CRGB(228, 164, 174), CRGB(248, 230, 232), CRGB(165, 84, 73), CRGB(216, 161, 164)};
+    return Palette{CRGB(125, 255, 0), CRGB(106, 240, 90), CRGB(216, 255, 200), CRGB(255, 45, 0), CRGB(57, 255, 20)};
   }
 
-  return Palette{CRGB(245, 241, 232), CRGB(199, 144, 74), CRGB(245, 241, 232), CRGB(165, 84, 73), CRGB(143, 211, 106)};
+  return Palette{CRGB(255, 255, 255), CRGB(199, 144, 74), CRGB(245, 241, 232), CRGB(255, 45, 0), CRGB(77, 255, 0)};
 }
 
 CRGB BoardRenderer::colorFromHex_(const char* hex, const CRGB& fallback) {

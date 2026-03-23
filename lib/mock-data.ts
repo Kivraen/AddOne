@@ -6,11 +6,16 @@ function fillWeeks(rows: number[][]): boolean[][] {
 
 export const initialDevices: AddOneDevice[] = [
   {
+    accountRemovalDeadlineAt: null,
+    accountRemovalMode: null,
+    accountRemovalRequestedAt: null,
+    accountRemovalState: "active",
     boardId: "board-studio-01",
     dailyMinimum: "Walk for 15 minutes",
     id: "studio-01",
     isLive: true,
     lastSnapshotAt: new Date(Date.now() - 60_000).toISOString(),
+    habitStartedOnLocal: "2025-09-14",
     historyEraStartedAt: new Date(Date.now() - 180 * 24 * 60 * 60_000).toISOString(),
     recordedDaysTotal: 547,
     name: "Studio Walk",

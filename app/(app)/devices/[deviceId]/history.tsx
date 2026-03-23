@@ -10,7 +10,13 @@ import { PixelGrid } from "@/components/board/pixel-grid";
 import { useRoutedDevice } from "@/components/devices/device-route-context";
 import { theme } from "@/constants/theme";
 import { useDeviceActions } from "@/hooks/use-devices";
-import { buildBoardCells, getMergedPalette, toggleHistoryCell as toggleHistoryCellLocal } from "@/lib/board";
+import {
+  buildBoardCells,
+  getMergedPalette,
+  isCellBeforeHabitStart,
+  resolveHabitStartLocalDate,
+  toggleHistoryCell as toggleHistoryCellLocal,
+} from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { connectionGraceState } from "@/lib/device-connection";
 import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
@@ -24,6 +30,7 @@ function collectHistoryDraftUpdates(baseDevice: AddOneDevice, draftDevice: AddOn
   }
 
   const updates: HistoryDraftUpdate[] = [];
+  const habitStartLocalDate = resolveHabitStartLocalDate(draftDevice);
 
   for (let weekIndex = 0; weekIndex < draftDevice.dateGrid.length; weekIndex += 1) {
     for (let dayIndex = 0; dayIndex < draftDevice.dateGrid[weekIndex].length; dayIndex += 1) {
@@ -33,6 +40,10 @@ function collectHistoryDraftUpdates(baseDevice: AddOneDevice, draftDevice: AddOn
 
       const localDate = draftDevice.dateGrid[weekIndex]?.[dayIndex];
       if (!localDate) {
+        continue;
+      }
+
+      if (habitStartLocalDate && localDate < habitStartLocalDate) {
         continue;
       }
 
@@ -46,6 +57,45 @@ function collectHistoryDraftUpdates(baseDevice: AddOneDevice, draftDevice: AddOn
   return updates;
 }
 
+function collectHabitStartBackfillUpdates(
+  draftDevice: AddOneDevice,
+  startInclusive: string | null,
+  endExclusive: string | null,
+  explicitUpdates: HistoryDraftUpdate[],
+): HistoryDraftUpdate[] {
+  if (!draftDevice.dateGrid || !startInclusive || !endExclusive || startInclusive >= endExclusive) {
+    return [];
+  }
+
+  const explicitDates = new Set(explicitUpdates.map((update) => update.localDate));
+  const updates: HistoryDraftUpdate[] = [];
+
+  for (let weekIndex = 0; weekIndex < draftDevice.dateGrid.length; weekIndex += 1) {
+    for (let dayIndex = 0; dayIndex < draftDevice.dateGrid[weekIndex].length; dayIndex += 1) {
+      const localDate = draftDevice.dateGrid[weekIndex]?.[dayIndex];
+      if (!localDate || localDate < startInclusive || localDate >= endExclusive || explicitDates.has(localDate)) {
+        continue;
+      }
+
+      updates.push({
+        isDone: draftDevice.days[weekIndex][dayIndex],
+        localDate,
+      });
+    }
+  }
+
+  return updates;
+}
+
+function formatHistoryDateLabel(localDate: string) {
+  return new Date(`${localDate}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+    year: "numeric",
+  });
+}
+
 export default function DeviceHistoryRoute() {
   const navigation = useNavigation();
   const { height, width } = useWindowDimensions();
@@ -53,14 +103,17 @@ export default function DeviceHistoryRoute() {
   const device = useRoutedDevice();
   const {
     commitHistoryDraft,
+    isUpdatingHabitStartDate,
     isSavingHistoryDraft,
     refreshDevices,
     refreshRuntimeSnapshot,
+    setActiveHabitStartDate,
   } = useDeviceActions();
   const [baseDevice, setBaseDevice] = useState(device);
   const [draftDevice, setDraftDevice] = useState(device);
   const [isDirty, setIsDirty] = useState(false);
   const [isOrientationReady, setIsOrientationReady] = useState(false);
+  const [pendingHabitStartBackfillEnd, setPendingHabitStartBackfillEnd] = useState<string | null>(null);
   const [isRefreshingAvailability, setIsRefreshingAvailability] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [boardViewport, setBoardViewport] = useState({ height: 0, width: 0 });
@@ -122,9 +175,9 @@ export default function DeviceHistoryRoute() {
     }, []),
   );
 
-  usePreventRemove(isSavingHistoryDraft || isDirty, ({ data }) => {
-    if (isSavingHistoryDraft) {
-      Alert.alert("Saving history", "AddOne is still waiting for the device to confirm your history changes.");
+  usePreventRemove(isSavingHistoryDraft || isUpdatingHabitStartDate || isDirty, ({ data }) => {
+    if (isSavingHistoryDraft || isUpdatingHabitStartDate) {
+      Alert.alert("Saving history", "AddOne is still applying your history changes.");
       return;
     }
 
@@ -137,12 +190,13 @@ export default function DeviceHistoryRoute() {
       {
         style: "destructive",
         text: "Discard",
-        onPress: () => {
-          setDraftDevice(baseDevice);
-          setIsDirty(false);
-          setStatusError(null);
-          navigation.dispatch(data.action);
-        },
+          onPress: () => {
+            setDraftDevice(baseDevice);
+            setIsDirty(false);
+            setPendingHabitStartBackfillEnd(null);
+            setStatusError(null);
+            navigation.dispatch(data.action);
+          },
       },
     ]);
   });
@@ -213,11 +267,23 @@ export default function DeviceHistoryRoute() {
 
     setBaseDevice(device);
     setDraftDevice(device);
+    setPendingHabitStartBackfillEnd(null);
   }, [deviceSyncKey, device, isDirty]);
 
   const palette = getMergedPalette(draftDevice.paletteId, draftDevice.customPalette);
-  const updates = useMemo(() => collectHistoryDraftUpdates(baseDevice, draftDevice), [baseDevice, draftDevice]);
-  const saveDisabled = !canEditHistory || isSavingHistoryDraft || updates.length === 0;
+  const explicitUpdates = useMemo(() => collectHistoryDraftUpdates(baseDevice, draftDevice), [baseDevice, draftDevice]);
+  const backfillUpdates = useMemo(
+    () =>
+      collectHabitStartBackfillUpdates(
+        draftDevice,
+        resolveHabitStartLocalDate(draftDevice),
+        pendingHabitStartBackfillEnd,
+        explicitUpdates,
+      ),
+    [draftDevice, explicitUpdates, pendingHabitStartBackfillEnd],
+  );
+  const updates = useMemo(() => [...explicitUpdates, ...backfillUpdates], [backfillUpdates, explicitUpdates]);
+  const saveDisabled = !canEditHistory || isSavingHistoryDraft || isUpdatingHabitStartDate || updates.length === 0;
   const gridAvailableWidth = Math.max(320, boardViewport.width - 16 || width - 32);
   const gridAvailableHeight = Math.max(140, boardViewport.height - 16 || height - 64);
 
@@ -440,7 +506,7 @@ export default function DeviceHistoryRoute() {
         </Pressable>
 
         <Pressable
-          accessibilityLabel={isSavingHistoryDraft ? "Saving history" : "Save history"}
+          accessibilityLabel={isSavingHistoryDraft ? "Saving history" : isUpdatingHabitStartDate ? "Updating habit start" : "Save history"}
           accessibilityRole="button"
           disabled={saveDisabled}
           onPress={() => void handleSave()}
@@ -454,7 +520,7 @@ export default function DeviceHistoryRoute() {
               lineHeight: theme.typography.label.lineHeight,
             }}
           >
-            {isSavingHistoryDraft ? "Saving…" : "Save"}
+            {isUpdatingHabitStartDate ? "Updating…" : isSavingHistoryDraft ? "Saving…" : "Save"}
           </Text>
         </Pressable>
       </View>
@@ -470,9 +536,76 @@ export default function DeviceHistoryRoute() {
       setStatusError(null);
       await commitHistoryDraft(updates, baseDevice.runtimeRevision, device.id);
       setIsDirty(false);
+      setPendingHabitStartBackfillEnd(null);
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : "Failed to save history on the device.");
     }
+  }
+
+  async function handleBackdateHabitStart(localDate: string, row: number, col: number) {
+    const previousStart = resolveHabitStartLocalDate(draftDevice);
+
+    try {
+      setStatusError(null);
+      await setActiveHabitStartDate(localDate, device.id);
+      setPendingHabitStartBackfillEnd((current) => {
+        if (!previousStart) {
+          return current;
+        }
+
+        if (!current || previousStart > current) {
+          return previousStart;
+        }
+
+        return current;
+      });
+      setBaseDevice((current) => ({
+        ...current,
+        habitStartedOnLocal: localDate,
+      }));
+      setDraftDevice((current) =>
+        toggleHistoryCellLocal(
+          {
+            ...current,
+            habitStartedOnLocal: localDate,
+          },
+          row,
+          col,
+        ),
+      );
+      setIsDirty(true);
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : "Failed to move the habit start date.");
+    }
+  }
+
+  function handleLockedCellPress(row: number, col: number) {
+    if (isSavingHistoryDraft || isUpdatingHabitStartDate) {
+      return;
+    }
+
+    const localDate = draftDevice.dateGrid?.[col]?.[row];
+    if (!localDate) {
+      return;
+    }
+
+    const currentStart = resolveHabitStartLocalDate(draftDevice);
+    const currentStartLabel = currentStart ? formatHistoryDateLabel(currentStart) : "the current start date";
+    const targetLabel = formatHistoryDateLabel(localDate);
+
+    Alert.alert(
+      "Move habit start earlier?",
+      `This habit currently starts on ${currentStartLabel}. To edit ${targetLabel}, move the habit start back first.`,
+      [
+        { style: "cancel", text: "Cancel" },
+        {
+          text: `Move start to ${targetLabel}`,
+          onPress: () => {
+            void handleBackdateHabitStart(localDate, row, col);
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -540,10 +673,13 @@ export default function DeviceHistoryRoute() {
                     availableHeight={gridAvailableHeight}
                     availableWidth={gridAvailableWidth}
                     cells={buildBoardCells(draftDevice)}
+                    footerHint="Bottom row is automatic. Dimmed cells are before this habit started. Tap one to move the start date earlier."
+                    isCellLocked={(row, col) => isCellBeforeHabitStart(draftDevice, row, col)}
                     maxWidth={2200}
                     mode="edit"
+                    onLockedCellPress={handleLockedCellPress}
                     onCellPress={(row, col) => {
-                      if (isSavingHistoryDraft) {
+                      if (isSavingHistoryDraft || isUpdatingHabitStartDate) {
                         return;
                       }
 
@@ -552,7 +688,6 @@ export default function DeviceHistoryRoute() {
                       setIsDirty(true);
                     }}
                     palette={palette}
-                    showFooterHint={false}
                   />
                 </View>
               </View>

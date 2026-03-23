@@ -6,22 +6,26 @@ import {
   applyHistoryDraftFromApp,
   claimDevice,
   enterWifiRecoveryFromApp,
-  factoryResetAndRemoveDeviceFromApp,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
+  removeDeviceFromAccountFromApp,
   resetDeviceHistoryFromApp,
   requestDeviceFactoryResetFromApp,
   requestRuntimeSnapshotFromApp,
   saveActiveHabitMetadataFromApp,
+  setActiveHabitStartDateFromApp,
   setDayStateFromApp,
 } from "@/lib/supabase/addone-repository";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
+import { DEVICE_OFFLINE_CONFIRMATION_MS, latestConnectionActivityAt } from "@/lib/device-connection";
 import { areCustomPalettesEqual, sanitizeCustomPalette } from "@/lib/device-settings";
 import { buildRestoreHistoryDraft, buildRestoreSettingsPatch } from "@/lib/onboarding-restore";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, OnboardingRestoreSource, SyncState } from "@/types/addone";
+
+type DeviceRemovalProgressState = "idle" | "removing_offline" | "sending_reset" | "waiting_for_board";
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -55,7 +59,6 @@ const DEVICE_SNAPSHOT_SELF_HEAL_MS = 30_000;
 const LIVE_WAIT_CACHE_POLL_MS = 100;
 const LIVE_WAIT_REFRESH_MS = 1_500;
 const CONNECTIVITY_CHECKING_MS = 10_000;
-const MANUAL_CONNECTIVITY_STALE_MS = 15_000;
 
 function isTransientNetworkFailureMessage(message: string) {
   return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
@@ -111,15 +114,6 @@ function isRuntimeRevisionConflictError(message: string) {
   return message.includes("Runtime revision conflict");
 }
 
-function latestDeviceActivityAt(device: AddOneDevice) {
-  const candidates = [device.lastSeenAt, device.lastSnapshotAt, device.lastSyncAt]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => new Date(value).getTime())
-    .filter((value) => Number.isFinite(value));
-
-  return candidates.length > 0 ? Math.max(...candidates) : 0;
-}
-
 export function useDevices() {
   const { isAuthenticated, mode, status, user, userEmail } = useAuth();
   const demoDevices = useAddOneStore((state) => state.devices);
@@ -149,6 +143,7 @@ export function useDevices() {
     const recoveryNeededRevision = recoveryNeededRevisionByDevice[device.id];
     if (
       recoveryNeededRevision === undefined ||
+      device.accountRemovalState !== "active" ||
       device.recoveryState !== "ready" ||
       device.runtimeRevision !== recoveryNeededRevision
     ) {
@@ -165,7 +160,7 @@ export function useDevices() {
   });
   const effectiveDevices = devices.map((device) => {
     const connectivityIssue = connectivityIssueByDevice[device.id];
-    if (!connectivityIssue || device.recoveryState !== "ready") {
+    if (!connectivityIssue || device.accountRemovalState !== "active" || device.recoveryState !== "ready") {
       return device;
     }
 
@@ -199,7 +194,11 @@ export function useDevices() {
         continue;
       }
 
-      if (matchingDevice.recoveryState !== "ready" || matchingDevice.runtimeRevision !== recoveryNeededRevision) {
+      if (
+        matchingDevice.accountRemovalState !== "active" ||
+        matchingDevice.recoveryState !== "ready" ||
+        matchingDevice.runtimeRevision !== recoveryNeededRevision
+      ) {
         clearRuntimeConflictRecovery(deviceId);
       }
     }
@@ -221,7 +220,11 @@ export function useDevices() {
         (matchingDevice.lastSeenAt ?? null) !== connectivityIssue.lastSeenAt ||
         (matchingDevice.lastSnapshotAt ?? null) !== connectivityIssue.lastSnapshotAt ||
         (matchingDevice.lastSyncAt ?? null) !== connectivityIssue.lastSyncAt;
-      if (timestampsChanged || matchingDevice.recoveryState !== "ready") {
+      if (
+        matchingDevice.accountRemovalState !== "active" ||
+        timestampsChanged ||
+        matchingDevice.recoveryState !== "ready"
+      ) {
         clearConnectivityIssue(deviceId);
       }
     }
@@ -268,6 +271,15 @@ export function useDeviceActions() {
   const markRuntimeConflictRecovery = useAppUiStore((state) => state.markRuntimeConflictRecovery);
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
   const [isAwaitingSettingsConfirmation, setIsAwaitingSettingsConfirmation] = useState(false);
+  const [deviceRemovalState, setDeviceRemovalState] = useState<{
+    deadlineAt: string | null;
+    deviceId: string | null;
+    phase: DeviceRemovalProgressState;
+  }>({
+    deadlineAt: null,
+    deviceId: null,
+    phase: "idle",
+  });
 
   const demoActions = {
     setAutoBrightness: useAddOneStore((state) => state.setAutoBrightness),
@@ -346,12 +358,13 @@ export function useDeviceActions() {
         (probeDevice.lastSnapshotAt ?? null) !== (previousProbeDevice.lastSnapshotAt ?? null) ||
         (probeDevice.lastSyncAt ?? null) !== (previousProbeDevice.lastSyncAt ?? null)
       );
-    const latestActivityAgeMs = Date.now() - latestDeviceActivityAt(probeDevice);
+    const latestActivityAt = latestConnectionActivityAt(probeDevice) ?? 0;
+    const latestActivityAgeMs = latestActivityAt > 0 ? Date.now() - latestActivityAt : Number.POSITIVE_INFINITY;
     const shouldMarkConnectivityIssue =
+      probeDevice.accountRemovalState === "active" &&
       probeDevice.recoveryState === "ready" &&
-      probeDevice.isLive &&
       !didAdvanceTimestamps &&
-      latestActivityAgeMs >= MANUAL_CONNECTIVITY_STALE_MS;
+      latestActivityAgeMs >= DEVICE_OFFLINE_CONFIRMATION_MS;
 
     if (shouldMarkConnectivityIssue) {
       markConnectivityIssue(probeDevice.id, {
@@ -371,16 +384,19 @@ export function useDeviceActions() {
 
   const resolveDevice = (deviceId?: string | null) => devices.find((device) => device.id === deviceId) ?? activeDevice ?? null;
 
-  const resolveFreshLiveDevice = async (deviceId?: string | null) => {
+  const resolveFreshDevice = async (deviceId?: string | null) => {
     const current = resolveDevice(deviceId);
 
     if (mode !== "cloud") {
-      return requireLiveDevice(current);
+      return current;
     }
 
     const latestDevices = await loadLatestDevices();
-    const latest = latestDevices.find((device) => device.id === (deviceId ?? current?.id)) ?? current;
-    return requireLiveDevice(latest ?? null);
+    return latestDevices.find((device) => device.id === (deviceId ?? current?.id)) ?? current;
+  };
+
+  const resolveFreshLiveDevice = async (deviceId?: string | null) => {
+    return requireLiveDevice(await resolveFreshDevice(deviceId));
   };
 
   const requireLiveDevice = (device: AddOneDevice | null) => {
@@ -519,8 +535,11 @@ export function useDeviceActions() {
   const saveHabitMetadataMutation = useMutation({
     mutationFn: saveActiveHabitMetadataFromApp,
   });
+  const setHabitStartDateMutation = useMutation({
+    mutationFn: setActiveHabitStartDateFromApp,
+  });
   const removeFromAppMutation = useMutation({
-    mutationFn: factoryResetAndRemoveDeviceFromApp,
+    mutationFn: removeDeviceFromAccountFromApp,
   });
 
   const isBusy =
@@ -533,7 +552,9 @@ export function useDeviceActions() {
     wifiRecoveryMutation.isPending ||
     factoryResetMutation.isPending ||
     resetHistoryMutation.isPending ||
-    removeFromAppMutation.isPending;
+    setHabitStartDateMutation.isPending ||
+    removeFromAppMutation.isPending ||
+    deviceRemovalState.phase !== "idle";
 
   const refreshRuntimeSnapshot = async (
     deviceId?: string,
@@ -746,6 +767,8 @@ export function useDeviceActions() {
       isResettingHistory: false,
       isStartingFactoryReset: false,
       isStartingWifiRecovery: false,
+      removalDeadlineAt: null as string | null,
+      removalPhase: "idle" as DeviceRemovalProgressState,
       factoryResetAndRemove: async (_deviceId?: string) => undefined,
       resetHistory: async (_params?: {
         dailyMinimum: string;
@@ -766,6 +789,8 @@ export function useDeviceActions() {
         habitName: string;
         weeklyTarget: number;
       }) => undefined,
+      setActiveHabitStartDate: async (_habitStartedOnLocal: string, _deviceId?: string) => undefined,
+      isUpdatingHabitStartDate: false,
       restoreBoardFromSnapshot: async (_source: OnboardingRestoreSource, _deviceId?: string) => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
       toggleToday: async (_deviceId?: string) => {
@@ -813,22 +838,61 @@ export function useDeviceActions() {
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
     isSavingHistoryDraft: historyDraftMutation.isPending,
     isSavingSettings: applySettingsMutation.isPending || saveHabitMetadataMutation.isPending || isAwaitingSettingsConfirmation,
-    isRemovingDeviceFromApp: removeFromAppMutation.isPending,
+    isUpdatingHabitStartDate: setHabitStartDateMutation.isPending,
+    isRemovingDeviceFromApp: removeFromAppMutation.isPending || deviceRemovalState.phase !== "idle",
     isResettingHistory: resetHistoryMutation.isPending,
     isStartingFactoryReset: factoryResetMutation.isPending,
     isStartingWifiRecovery: wifiRecoveryMutation.isPending,
+    removalDeadlineAt: deviceRemovalState.deadlineAt,
+    removalPhase: deviceRemovalState.phase,
     factoryResetAndRemove: async (deviceId?: string) => {
-      const targetDevice = await resolveFreshLiveDevice(deviceId);
-      const result = await removeFromAppMutation.mutateAsync({
+      const targetDevice = await resolveFreshDevice(deviceId);
+      if (!targetDevice) {
+        throw new Error("No AddOne device is active.");
+      }
+
+      if (targetDevice.accountRemovalState === "pending_device_reset") {
+        throw new Error("Removal is already in progress for this board.");
+      }
+
+      const remoteReset = targetDevice.isLive;
+      setDeviceRemovalState({
+        deadlineAt: null,
         deviceId: targetDevice.id,
-        requestId: makeClientEventId(),
+        phase: remoteReset ? "sending_reset" : "removing_offline",
       });
 
-      await waitForDeviceAbsence(targetDevice.id, {
-        commandId: result.command_id ?? null,
-        errorMessage: "The device did not leave this account in time.",
-      });
-      void invalidateCloudDevices();
+      try {
+        const result = await removeFromAppMutation.mutateAsync({
+          deviceId: targetDevice.id,
+          remoteReset,
+          requestId: makeClientEventId(),
+        });
+
+        if (result.mode === "remote_reset_remove") {
+          setDeviceRemovalState({
+            deadlineAt: result.removal_deadline_at,
+            deviceId: targetDevice.id,
+            phase: "waiting_for_board",
+          });
+        }
+
+        await waitForDeviceAbsence(targetDevice.id, {
+          commandId: result.command_id ?? null,
+          errorMessage: remoteReset
+            ? "The device did not leave this account in time."
+            : "The device is still attached to this account.",
+          timeoutMs: remoteReset ? 40_000 : 8_000,
+        });
+        useAppUiStore.getState().clearOnboardingSession();
+        void invalidateCloudDevices();
+      } finally {
+        setDeviceRemovalState({
+          deadlineAt: null,
+          deviceId: null,
+          phase: "idle",
+        });
+      }
     },
     resetHistory: async (params?: {
       dailyMinimum: string;
@@ -894,6 +958,14 @@ export function useDeviceActions() {
         deviceId: targetDevice.id,
         habitName: params.habitName,
         weeklyTarget: params.weeklyTarget,
+      });
+      void invalidateCloudDevices();
+    },
+    setActiveHabitStartDate: async (habitStartedOnLocal: string, deviceId?: string) => {
+      const targetDevice = await resolveFreshLiveDevice(deviceId);
+      await setHabitStartDateMutation.mutateAsync({
+        deviceId: targetDevice.id,
+        habitStartedOnLocal,
       });
       void invalidateCloudDevices();
     },

@@ -27,6 +27,7 @@ import { useOnboarding } from "@/hooks/use-onboarding";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { getDeviceAccentColor } from "@/lib/device-accent";
+import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { homeMinimumGoalLabel } from "@/lib/habit-details";
@@ -40,8 +41,9 @@ const HOME_INSIGHT_PANEL_HEIGHT = theme.typography.micro.lineHeight + theme.typo
 const HOME_INSIGHT_TRANSITION_DURATION = 360;
 const HOME_INSIGHT_ENTRY_OFFSET = 16;
 const HOME_INSIGHT_EXIT_OFFSET = 10;
+const CLAIMED_SESSION_DEVICE_GRACE_MS = 15_000;
 
-type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline";
+type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline" | "removing";
 type HomeInsight = { eyebrow: string; message: string };
 
 function resolvePendingSetupCopy(status: "awaiting_ap" | "awaiting_cloud" | "claimed") {
@@ -69,6 +71,10 @@ function resolvePendingSetupCopy(status: "awaiting_ap" | "awaiting_cloud" | "cla
 }
 
 function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState {
+  if (isDevicePendingRemoval(device)) {
+    return "removing";
+  }
+
   if (needsDeviceRecovery(device)) {
     return "needs-recovery";
   }
@@ -135,6 +141,13 @@ function visibleBoardStats(device: AddOneDevice) {
 
 function boardInsight(device: AddOneDevice, stats: { fillPercentage: number }, currentWeekCompleted: number): HomeInsight {
   const remainingThisWeek = Math.max(device.weeklyTarget - currentWeekCompleted, 0);
+
+  if (isDevicePendingRemoval(device)) {
+    return {
+      eyebrow: "Removal",
+      message: "This board is leaving the account now. AddOne is waiting for the reset confirmation or a short timeout before it disappears.",
+    };
+  }
 
   if (needsDeviceRecovery(device)) {
     return {
@@ -512,7 +525,7 @@ export function HomeScreen() {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
-  const { isLoading: isOnboardingLoading, session: onboardingSession } = useOnboarding();
+  const { clearLocalOnboardingSession, isLoading: isOnboardingLoading, session: onboardingSession } = useOnboarding();
   const { isApplyingToday, refreshDevices, refreshRuntimeSnapshot, toggleToday } = useDeviceActions();
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
@@ -540,15 +553,31 @@ export function HomeScreen() {
 
     return withPendingTodayState(activeDevice, activePendingTodayState);
   }, [activeDevice, activePendingTodayState]);
+  const claimedSessionIsFresh = useMemo(() => {
+    if (onboardingSession?.status !== "claimed" || !onboardingSession.claimedAt) {
+      return false;
+    }
+
+    const claimedAtMs = new Date(onboardingSession.claimedAt).getTime();
+    return Number.isFinite(claimedAtMs) && Date.now() - claimedAtMs < CLAIMED_SESSION_DEVICE_GRACE_MS;
+  }, [onboardingSession?.claimedAt, onboardingSession?.status]);
   const pendingOnboardingStatus =
     !effectiveDevice && onboardingSession && !onboardingSession.isExpired
       ? onboardingSession.status === "awaiting_ap" ||
         onboardingSession.status === "awaiting_cloud" ||
-        onboardingSession.status === "claimed"
+        (onboardingSession.status === "claimed" && claimedSessionIsFresh)
         ? onboardingSession.status
         : null
       : null;
   const pendingSetupCopy = pendingOnboardingStatus ? resolvePendingSetupCopy(pendingOnboardingStatus) : null;
+
+  useEffect(() => {
+    if (effectiveDevice || onboardingSession?.status !== "claimed" || claimedSessionIsFresh) {
+      return;
+    }
+
+    clearLocalOnboardingSession();
+  }, [claimedSessionIsFresh, clearLocalOnboardingSession, effectiveDevice, onboardingSession?.status]);
 
   useEffect(() => {
     if (!activeDevice || !isDeviceControlReady(activeDevice) || !activeDevice.needsSnapshotRefresh) {
@@ -594,14 +623,17 @@ export function HomeScreen() {
       const refreshResult = await refreshDevices({
         probeDeviceId: activeDevice?.id ?? null,
       });
+      const probeDevice = refreshResult.probeDevice;
 
       if (
-        refreshResult.probeDevice?.recoveryState === "ready" &&
-        refreshResult.probeDevice.isLive &&
+        probeDevice &&
+        probeDevice.accountRemovalState === "active" &&
+        probeDevice.recoveryState === "ready" &&
+        probeDevice.isLive &&
         !refreshResult.markedConnectivityIssue
       ) {
         try {
-          await refreshRuntimeSnapshot(refreshResult.probeDevice.id, {
+          await refreshRuntimeSnapshot(probeDevice.id, {
             errorMessage: "The board did not answer the refresh check in time.",
             timeoutMs: 6_500,
           });
@@ -775,7 +807,9 @@ export function HomeScreen() {
         ? theme.colors.textMuted
         : theme.colors.accentAmber;
   const headerContextMessage =
-    headerStatusState === "verifying-board"
+    headerStatusState === "removing"
+      ? "Removing this board from the account…"
+      : headerStatusState === "verifying-board"
       ? "Verifying the current board…"
       : headerStatusState === "recovering"
         ? "Recovery is finishing. Controls come back after the restored board syncs."
@@ -832,6 +866,8 @@ export function HomeScreen() {
             >
               {headerStatusState === "offline" || headerStatusState === "needs-recovery" || headerStatusState === "recovering" ? (
                 <HeaderChip icon="wifi-outline" label="Recovery" onPress={() => router.push(deviceRecoveryPath(device.id))} />
+              ) : headerStatusState === "removing" ? (
+                <HeaderChip color={headerStatusColor} pulse />
               ) : headerStatusState === "checking-connection" ? (
                 <HeaderChip color={theme.colors.accentSuccess} pulse />
               ) : (

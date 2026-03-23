@@ -269,19 +269,44 @@ export default function DeviceRecoveryRoute() {
             </SetupStageLayout>
           ) : null}
 
-          {controller.stage === "intro" || controller.stage === "join_device_ap" ? (
+          {controller.stage === "intro" ? (
             <SetupStageLayout
               footer={
                 <ActionButton
-                  disabled={!session || isBusy || controller.isCheckingAp || controller.isScanningNetworks}
-                  label={!session || isBusy ? "Preparing…" : controller.isCheckingAp || controller.isScanningNetworks ? "Checking…" : "I joined AddOne Wi‑Fi"}
+                  disabled
+                  label="Preparing…"
+                  onPress={() => undefined}
+                />
+              }
+            >
+              <StepHeader
+                step={1}
+                subtitle="Start a recovery session on this phone."
+                title="Join AddOne Wi‑Fi"
+              />
+              <NumberedSteps
+                steps={[
+                  "Open Settings > Wi‑Fi.",
+                  "Join the network that starts with AddOne_XXXX.",
+                  "Come back here when the phone is connected.",
+                ]}
+              />
+            </SetupStageLayout>
+          ) : null}
+
+          {controller.stage === "join_device_ap" ? (
+            <SetupStageLayout
+              footer={
+                <ActionButton
+                  disabled
+                  label={controller.isCheckingAp ? "Checking AddOne Wi‑Fi…" : "Waiting for AddOne Wi‑Fi…"}
                   onPress={() => void controller.confirmJoinedDeviceAp()}
                 />
               }
             >
               <StepHeader
                 step={1}
-                subtitle="Join the temporary AddOne network on this phone, then come back here."
+                subtitle="Join the temporary AddOne network on this phone. This screen continues automatically once the phone is connected."
                 title="Join AddOne Wi‑Fi"
               />
               <NumberedSteps

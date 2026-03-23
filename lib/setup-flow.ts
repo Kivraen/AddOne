@@ -83,27 +83,36 @@ export function buildSetupProgressRows(params: {
   restoreLabel: string;
   stage: SetupFlowStage;
 }): SetupFlowProgressRow[] {
-  const { completionLabel, restoreLabel, stage } = params;
+  const { completionLabel, flow, restoreLabel, stage } = params;
   const restoreStage = stage === "restoring_board";
   const successStage = stage === "success";
   const reconnectStage = stage === "reconnecting_board";
+  const showsRestoreProgress = flow === "recovery";
   const restoreState = successStage ? "complete" : restoreStage ? "active" : "pending";
-  const completionState = successStage ? "active" : "pending";
-
-  return [
+  const completionState =
+    successStage || (!showsRestoreProgress && restoreStage)
+      ? "active"
+      : "pending";
+  const progressRows: SetupFlowProgressRow[] = [
     { key: "submit", label: "Sending Wi‑Fi details", state: reconnectStage || restoreStage || successStage ? "complete" : "pending" },
     {
       key: "join",
       label: "Connecting to Wi‑Fi and cloud",
       state: successStage || restoreStage ? "complete" : reconnectStage ? "active" : "pending",
     },
-    {
+  ];
+
+  if (showsRestoreProgress) {
+    progressRows.push({
       key: "restore",
       label: restoreLabel,
       state: restoreState,
-    },
-    { key: "finish", label: completionLabel, state: completionState },
-  ];
+    });
+  }
+
+  progressRows.push({ key: "finish", label: completionLabel, state: completionState });
+
+  return progressRows;
 }
 
 export function logSetupFlowEvent(flow: SetupFlowKind, event: string, details?: Record<string, unknown>) {

@@ -1,6 +1,9 @@
 import { paletteById } from "@/constants/palettes";
+import { connectionGraceState } from "@/lib/device-connection";
 import {
   AddOneDevice,
+  DeviceAccountRemovalMode,
+  DeviceAccountRemovalState,
   BoardPalette,
   DeviceSettingsPatch,
   DeviceOnboardingSession,
@@ -18,6 +21,10 @@ import { Database, Json, Tables, TablesInsert, TablesUpdate } from "@/lib/supaba
 import { getSupabaseClient } from "@/lib/supabase";
 
 type DeviceRow = Tables<"devices"> & {
+  account_removal_deadline_at?: string | null;
+  account_removal_mode?: DeviceAccountRemovalMode | null;
+  account_removal_requested_at?: string | null;
+  account_removal_state?: DeviceAccountRemovalState | null;
   last_runtime_revision?: number | null;
   last_snapshot_at?: string | null;
   last_snapshot_hash?: string | null;
@@ -40,6 +47,7 @@ type RestoreCandidateRow = Database["public"]["Functions"]["list_restorable_boar
 type DeviceHistoryMetricRow = {
   current_daily_minimum: string | null;
   current_habit_name: string | null;
+  current_habit_started_on_local: string | null;
   current_weekly_target: number | null;
   device_id: string;
   history_era_started_at: string | null;
@@ -80,6 +88,16 @@ function displayNameFromEmail(email?: string | null) {
 function normalizeOptionalText(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function timestampsMatch(left?: string | null, right?: string | null) {
+  if (!left || !right) {
+    return false;
+  }
+
+  const leftTime = new Date(left).getTime();
+  const rightTime = new Date(right).getTime();
+  return Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime === rightTime;
 }
 
 function normalizeUsername(value: string) {
@@ -128,6 +146,10 @@ function isMissingHistoryMetricsBackendMessage(message: string) {
   return /list_device_history_metrics_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
 }
 
+function isMissingRemovalFinalizerBackendMessage(message: string) {
+  return /finalize_stale_device_account_removals_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
+}
+
 function isTransientNetworkFailureMessage(message: string) {
   return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
 }
@@ -164,12 +186,16 @@ function nextResetLabel(resetTime: string) {
   return formatted === "midnight" ? "Resets at midnight" : `Resets at ${formatted}`;
 }
 
-function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_sync_at">) {
-  const lastSeenAt = device.last_seen_at ? new Date(device.last_seen_at).getTime() : 0;
-  const lastSyncAt = device.last_sync_at ? new Date(device.last_sync_at).getTime() : 0;
-  const now = Date.now();
+function deviceConnectionState(device: Pick<DeviceRow, "last_seen_at" | "last_snapshot_at" | "last_sync_at">) {
+  return connectionGraceState({
+    lastSeenAt: device.last_seen_at ?? null,
+    lastSnapshotAt: device.last_snapshot_at ?? null,
+    lastSyncAt: device.last_sync_at ?? null,
+  });
+}
 
-  return Boolean((lastSeenAt && now - lastSeenAt < 45_000) || (lastSyncAt && now - lastSyncAt < 45_000));
+function deviceSeemsOnline(device: Pick<DeviceRow, "last_seen_at" | "last_snapshot_at" | "last_sync_at">) {
+  return deviceConnectionState(device) !== "offline";
 }
 
 function normalizeRecoveryState(value?: string | null): DeviceRecoveryState {
@@ -180,21 +206,31 @@ function normalizeRecoveryState(value?: string | null): DeviceRecoveryState {
   return "ready";
 }
 
+function normalizeAccountRemovalState(value?: string | null): DeviceAccountRemovalState {
+  return value === "pending_device_reset" || value === "removed" ? value : "active";
+}
+
 function deriveSyncState(device: DeviceRow): SyncState {
+  const connectionState = deviceConnectionState(device);
+  const accountRemovalState = normalizeAccountRemovalState(device.account_removal_state);
+  if (accountRemovalState === "pending_device_reset") {
+    return connectionState === "offline" ? "offline" : "syncing";
+  }
+
   const recoveryState = normalizeRecoveryState(device.recovery_state);
   if (recoveryState === "needs_recovery") {
-    return deviceSeemsOnline(device) ? "syncing" : "offline";
+    return connectionState === "offline" ? "offline" : "syncing";
   }
 
   if (recoveryState === "recovering") {
     return "syncing";
   }
 
-  if (deviceSeemsOnline(device)) {
+  if (connectionState === "online") {
     return "online";
   }
 
-  return "offline";
+  return connectionState === "checking" ? "syncing" : "offline";
 }
 
 function coercePalette(json: Json): Partial<BoardPalette> | undefined {
@@ -232,6 +268,10 @@ function mapDeviceRowToAppDevice(input: {
   });
 
   return {
+    accountRemovalDeadlineAt: device.account_removal_deadline_at ?? null,
+    accountRemovalMode: device.account_removal_mode ?? null,
+    accountRemovalRequestedAt: device.account_removal_requested_at ?? null,
+    accountRemovalState: normalizeAccountRemovalState(device.account_removal_state),
     boardId: device.board_id ?? null,
     dailyMinimum: metrics?.current_daily_minimum ?? "",
     id: device.id,
@@ -239,6 +279,7 @@ function mapDeviceRowToAppDevice(input: {
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
     lastSeenAt: device.last_seen_at,
     lastSyncAt: device.last_sync_at,
+    habitStartedOnLocal: metrics?.current_habit_started_on_local ?? null,
     historyEraStartedAt: metrics?.history_era_started_at ?? null,
     name: metrics?.current_habit_name?.trim() || device.name,
     ownerName: currentUserName,
@@ -315,13 +356,37 @@ async function fetchLatestRuntimeSnapshots(deviceIds: string[]) {
     .from("device_runtime_snapshots")
     .select("*")
     .in("device_id", deviceIds)
-    .order("revision", { ascending: false });
+    .order("generated_at", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (error && isTransientNetworkFailureMessage(error.message)) {
     return [] as RuntimeSnapshotRow[];
   }
 
   return assertData(error, (data ?? []) as RuntimeSnapshotRow[], "Failed to load device runtime snapshots.");
+}
+
+function resolveAuthoritativeSnapshotForDevice(device: DeviceRow, snapshots: RuntimeSnapshotRow[]) {
+  const deviceSnapshots = snapshots.filter((row) => row.device_id === device.id);
+  if (deviceSnapshots.length === 0) {
+    return null;
+  }
+
+  if (device.last_snapshot_at) {
+    const exactTimestampMatch = deviceSnapshots.find((row) => timestampsMatch(row.generated_at, device.last_snapshot_at));
+    if (exactTimestampMatch) {
+      return exactTimestampMatch;
+    }
+  }
+
+  if ((device.last_runtime_revision ?? 0) > 0) {
+    const revisionMatch = deviceSnapshots.find((row) => Number(row.revision) === Number(device.last_runtime_revision));
+    if (revisionMatch) {
+      return revisionMatch;
+    }
+  }
+
+  return null;
 }
 
 async function fetchOwnedDeviceHistoryMetrics() {
@@ -499,6 +564,11 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
   const currentUserProfile = await fetchProfile(userId).catch(() => null);
   const currentUserName = currentUserProfile?.display_name ?? displayNameFromEmail(userEmail);
 
+  const removalFinalizerResponse = await (supabase.rpc as any)("finalize_stale_device_account_removals_for_user");
+  if (removalFinalizerResponse.error && !isMissingRemovalFinalizerBackendMessage(removalFinalizerResponse.error.message)) {
+    throw new Error(removalFinalizerResponse.error.message);
+  }
+
   const membershipsResponse = await supabase
     .from("device_memberships")
     .select("device_id, reminder_enabled, reminder_time, device:devices(*)")
@@ -523,10 +593,6 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     fetchLatestRuntimeSnapshots(deviceIds),
     fetchOwnedDeviceHistoryMetrics(),
   ]);
-  const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
-    accumulator[row.device_id] ??= row;
-    return accumulator;
-  }, {});
   const metricsByDevice = historyMetrics.reduce<Record<string, DeviceHistoryMetricRow>>((accumulator, row) => {
     accumulator[row.device_id] = row;
     return accumulator;
@@ -538,7 +604,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
       device: membership.device as DeviceRow,
       metrics: metricsByDevice[membership.device_id] ?? null,
       membership,
-      snapshot: snapshotByDevice[membership.device_id] ?? null,
+      snapshot: resolveAuthoritativeSnapshotForDevice(membership.device as DeviceRow, snapshots),
     }),
   );
 }
@@ -588,16 +654,11 @@ export async function fetchSharedBoards(userId: string) {
     return accumulator;
   }, {});
 
-  const snapshotByDevice = snapshots.reduce<Record<string, RuntimeSnapshotRow>>((accumulator, row) => {
-    accumulator[row.device_id] ??= row;
-    return accumulator;
-  }, {});
-
   return devices.map((device) =>
     mapDeviceRowToSharedBoard({
       device,
       ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
-      snapshot: snapshotByDevice[device.id] ?? null,
+      snapshot: resolveAuthoritativeSnapshotForDevice(device, snapshots),
     }),
   );
 }
@@ -930,19 +991,47 @@ export async function saveActiveHabitMetadataFromApp(params: {
   );
 }
 
-export async function factoryResetAndRemoveDeviceFromApp(params: {
+export async function setActiveHabitStartDateFromApp(params: {
   deviceId: string;
+  habitStartedOnLocal: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("set_active_habit_start_date_from_app", {
+    p_device_id: params.deviceId,
+    p_habit_started_on_local: params.habitStartedOnLocal,
+  });
+
+  return assertData(
+    error,
+    data as {
+      device_id: string;
+      habit_started_on_local: string;
+      history_era: number;
+    },
+    "Failed to update the habit start date.",
+  );
+}
+
+export async function removeDeviceFromAccountFromApp(params: {
+  deviceId: string;
+  remoteReset: boolean;
   requestId: string;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("factory_reset_and_remove_device_from_app", {
+  const { data, error } = await (supabase.rpc as any)("remove_device_from_account_from_app", {
     p_device_id: params.deviceId,
+    p_remote_reset: params.remoteReset,
     p_request_id: params.requestId,
   });
 
   return assertData(
     error,
-    data as { command_id: string; status: string },
+    data as {
+      command_id: string | null;
+      mode: DeviceAccountRemovalMode;
+      removal_deadline_at: string | null;
+      status: string;
+    },
     "Failed to remove the device from the app.",
   );
 }

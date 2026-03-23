@@ -20,7 +20,11 @@ function completedCount(days: boolean[], visibleDayCount: number): number {
   return days.slice(0, visibleDayCount).filter(Boolean).length;
 }
 
-function activeEraStartLocalDate(entity: AddOneDevice | SharedBoard) {
+export function resolveHabitStartLocalDate(entity: AddOneDevice | SharedBoard) {
+  if ("habitStartedOnLocal" in entity && entity.habitStartedOnLocal) {
+    return entity.habitStartedOnLocal;
+  }
+
   if (!("historyEraStartedAt" in entity) || !entity.historyEraStartedAt) {
     return null;
   }
@@ -28,10 +32,20 @@ function activeEraStartLocalDate(entity: AddOneDevice | SharedBoard) {
   return getLogicalToday(entity.timezone, entity.resetTime, new Date(entity.historyEraStartedAt));
 }
 
+export function isCellBeforeHabitStart(entity: AddOneDevice | SharedBoard, row: number, col: number) {
+  if (row > 6) {
+    return false;
+  }
+
+  const habitStartLocalDate = resolveHabitStartLocalDate(entity);
+  const localDate = entity.dateGrid?.[col]?.[row];
+  return Boolean(habitStartLocalDate && localDate && localDate < habitStartLocalDate);
+}
+
 export function buildBoardCells(entity: AddOneDevice | SharedBoard): PixelCellState[][] {
   const cells = emptyBoard();
   const { today, weeklyTarget, days } = entity;
-  const eraStartLocalDate = activeEraStartLocalDate(entity);
+  const habitStartLocalDate = resolveHabitStartLocalDate(entity);
 
   for (let col = 0; col < BOARD_COLS; col += 1) {
     const isPastWeek = col > today.weekIndex;
@@ -46,7 +60,7 @@ export function buildBoardCells(entity: AddOneDevice | SharedBoard): PixelCellSt
       }
 
       const localDate = entity.dateGrid?.[col]?.[row];
-      if (eraStartLocalDate && localDate && localDate < eraStartLocalDate) {
+      if (habitStartLocalDate && localDate && localDate < habitStartLocalDate) {
         continue;
       }
 
@@ -84,6 +98,10 @@ export function toggleHistoryCell(device: AddOneDevice, row: number, col: number
   }
 
   if (col === device.today.weekIndex && row > device.today.dayIndex) {
+    return device;
+  }
+
+  if (isCellBeforeHabitStart(device, row, col)) {
     return device;
   }
 

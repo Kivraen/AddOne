@@ -5,6 +5,8 @@ export type PixelGridMode = "display" | "edit" | "preview" | "shared";
 export type PixelCellState = "future" | "socket" | "done" | "weekSuccess" | "weekFail";
 export type WeekStart = "locale" | "monday" | "sunday";
 export type DeviceRecoveryState = "ready" | "needs_recovery" | "recovering";
+export type DeviceAccountRemovalState = "active" | "pending_device_reset" | "removed";
+export type DeviceAccountRemovalMode = "remote_reset_remove" | "account_only_remove";
 export type DeviceOnboardingStatus = "awaiting_ap" | "awaiting_cloud" | "claimed" | "expired" | "cancelled" | "failed";
 export type DeviceApProvisioningState = "ready" | "busy" | "provisioned";
 export type DeviceApProvisioningNextStep = "connect_to_cloud" | "retry";
@@ -52,6 +54,10 @@ export interface TodayPointer {
 }
 
 export interface AddOneDevice {
+  accountRemovalDeadlineAt: string | null;
+  accountRemovalMode: DeviceAccountRemovalMode | null;
+  accountRemovalRequestedAt: string | null;
+  accountRemovalState: DeviceAccountRemovalState;
   boardId: string | null;
   dailyMinimum: string;
   id: string;
@@ -79,6 +85,7 @@ export interface AddOneDevice {
   reminderEnabled: boolean;
   reminderTime: string;
   firmwareVersion: string;
+  habitStartedOnLocal: string | null;
   historyEraStartedAt: string | null;
   recordedDaysTotal: number;
   successfulWeeksTotal: number;

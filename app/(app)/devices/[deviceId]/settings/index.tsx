@@ -19,6 +19,7 @@ import {
 import { theme } from "@/constants/theme";
 import { useDeviceActions } from "@/hooks/use-devices";
 import { withAlpha } from "@/lib/color";
+import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceResetHistoryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
 
@@ -75,17 +76,26 @@ export default function DeviceSettingsOverviewRoute() {
     factoryResetAndRemove,
     isRemovingDeviceFromApp,
     isResettingHistory,
+    removalPhase,
   } = useDeviceActions();
   const controlReady = isDeviceControlReady(device);
+  const devicePendingRemoval = isDevicePendingRemoval(device);
+  const removeActionDisabled = devicePendingRemoval || isRemovingDeviceFromApp;
 
   function handleResetHistory() {
     router.push(deviceResetHistoryPath(device.id));
   }
 
   function handleFactoryResetAndRemove() {
+    const title = device.isLive ? "Factory reset and remove?" : "Remove this device from the account?";
+    const message = device.isLive
+      ? "AddOne will ask the board to factory reset, then remove it from this account. If the board never confirms the reset, AddOne will still clear it from this account automatically."
+      : "This board looks offline, broken, or lost. AddOne can still remove it from this account now, but the physical board will not be wiped remotely. If it comes back later, factory-reset it manually before reusing it.";
+    const confirmLabel = device.isLive ? "Reset and remove" : "Remove from account";
+
     Alert.alert(
-      "Factory reset and remove?",
-      "This is the transfer flow. The board wipes its local setup, leaves this app, and will need to be added again by the next owner.",
+      title,
+      message,
       [
         {
           style: "cancel",
@@ -93,14 +103,11 @@ export default function DeviceSettingsOverviewRoute() {
         },
         {
           style: "destructive",
-          text: "Reset and remove",
+          text: confirmLabel,
           onPress: () => {
             void factoryResetAndRemove(device.id).then(
               () => {
-                Alert.alert(
-                  "Device removed",
-                  "The board is wiping itself and has been removed from this app.",
-                );
+                router.replace("/");
               },
               (error: unknown) => {
                 Alert.alert(
@@ -238,13 +245,17 @@ export default function DeviceSettingsOverviewRoute() {
               <SettingsDivider />
               <SettingsRow
                 detail={
-                  device.isLive
-                    ? isRemovingDeviceFromApp
-                      ? "Removing device…"
-                      : "Use this only when the board is leaving this account. It wipes the device and removes it from the app."
-                    : "Factory reset and remove is only available while the board is online."
+                  devicePendingRemoval || isRemovingDeviceFromApp
+                    ? removalPhase === "sending_reset"
+                      ? "Sending the reset request to the board…"
+                      : removalPhase === "waiting_for_board"
+                        ? "Waiting for the board to confirm its reset. If it never does, AddOne will still remove it from this account."
+                        : "Waiting for this board to finish leaving the account."
+                    : device.isLive
+                      ? "Use this when the board is leaving this account. AddOne asks it to factory reset, then removes it from the app."
+                      : "Use this when the board is offline, broken, or lost. AddOne removes it from the account now, but the physical board is not wiped remotely."
                 }
-                onPress={device.isLive && !isRemovingDeviceFromApp ? handleFactoryResetAndRemove : undefined}
+                onPress={!removeActionDisabled ? handleFactoryResetAndRemove : undefined}
                 title="Factory reset and remove"
               />
             </SettingsListSurface>

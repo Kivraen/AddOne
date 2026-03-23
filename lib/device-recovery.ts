@@ -1,7 +1,7 @@
 import { AddOneDevice } from "@/types/addone";
 
-export function isDeviceControlReady(device: Pick<AddOneDevice, "isLive" | "recoveryState">) {
-  return device.isLive && device.recoveryState === "ready";
+export function isDeviceControlReady(device: Pick<AddOneDevice, "accountRemovalState" | "isLive" | "recoveryState">) {
+  return device.accountRemovalState === "active" && device.isLive && device.recoveryState === "ready";
 }
 
 export function isDeviceRecovering(device: Pick<AddOneDevice, "recoveryState">) {

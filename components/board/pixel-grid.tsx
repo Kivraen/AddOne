@@ -17,10 +17,13 @@ interface PixelGridProps {
   availableWidth?: number;
   availableHeight?: number;
   cells: PixelCellState[][];
+  footerHint?: string | null;
+  isCellLocked?: (row: number, col: number) => boolean;
   palette: BoardPalette;
   mode: PixelGridMode;
   highlightToday?: HighlightTarget;
   maxWidth?: number;
+  onLockedCellPress?: (row: number, col: number) => void;
   pendingPulse?: HighlightTarget | null;
   onCellPress?: (row: number, col: number) => void;
   readOnly?: boolean;
@@ -158,10 +161,13 @@ export function PixelGrid({
   availableWidth,
   availableHeight,
   cells,
+  footerHint,
+  isCellLocked,
   palette,
   mode,
   highlightToday,
   maxWidth,
+  onLockedCellPress,
   pendingPulse = null,
   onCellPress,
   readOnly = false,
@@ -190,14 +196,17 @@ export function PixelGrid({
               const outerGlow = lit && treatment ? withAlpha(colors.fill, treatment.outerGlowOpacity) : "transparent";
               const isToday = highlightToday?.row === rowIndex && highlightToday?.col === colIndex;
               const disabled = readOnly || mode === "display" || mode === "shared" || rowIndex === 7;
+              const locked = !disabled && mode === "edit" && (isCellLocked?.(rowIndex, colIndex) ?? false);
               const cellStyle = {
                 alignItems: "center" as const,
                 justifyContent: "center" as const,
                 height: cellSize,
                 width: cellSize,
                 borderRadius: Math.max(4, Math.floor(cellSize * 0.28)),
-                backgroundColor: lit && treatment ? treatment.edgeFill : colors.fill,
+                backgroundColor: locked ? shadeHex(palette.socketEdge, 0.56) : lit && treatment ? treatment.edgeFill : colors.fill,
                 overflow: "hidden" as const,
+                borderWidth: locked ? 1 : 0,
+                borderColor: locked ? withAlpha(theme.colors.textTertiary, 0.16) : undefined,
                 boxShadow: lit ? `0px 0px ${Math.max(10, Math.floor(cellSize * 0.55))}px ${outerGlow}` : undefined,
               };
               const ledGlow = lit && treatment ? <LitPixelDiffuser cellSize={cellSize} fill={treatment.centerFill} /> : null;
@@ -230,9 +239,55 @@ export function PixelGrid({
               }
 
               return (
-                <Pressable key={`cell-${rowIndex}-${colIndex}`} onPress={() => onCellPress?.(rowIndex, colIndex)} style={cellStyle}>
+                <Pressable
+                  key={`cell-${rowIndex}-${colIndex}`}
+                  onPress={() => {
+                    if (locked) {
+                      onLockedCellPress?.(rowIndex, colIndex);
+                      return;
+                    }
+
+                    onCellPress?.(rowIndex, colIndex);
+                  }}
+                  style={cellStyle}
+                >
                   {ledGlow}
                   {showPendingPulse ? <PendingPulse cellSize={cellSize} /> : null}
+                  {locked ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        left: 0,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <View
+                        style={{
+                          position: "absolute",
+                          width: Math.max(8, Math.floor(cellSize * 0.54)),
+                          height: 1.5,
+                          borderRadius: theme.radius.full,
+                          backgroundColor: withAlpha(theme.colors.textTertiary, 0.42),
+                          transform: [{ rotate: "45deg" }],
+                        }}
+                      />
+                      <View
+                        style={{
+                          position: "absolute",
+                          width: Math.max(8, Math.floor(cellSize * 0.54)),
+                          height: 1.5,
+                          borderRadius: theme.radius.full,
+                          backgroundColor: withAlpha(theme.colors.textTertiary, 0.42),
+                          transform: [{ rotate: "-45deg" }],
+                        }}
+                      />
+                    </View>
+                  ) : null}
                   {highlight}
                 </Pressable>
               );
@@ -240,7 +295,7 @@ export function PixelGrid({
           </View>
         ))}
       </View>
-      {mode === "edit" && showFooterHint ? (
+      {mode === "edit" && showFooterHint && footerHint !== null ? (
         <Text
           style={{
             marginTop: 12,
@@ -252,7 +307,7 @@ export function PixelGrid({
             textTransform: "uppercase",
           }}
         >
-          Bottom row is automatic. Tap day cells to correct history.
+          {footerHint ?? "Bottom row is automatic. Tap day cells to correct history."}
         </Text>
       ) : null}
     </Animated.View>

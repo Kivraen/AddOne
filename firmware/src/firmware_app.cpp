@@ -284,14 +284,14 @@ void FirmwareApp::begin() {
   habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
   provisioningStore_.begin();
   cloudClient_.begin(identity_);
+  timeService_.begin();
+  timeService_.applySettings(deviceSettings_.current());
   if (factoryResetRequestedAtBoot_) {
     performFactoryReset_("Boot-time factory reset requested.", true);
     return;
   }
   migrateReadyForTrackingFlag_();
   realtimeClient_.begin(identity_);
-  timeService_.begin();
-  timeService_.applySettings(deviceSettings_.current());
   rewardEngine_.clear();
 
   const bool trackerShiftedAtBoot = bootReadyForTracking_() && hasAuthoritativeTime_() && prepareTrackerForCurrentTime_();

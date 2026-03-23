@@ -27,6 +27,9 @@ const RECONNECT_POLL_MS = 2_000;
 const WIFI_RECONNECT_TIMEOUT_MS = 90_000;
 const RESTORE_TIMEOUT_MS = 45_000;
 const RECONNECT_AP_FAILURE_GRACE_MS = 7_000;
+const AP_JOIN_AUTODETECT_POLL_MS = 1_200;
+const WIFI_SCAN_ATTEMPTS = 3;
+const WIFI_SCAN_RETRY_DELAY_MS = 1_200;
 
 type SessionRefreshResult = { data?: DeviceOnboardingSession | null } | null;
 
@@ -257,9 +260,24 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
     try {
       let nextNetworks: DeviceApScannedNetwork[] = [];
 
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
-        const response = await scanNetworks();
-        nextNetworks = sortNetworks(response.networks);
+      for (let attempt = 1; attempt <= WIFI_SCAN_ATTEMPTS; attempt += 1) {
+        try {
+          const response = await scanNetworks();
+          nextNetworks = sortNetworks(response.networks);
+        } catch (error) {
+          const shouldRetry = error instanceof DeviceApClientError && error.code === "ap_not_joined" && attempt < WIFI_SCAN_ATTEMPTS;
+          if (!shouldRetry) {
+            throw error;
+          }
+
+          logSetupFlowEvent(flow, "scan_ap_retrying", {
+            attempt,
+            message: error.message,
+          });
+          await sleep(WIFI_SCAN_RETRY_DELAY_MS);
+          continue;
+        }
+
         if (nextNetworks.length > 0) {
           if (attempt > 1) {
             logSetupFlowEvent(flow, "scan_success_after_retry", {
@@ -270,9 +288,9 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
           break;
         }
 
-        if (attempt < 3) {
+        if (attempt < WIFI_SCAN_ATTEMPTS) {
           logSetupFlowEvent(flow, "scan_empty_retrying", { attempt });
-          await sleep(1_200);
+          await sleep(WIFI_SCAN_RETRY_DELAY_MS);
         }
       }
 
@@ -306,27 +324,39 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
     }
   }
 
-  async function confirmJoinedDeviceAp() {
+  async function confirmJoinedDeviceAp(options?: { silent?: boolean }) {
     setIsCheckingAp(true);
-    setFailureState(null);
-    setOverlay(null);
-    setRetryFromReconnect(false);
-    clearDraft();
-    setNetworks([]);
-    setNetworkScanComplete(false);
-    setManualWifiEntry(false);
-    setPickerVisible(false);
-    logSetupFlowEvent(flow, "confirm_ap_start", { sessionId: session?.id ?? null });
+    if (!options?.silent) {
+      setFailureState(null);
+      setOverlay(null);
+    }
+    logSetupFlowEvent(flow, "confirm_ap_start", {
+      mode: options?.silent ? "autodetect" : "manual",
+      sessionId: session?.id ?? null,
+    });
 
     try {
       const info = await checkAp();
       setHasValidatedAp(true);
+      setFailureState(null);
+      setOverlay(null);
+      setRetryFromReconnect(false);
+      setNetworks([]);
+      setNetworkScanComplete(false);
+      setManualWifiEntry(false);
+      setPickerVisible(false);
       setShowWifiPassword(false);
       logSetupFlowEvent(flow, "confirm_ap_success", {
         apSsid: info.device_ap_ssid,
+        mode: options?.silent ? "autodetect" : "manual",
         provisioningState: info.provisioning_state,
       });
     } catch (error) {
+      if (options?.silent && error instanceof DeviceApClientError && error.code === "ap_not_joined") {
+        logSetupFlowEvent(flow, "confirm_ap_waiting", { sessionId: session?.id ?? null });
+        return;
+      }
+
       const nextFailure =
         error instanceof DeviceApClientError && error.code === "ap_not_joined"
           ? buildSetupFailureState("ap_not_joined")
@@ -335,7 +365,9 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
             });
       setHasValidatedAp(false);
       setFailureState(nextFailure);
-      presentOverlay(nextFailure);
+      if (!options?.silent) {
+        presentOverlay(nextFailure);
+      }
       logSetupFlowEvent(flow, "confirm_ap_error", { code: nextFailure.code, message: nextFailure.message });
     } finally {
       setIsCheckingAp(false);
@@ -508,6 +540,18 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
 
     void startWifiScan({ openPickerOnSuccess: true });
   }, [hasValidatedAp, isScanningNetworks, networkScanComplete, stage]);
+
+  useEffect(() => {
+    if (stage !== "join_device_ap" || hasValidatedAp || isCheckingAp) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      void confirmJoinedDeviceAp({ silent: true });
+    }, AP_JOIN_AUTODETECT_POLL_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasValidatedAp, isCheckingAp, stage]);
 
   useEffect(() => {
     const nextSessionId = session?.id ?? null;
