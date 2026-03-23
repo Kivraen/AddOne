@@ -52,7 +52,8 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 - The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install from `d589cdc`.
 - The first Friends implementation is checkpointed on the task branch, but its final acceptance still depends on second-device or second-account proof.
-- The March 22 setup follow-up is implemented and hardware-validated: shared onboarding or recovery flow stabilization, wrong-password retry handling, and `Reset history` as `Start new habit` are now checkpoint candidates rather than chat-only work.
+- The March 22 setup follow-up is implemented and hardware-validated: shared onboarding or recovery flow stabilization, wrong-password retry handling, and `Reset history` as `Start new habit` are checkpointed rather than chat-only work.
+- The March 22 destructive lifecycle slice is also implemented and live-validated: full `Factory reset and remove`, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on reclaim, and editable earlier habit-start correction.
 
 ## Open Risks / Blockers
 
@@ -67,6 +68,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, execute the planning checkpoint [T-019-device-lifecycle-factory-reset-and-first-add-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-019-device-lifecycle-factory-reset-and-first-add-plan.md) so the real current device lifecycle and target first-add or destructive-reset flow are explicit. Then execute [T-018-factory-reset-remove-and-fresh-add-flow.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-018-factory-reset-remove-and-fresh-add-flow.md) inside the broader [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) parent while the final [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) proof is blocked on second-device testing. Then return to the Friends verification-only pass and accept it before closing `S3`.
+Next, treat the destructive lifecycle path as accepted and shift the remaining work back to the still-open S3 items: the blocked [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) proof, the `T-011` timezone revision path if it stays active, and the final onboarding or Wi-Fi recovery polish slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.

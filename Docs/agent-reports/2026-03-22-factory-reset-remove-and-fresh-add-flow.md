@@ -132,7 +132,6 @@ Open risks / blockers
   - setup and onboarding transitions can still be visually tightened
   - copy and step framing can be simplified further now that behavior is stable
 - Real-world Wi-Fi still showed at least one transient first-try WPA handshake miss (`disconnect reason 15`) during testing. The UX is now safer, but the device still does not internally auto-retry the same credentials before surfacing failure.
-- The branch contains accepted implementation work plus this report in a dirty tree and should be checkpointed before any new broad slice starts.
 - No dedicated replacement-device/restore product flow exists anymore in onboarding. That is intentional for this slice, but if product wants a “move my old board onto new hardware” feature later, it should be designed as its own explicit flow rather than reopening onboarding ambiguity.
 
 Recommendation

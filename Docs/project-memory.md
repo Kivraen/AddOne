@@ -55,23 +55,22 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
 - The March 22 setup follow-up stabilized the shared onboarding or recovery controller on real hardware, fixed wrong-password retry behavior, and implemented `Reset history` as `Start new habit` with backend era preservation.
+- The March 22 factory-reset slice is now also live-validated: destructive account removal, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on re-claim, and editable earlier habit-start correction all work on real hardware.
 
 ## Current Active Stage
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-016-stage-s3-device-lifecycle-reset-and-first-add-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-016-stage-s3-device-lifecycle-reset-and-first-add-plan.md)
-- Current execution task: [T-019-device-lifecycle-factory-reset-and-first-add-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-019-device-lifecycle-factory-reset-and-first-add-plan.md)
+- Next brief: `TBD after the next S3 slice is chosen`
+- Current execution task: `No new execution task is locked yet after T-018 acceptance`
 
 ## Current Blockers
 
 - `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
-- The March 22 recovery and `Start new habit` slice is implemented and verified, but the destructive `Factory reset and remove` path is still the next required hardware-backed follow-up.
-- The next immediate step is planning, not implementation: map the full device lifecycle and agree the target first-add and destructive-reset flows before executing `T-018`.
-- `T-019` is the current focused planning pass inside `T-008`.
+- `T-018` is now accepted and no longer a lifecycle blocker.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
-- Onboarding and Wi-Fi recovery still need the final polish slice after the destructive reset path is trustworthy.
+- Onboarding and Wi-Fi recovery still need the final polish slice, but the remaining work is now polish rather than core lifecycle correctness.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
 - `main` is now fully backed up on GitHub, so there is no current backup gap.
 
