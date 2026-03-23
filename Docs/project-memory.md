@@ -67,11 +67,13 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 ## Current Blockers
 
 - `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
+- The user has opened an approved parallel planning track for factory QA and ship-ready bring-up on `codex/s2-factory-qa-plan` because the next physical board build needs a repeatable flash-and-test workflow.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
 - Onboarding and Wi-Fi recovery still need the final polish slice, but the remaining work is now polish rather than core lifecycle correctness.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
+- The repo already has device preregistration and a first-flash identity path, but it does not yet have a dedicated factory-QA harness, operator workflow, or ship-ready record model.
 - `main` is now fully backed up on GitHub, so there is no current backup gap.
 
 ## Fresh Agent Read Order

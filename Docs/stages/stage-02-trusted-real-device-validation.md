@@ -35,6 +35,7 @@ Prove or falsify the core AddOne experience on real hardware and real networks s
 
 - Router-specific failures may require multiple rounds.
 - Infra ambiguity from `S1` can make firmware or app behavior appear worse than it is.
+- The repo does not yet have a dedicated factory-QA and ship-ready bring-up harness for new boards; the user has opened a parallel planning track to define that workflow before the next device build.
 
 ## Recommendation
 
