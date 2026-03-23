@@ -14,7 +14,7 @@ Last updated: March 22, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: `TBD after the next S3 slice is chosen`
+- Next brief: [B-017-stage-s3-friends-finalization-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-017-stage-s3-friends-finalization-plan.md)
 
 ## Stage Notes
 
@@ -31,6 +31,7 @@ Last updated: March 22, 2026
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
 - `T-001` is implemented and saved, but its final verification is blocked on second-device or second-account proof.
+- `T-020` is the current planning step to map the exact Friends proof path on the fresh branch.
 - `T-008` remains the current active parent slice while that Friends proof dependency is unavailable.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

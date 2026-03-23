@@ -61,12 +61,13 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: `TBD after the next S3 slice is chosen`
-- Current execution task: `No new execution task is locked yet after T-018 acceptance`
+- Next brief: [B-017-stage-s3-friends-finalization-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-017-stage-s3-friends-finalization-plan.md)
+- Current execution task: [T-020-friends-finalization-plan-and-proof-strategy.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-020-friends-finalization-plan-and-proof-strategy.md)
 
 ## Current Blockers
 
 - `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
+- The next focused step is a planning pass for Friends finalization on `codex/s3-friends-finalization`, not immediate new feature work.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
