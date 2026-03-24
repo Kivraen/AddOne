@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 22, 2026
+Last updated: March 24, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -56,6 +56,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
 - The March 22 setup follow-up stabilized the shared onboarding or recovery controller on real hardware, fixed wrong-password retry behavior, and implemented `Reset history` as `Start new habit` with backend era preservation.
 - The March 22 factory-reset slice is now also live-validated: destructive account removal, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on re-claim, and editable earlier habit-start correction all work on real hardware.
+- The March 24 factory-QA slice added a real beta factory station on `codex/s2-factory-qa-plan`, including a release manifest, local Node plus browser operator tool, backend `factory_device_runs` support, firmware manufacturing-QA serial commands, and one successful live ship-ready bench run on a newly built board.
 
 ## Current Active Stage
 
@@ -70,10 +71,10 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The user has opened an approved parallel planning track for factory QA and ship-ready bring-up on `codex/s2-factory-qa-plan` because the next physical board build needs a repeatable flash-and-test workflow.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
 - `T-018` is now accepted and no longer a lifecycle blocker.
+- `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.
 - The timezone implementation loop still needs its revision pass accepted if that surface stays in the active UI queue.
 - Onboarding and Wi-Fi recovery still need the final polish slice, but the remaining work is now polish rather than core lifecycle correctness.
 - The device offline or Wi-Fi reconnect issue is still unresolved and should be treated as a real device-validation problem, not a fake app state problem.
-- The repo already has device preregistration and a first-flash identity path, but it does not yet have a dedicated factory-QA harness, operator workflow, or ship-ready record model.
 - `main` is now fully backed up on GitHub, so there is no current backup gap.
 
 ## Fresh Agent Read Order

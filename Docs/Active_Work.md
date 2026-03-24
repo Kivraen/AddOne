@@ -1,6 +1,6 @@
 # Active Work
 
-Last updated: March 22, 2026
+Last updated: March 24, 2026
 
 This file is the live registry for coordination work.
 It is the structured companion to [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md).
@@ -25,7 +25,7 @@ The coordinator owns this file.
 | Timezone model | Verified | The current flow is now audited: device timezone is the canonical scheduling setting, a future viewer timezone must stay separate, and universal support is firmware-blocked today. | Coordinator | Choose a beta policy next: supported-zone picker and fallback messaging, or explicit firmware timezone expansion. |
 | Beta environment | Implemented | Hosted beta infrastructure is alive and the TestFlight distribution path now works, but the always-on device reconnect path is not yet trusted enough to close validation. | Coordinator | Queue `T-002` after the active UI stage is explicit enough to hand off cleanly, then use `T-003` to prove the real device path. |
 | Backend runtime mirror | Implemented | Snapshot-based runtime and gateway forwarding exist, but the full staged validation loop is still pending. | Coordinator | Re-check after `T-002` and `T-003`. |
-| Hardware validation | Not Done | Validation criteria are clear, but the full real-device pass has not been completed yet. | Coordinator | Start `T-003` only after `S1` is accepted or explicitly bounded. |
+| Hardware validation | Implemented | A beta factory station now exists with one full live bench pass on a newly built board, but broader multi-board validation and stable artifact promotion are still pending. | Coordinator | Use `T-022` to promote the release path and widen bench proof, then return to `T-003` for the broader real-device matrix. |
 
 ## Task Registry
 
@@ -43,7 +43,9 @@ The coordinator owns this file.
 | T-017 | Add-device entry flow first-screen polish | app | Closed | Codex | T-008 | [T-017](tasks/T-017-add-device-entry-flow-first-screen.md) | [Report](agent-reports/2026-03-22-recovery-and-reset-history-start-new-habit.md) | Strict gate | Absorbed into the broader March 22 setup-flow stabilization slice. |
 | T-018 | Factory reset remove and fresh add-flow validation | cross-platform | Closed | Codex | T-008 | [T-018](tasks/T-018-factory-reset-remove-and-fresh-add-flow.md) | [Report](agent-reports/2026-03-22-factory-reset-remove-and-fresh-add-flow.md) | Strict gate | Accepted. Merge this slice and treat further work here as new polish-focused follow-up, not more lifecycle debugging on top of the same branch. |
 | T-019 | Device lifecycle factory reset and first add-flow plan | product | Closed | Codex | T-008 | [T-019](tasks/T-019-device-lifecycle-factory-reset-and-first-add-plan.md) | — | Strict gate | Historical planning artifact. The destructive reset and fresh-add implementation landed directly and live validation is captured under `T-018`. |
-| T-021 | Factory QA and ship-ready bring-up plan | cross-platform | Brief Ready | Unassigned | T-018 | [T-021](tasks/T-021-factory-qa-and-ship-ready-bring-up-plan.md) | — | Strict gate | Run this as an approved planning-only parallel track. Use [B-018](briefs/B-018-stage-s2-factory-qa-and-ship-ready-bring-up-plan.md) to map the flashing, QA, preregistration, notes, and ship-ready workflow before implementation starts. |
+| T-021 | Factory QA and ship-ready bring-up plan | cross-platform | Closed | Codex | T-018 | [T-021](tasks/T-021-factory-qa-and-ship-ready-bring-up-plan.md) | [Report](agent-reports/2026-03-22-factory-qa-and-ship-ready-bring-up-plan.md) | Strict gate | Accepted as the first beta factory-station checkpoint. The planning-only scope was exceeded, but the implemented station, QA protocol, backend run records, and ship-ready flow are now real and preserved together. |
+| T-022 | Factory station release promotion and broader bench validation | cross-platform | Backlog | Unassigned | T-021 | [T-022](tasks/T-022-factory-station-release-promotion-and-bench-validation.md) | — | Strict gate | Promote the manifest away from the branch-candidate artifact, run more boards, and tighten retry/rework proof before wider operator use. |
+| T-023 | Factory station security hardening and trust boundaries | cross-platform | Backlog | Unassigned | T-021 | [T-023](tasks/T-023-factory-station-security-hardening-and-trust-boundaries.md) | — | Strict gate | Harden the local station trust model and document the real operator security boundary before wider rollout. |
 | T-014 | Repo typecheck noise cleanup | repo | Closed | Codex | T-005 | [T-014](tasks/T-014-repo-typecheck-noise-cleanup.md) | [Report](agent-reports/2026-03-19-repo-typecheck-noise-cleanup.md) | Strict gate | Accepted. Repo-wide `typecheck` is meaningful again; keep the backup tree excluded unless a deliberate restore workflow needs it. |
 | T-013 | Challenge groups and shared board model | app | Backlog | Unassigned | T-001 | [T-013](tasks/T-013-challenge-groups-and-shared-board-model.md) | — | Strict gate | Keep as a post-beta planning task so the first-beta friends implementation does not block shared-goal groups later. |
 | T-006 | Timezone model and universal flow audit | cross-platform | Closed | Hubble | — | [T-006](tasks/T-006-timezone-model-and-universal-flow-audit.md) | [Report](agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) | Strict gate | Accepted. Next decide whether beta uses a supported-zone timezone picker or whether firmware timezone support must expand first. |

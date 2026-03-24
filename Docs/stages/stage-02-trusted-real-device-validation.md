@@ -29,13 +29,21 @@ Prove or falsify the core AddOne experience on real hardware and real networks s
 
 ## Evidence
 
-- Awaiting acceptance of `S1` before dispatch.
+- `T-021` is now accepted as a bounded parallel checkpoint:
+  - beta factory station exists
+  - firmware manufacturing-QA serial support exists
+  - backend factory run records exist
+  - one newly built board completed a full live ship-ready bench run
+- The broader S2 real-device matrix is still pending.
 
 ## Open Risks / Blockers
 
 - Router-specific failures may require multiple rounds.
 - Infra ambiguity from `S1` can make firmware or app behavior appear worse than it is.
-- The repo does not yet have a dedicated factory-QA and ship-ready bring-up harness for new boards; the user has opened a parallel planning track to define that workflow before the next device build.
+- The factory station still needs:
+  - stable release promotion away from a branch-candidate artifact
+  - broader multi-board validation
+  - security hardening before wider operator use
 
 ## Recommendation
 

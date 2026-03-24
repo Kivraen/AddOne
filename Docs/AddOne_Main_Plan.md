@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 22, 2026
+Last locked: March 24, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -110,11 +110,16 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - `Supabase queued commands -> MQTT`
   - `MQTT ack / presence / day-state / runtime snapshots -> Supabase RPCs`
 - The TestFlight path is now real and working for the recovered latest app baseline.
+- The beta backend now also has factory preregistration support plus `factory_device_runs` records for bench QA notes and ship-ready signoff.
 - Remaining backend work is mostly hosted-beta validation and hardening, not foundational schema design.
 
 ### Firmware
 - Firmware v2 exists in a clean workspace with AP provisioning, claim redemption, heartbeat, fallback command poll, MQTT realtime subscribe, runtime snapshots, local button handling, settings sync, and reward rendering.
 - Button handling and normal board rendering now run separately from blocking cloud work through the background sync task.
+- A first beta factory station now exists off the main app path:
+  - approved-manifest flashing
+  - local Node plus browser operator flow
+  - firmware manufacturing-QA serial commands for button, LED, ambient, RTC, and final ship-ready reset
 - Remaining firmware work is real-device validation, broker and beta config validation, and custom reward asset sync.
 
 ## Main Plan

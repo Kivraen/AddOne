@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 22, 2026
+Last updated: March 24, 2026
 
 ## Current Stage Map
 
@@ -35,7 +35,7 @@ Last updated: March 22, 2026
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
 - `T-019` is preserved as a historical planning artifact, not an active blocker.
-- The user has explicitly opened a parallel planning track for factory QA and ship-ready bring-up while second-device Friends proof is blocked.
+- `T-021` is now accepted as a parallel S2 checkpoint: the beta factory station exists and has one successful live ship-ready board run.
 - `T-002` remains important, but it is no longer the active stage entrypoint.
 - Stage acceptance outcomes are only:
   - `accepted`
