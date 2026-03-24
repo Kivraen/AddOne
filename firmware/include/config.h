@@ -14,6 +14,7 @@ constexpr const char* kDefaultTimezoneIana = "America/Los_Angeles";
 
 constexpr uint8_t kButtonPin = 33;
 constexpr unsigned long kButtonDebounceMs = 25;
+constexpr unsigned long kFactoryQaArmHoldMs = 3000;
 constexpr unsigned long kRecoveryHoldMs = 5000;
 constexpr unsigned long kFactoryResetHoldMs = 10000;
 constexpr uint8_t kLedPin = 5;

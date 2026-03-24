@@ -702,6 +702,80 @@ export type Database = {
           },
         ]
       }
+      factory_device_runs: {
+        Row: {
+          build_notes: string | null
+          completed_at: string | null
+          created_at: string
+          device_id: string | null
+          firmware_release_id: string
+          firmware_version: string | null
+          hardware_profile: string | null
+          hardware_uid: string | null
+          id: string
+          order_number: string | null
+          preregistered_at: string | null
+          qa_results: Json
+          ready_to_ship: boolean
+          ready_to_ship_at: string | null
+          recipient: string | null
+          ship_block_reason: string | null
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          build_notes?: string | null
+          completed_at?: string | null
+          created_at?: string
+          device_id?: string | null
+          firmware_release_id: string
+          firmware_version?: string | null
+          hardware_profile?: string | null
+          hardware_uid?: string | null
+          id?: string
+          order_number?: string | null
+          preregistered_at?: string | null
+          qa_results?: Json
+          ready_to_ship?: boolean
+          ready_to_ship_at?: string | null
+          recipient?: string | null
+          ship_block_reason?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          build_notes?: string | null
+          completed_at?: string | null
+          created_at?: string
+          device_id?: string | null
+          firmware_release_id?: string
+          firmware_version?: string | null
+          hardware_profile?: string | null
+          hardware_uid?: string | null
+          id?: string
+          order_number?: string | null
+          preregistered_at?: string | null
+          qa_results?: Json
+          ready_to_ship?: boolean
+          ready_to_ship_at?: string | null
+          recipient?: string | null
+          ship_block_reason?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factory_device_runs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1450,6 +1524,61 @@ export type Database = {
       register_factory_device: {
         Args: {
           p_device_auth_token: string
+          p_firmware_version?: string
+          p_hardware_profile?: string
+          p_hardware_uid: string
+          p_name?: string
+        }
+        Returns: {
+          account_removal_completed_at: string | null
+          account_removal_completion:
+            | Database["public"]["Enums"]["device_account_removal_completion"]
+            | null
+          account_removal_deadline_at: string | null
+          account_removal_mode:
+            | Database["public"]["Enums"]["device_account_removal_mode"]
+            | null
+          account_removal_requested_at: string | null
+          account_removal_state: Database["public"]["Enums"]["device_account_removal_state"]
+          ambient_auto: boolean
+          board_id: string | null
+          brightness: number
+          created_at: string
+          day_reset_time: string
+          device_auth_token_hash: string | null
+          firmware_version: string
+          hardware_profile: string
+          hardware_uid: string
+          id: string
+          last_factory_reset_at: string | null
+          last_runtime_revision: number
+          last_seen_at: string | null
+          last_snapshot_at: string | null
+          last_snapshot_hash: string | null
+          last_sync_at: string | null
+          name: string
+          palette_custom: Json
+          palette_preset: string
+          recovery_state: Database["public"]["Enums"]["device_recovery_state"]
+          reset_epoch: number
+          reward_artwork_id: string | null
+          reward_enabled: boolean
+          reward_trigger: Database["public"]["Enums"]["device_reward_trigger"]
+          reward_type: Database["public"]["Enums"]["device_reward_type"]
+          timezone: string
+          updated_at: string
+          week_start: Database["public"]["Enums"]["device_week_start"]
+          weekly_target: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "devices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      preregister_factory_device_identity: {
+        Args: {
           p_firmware_version?: string
           p_hardware_profile?: string
           p_hardware_uid: string

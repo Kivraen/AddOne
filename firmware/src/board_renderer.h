@@ -20,9 +20,19 @@ enum class ResetHoldVisualStage : uint8_t {
   FactoryResetReady = 2,
 };
 
+enum class QaLedPattern : uint8_t {
+  Off = 0,
+  White = 1,
+  Red = 2,
+  Green = 3,
+  Blue = 4,
+  Mapping = 5,
+};
+
 class BoardRenderer {
 public:
   void begin();
+  void renderQaPattern(QaLedPattern pattern, uint8_t brightness, unsigned long elapsedMs);
   void renderResetHoldState(ResetHoldVisualStage stage, uint8_t brightness);
   void render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness);
   void renderRecoveryState(RecoveryVisualStage stage, uint8_t brightness);

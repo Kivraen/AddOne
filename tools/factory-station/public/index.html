@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AddOne Factory Station</title>
+    <link rel="stylesheet" href="/styles.css?v=20260324-flow9" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel panel-priority console-panel">
+        <div class="console-topbar">
+          <div class="console-heading">
+            <div class="eyebrow">AddOne Beta</div>
+            <h1>Factory Station</h1>
+            <p class="helper">Flash, validate, preregister, and return the board to fresh customer setup.</p>
+          </div>
+          <div class="console-actions">
+            <span id="manifest-pill" class="pill muted">Manifest loading</span>
+            <button id="refresh-state-button" class="ghost">Refresh</button>
+          </div>
+        </div>
+        <div class="console-summary">
+          <p id="next-step-banner" class="step-banner">Choose the USB board, then click Start run + flash approved firmware.</p>
+          <p id="run-summary" class="helper">No active run yet.</p>
+        </div>
+        <pre id="serial-log" class="serial-log"></pre>
+      </section>
+
+      <section class="workspace-layout compact-flow">
+        <article class="panel compact-panel">
+          <div class="panel-head step-head">
+            <div class="title-stack">
+              <div class="eyebrow">Step 1</div>
+              <h2 class="title-with-icon">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M7 3v6H4l8 8 8-8h-3V3h-4v4h-2V3H7zm4 8h2v7h-2v-7z"></path>
+                  </svg>
+                </span>
+                <span>Connect + Flash</span>
+              </h2>
+            </div>
+            <span class="step-number">1</span>
+          </div>
+          <p class="helper">Choose the approved release and board port, add the order details, then flash.</p>
+          <div class="field-grid">
+            <label class="field field-full">
+              <span>Approved release</span>
+              <select id="release-select"></select>
+            </label>
+            <label class="field field-full">
+              <span>USB port</span>
+              <select id="port-select"></select>
+            </label>
+            <label class="field">
+              <span>Order number</span>
+              <input id="order-number" type="text" placeholder="A-1042" />
+            </label>
+            <label class="field">
+              <span>Recipient</span>
+              <input id="recipient" type="text" placeholder="Recipient name" />
+            </label>
+            <label class="field field-full">
+              <span>Build notes</span>
+              <textarea id="build-notes" rows="2" placeholder="Assembly notes, rework notes, quirks"></textarea>
+            </label>
+          </div>
+          <div class="button-row compact-buttons">
+            <button id="flash-button" class="primary">Start run + flash approved firmware</button>
+          </div>
+        </article>
+
+        <article class="panel compact-panel">
+          <div class="panel-head step-head">
+            <div class="title-stack">
+              <div class="eyebrow">Step 2</div>
+              <h2 class="title-with-icon">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 4a8 8 0 1 1-7.75 10h2.12A6 6 0 1 0 12 6c-1.57 0-3 .6-4.06 1.58L10 10H4V4l2.53 2.53A7.95 7.95 0 0 1 12 4z"></path>
+                  </svg>
+                </span>
+                <span>Reconnect + Confirm</span>
+              </h2>
+            </div>
+            <span class="step-number">2</span>
+          </div>
+          <p id="board-next-step" class="helper">Start a run to begin.</p>
+          <div class="button-row compact-buttons">
+            <button id="reconnect-button" class="ghost">Reconnect serial</button>
+          </div>
+          <dl class="kv kv-grid">
+            <div><dt>Hardware UID</dt><dd id="boot-hardware-uid">-</dd></div>
+            <div><dt>Firmware</dt><dd id="boot-firmware-version">-</dd></div>
+            <div><dt>AP SSID</dt><dd id="boot-ap-ssid">-</dd></div>
+            <div><dt>QA access</dt><dd id="boot-qa-armed">-</dd></div>
+            <div><dt>State</dt><dd id="boot-state">-</dd></div>
+            <div><dt>Pending claim</dt><dd id="boot-pending-claim">-</dd></div>
+            <div><dt>Ready</dt><dd id="boot-ready">-</dd></div>
+            <div><dt>Reset epoch</dt><dd id="boot-reset-epoch">-</dd></div>
+          </dl>
+        </article>
+
+        <article class="panel compact-panel panel-wide">
+          <div class="panel-head step-head">
+            <div class="title-stack">
+              <div class="eyebrow">Step 3</div>
+              <h2 class="title-with-icon">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 3h6l1 2h3a2 2 0 0 1 2 2v3h-2V7H5v10h5v2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3l1-2zm3 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm7.71 6.29L22 18.59 20.59 20l-2.29-2.29 1.41-1.42z"></path>
+                  </svg>
+                </span>
+                <span>Run Hardware Checks</span>
+              </h2>
+            </div>
+            <span class="step-number">3</span>
+          </div>
+          <div class="qa-grid">
+            <div class="qa-block">
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 3h6a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm3 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                  </svg>
+                </span>
+                <span>Button input</span>
+              </h3>
+              <p class="helper">Start the test, press once, then hold once.</p>
+              <div class="button-row compact-buttons">
+                <button id="button-test-button" class="primary">Start button test</button>
+                <button id="record-button-pass-button" class="ghost">Record result</button>
+              </div>
+              <div class="metric-row compact-metrics">
+                <div class="metric"><span>Short</span><strong id="button-short-seen">No</strong></div>
+                <div class="metric"><span>Long</span><strong id="button-long-seen">No</strong></div>
+              </div>
+            </div>
+
+            <div class="qa-block">
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 3l2.2 4.6L19 10l-4.8 2.4L12 17l-2.2-4.6L5 10l4.8-2.4L12 3zm0 12a7 7 0 0 1 7 7h-2a5 5 0 0 0-10 0H5a7 7 0 0 1 7-7z"></path>
+                  </svg>
+                </span>
+                <span>Ambient sensor</span>
+              </h3>
+              <p class="helper">Capture bright, cover the sensor, capture covered, then record.</p>
+              <div class="button-row compact-buttons">
+                <button id="ambient-bright-button" class="ghost">Capture bright</button>
+                <button id="ambient-dark-button" class="ghost">Capture covered</button>
+                <button id="record-ambient-button" class="primary">Record result</button>
+              </div>
+              <div class="metric-row compact-metrics">
+                <div class="metric"><span>Bright</span><strong id="ambient-bright-value">-</strong></div>
+                <div class="metric"><span>Covered</span><strong id="ambient-dark-value">-</strong></div>
+                <div class="metric"><span>Delta</span><strong id="ambient-delta-value">-</strong></div>
+              </div>
+            </div>
+
+            <div class="qa-block">
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M15 2h2v2h3a2 2 0 0 1 2 2v3h-2V6H4v12h8v2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2h2v2h6V2zm-3 7a6 6 0 1 1 0 12 6 6 0 0 1 0-12zm1 3h-2v4l3 2 1-1.73-2-1.17V12z"></path>
+                  </svg>
+                </span>
+                <span>RTC + battery retention</span>
+              </h3>
+              <p class="helper">Set time, unplug for 30 seconds, then reconnect and read in one action.</p>
+              <div class="button-row compact-buttons">
+                <button id="rtc-status-button" class="ghost">RTC status</button>
+                <button id="rtc-set-button" class="ghost">Set RTC test time</button>
+                <button id="rtc-read-button" class="ghost">Reconnect + read RTC</button>
+                <button id="record-rtc-button" class="primary">Record result</button>
+              </div>
+              <div class="metric-row compact-metrics">
+                <div class="metric"><span>Status</span><strong id="rtc-status-value">-</strong></div>
+                <div class="metric"><span>Baseline</span><strong id="rtc-baseline-value">-</strong></div>
+                <div class="metric"><span>Readback</span><strong id="rtc-readback-value">-</strong></div>
+                <div class="metric"><span>Elapsed</span><strong id="rtc-elapsed-value">-</strong></div>
+              </div>
+            </div>
+
+            <div class="qa-block">
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm2 2v3h3V6H7zm5 0v3h3V6h-3zm5 0v3h1V6h-1zM7 11v3h3v-3H7zm5 0v3h3v-3h-3zm5 0v3h1v-3h-1zM7 16v2h3v-2H7zm5 0v2h3v-2h-3zm5 0v2h1v-2h-1z"></path>
+                  </svg>
+                </span>
+                <span>LED matrix</span>
+              </h3>
+              <p class="helper">Run the patterns, visually confirm, then record the result.</p>
+              <div class="button-grid compact-patterns">
+                <button data-led-pattern="white" class="ghost led-pattern">White</button>
+                <button data-led-pattern="red" class="ghost led-pattern">Red</button>
+                <button data-led-pattern="green" class="ghost led-pattern">Green</button>
+                <button data-led-pattern="blue" class="ghost led-pattern">Blue</button>
+                <button data-led-pattern="mapping" class="ghost led-pattern">Mapping</button>
+                <button data-led-pattern="off" class="ghost led-pattern">Off</button>
+              </div>
+              <div class="button-row compact-buttons">
+                <button id="record-led-pass-button" class="primary">Record pass</button>
+                <button id="record-led-fail-button" class="danger">Record fail</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel compact-panel panel-wide">
+          <div class="panel-head step-head">
+            <div class="title-stack">
+              <div class="eyebrow">Step 4</div>
+              <h2 class="title-with-icon">
+                <span class="section-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.4L9 16.2z"></path>
+                  </svg>
+                </span>
+                <span>Record + Ship Signoff</span>
+              </h2>
+            </div>
+            <span class="step-number">4</span>
+          </div>
+          <div class="step-split">
+            <div id="workflow-panel" class="qa-block" hidden>
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M4 5h16v2H4V5zm0 6h10v2H4v-2zm0 6h16v2H4v-2zm12.5-5.5L19 9l1.5 1.5-4 4L14 12l1.5-1.5 1 1z"></path>
+                  </svg>
+                </span>
+                <span>Progress summary</span>
+              </h3>
+              <p id="workflow-summary" class="helper">Flash the approved firmware to begin.</p>
+              <p id="workflow-detail" class="helper">The station shows the full sequence, including completed checks, so you can see exactly where this board stands.</p>
+              <ul id="qa-checklist" class="checklist"></ul>
+            </div>
+
+            <div class="qa-block">
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 2l8 4v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4zm-1 11l-2-2-1.4 1.4L11 15.8l5.4-5.4L15 9l-4 4z"></path>
+                  </svg>
+                </span>
+                <span>Backend preregistration</span>
+              </h3>
+              <p class="helper">Create or refresh the preregistered device row after hardware checks pass.</p>
+              <div class="button-row compact-buttons">
+                <button id="preregister-button" class="primary">Preregister hardware</button>
+              </div>
+              <p id="preregister-summary" class="helper">Not preregistered yet.</p>
+            </div>
+
+            <div class="qa-block">
+              <h3 class="title-with-icon minor-title">
+                <span class="section-icon small-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 2a10 10 0 1 1-9.95 11H4a8 8 0 1 0 2.34-5.66L9 10H2V3l2.24 2.24A9.97 9.97 0 0 1 12 2z"></path>
+                  </svg>
+                </span>
+                <span>Ship-ready reset</span>
+              </h3>
+              <p class="helper">Run the final factory reset and confirm clean setup state before shipping.</p>
+              <div class="button-row compact-buttons">
+                <button id="final-reset-button" class="primary">Run final reset + verify</button>
+              </div>
+              <p id="ship-summary" class="helper">Board is not marked ready to ship.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <div id="toast" class="toast hidden"></div>
+    </main>
+    <script>/*__FACTORY_STATION_BOOTSTRAP__*/</script>
+    <script type="module" src="/app.js?v=20260324-flow8"></script>
+  </body>
+</html>

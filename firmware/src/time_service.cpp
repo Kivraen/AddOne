@@ -102,6 +102,10 @@ String TimeService::currentUtcIsoTimestamp() const {
   return String(buffer);
 }
 
+time_t TimeService::currentUtc() const {
+  return time(nullptr);
+}
+
 bool TimeService::hasAuthoritativeTime() const {
   return hasValidTime() && !rtc_.lostPower();
 }
@@ -137,6 +141,10 @@ bool TimeService::nowLocal(tm& outLocalTime) const {
 
   time_t now = time(nullptr);
   return localtime_r(&now, &outLocalTime) != nullptr;
+}
+
+bool TimeService::readRtcUtc(time_t& outUtc) const {
+  return rtc_.readUtc(outUtc);
 }
 
 bool TimeService::nowLogical(tm& outLocalTime) const {
@@ -269,6 +277,18 @@ void TimeService::syncRtcFromSystem_() {
   if (rtc_.setUtc(utc)) {
     lastRtcWriteAtMs_ = nowMs;
   }
+}
+
+bool TimeService::setRtcUtc(time_t utc) {
+  if (!rtc_.setUtc(utc)) {
+    return false;
+  }
+
+  timeval tv{.tv_sec = utc, .tv_usec = 0};
+  settimeofday(&tv, nullptr);
+  rtcLoaded_ = true;
+  lastRtcWriteAtMs_ = millis();
+  return true;
 }
 
 void TimeService::update(bool wifiConnected) {

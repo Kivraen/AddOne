@@ -44,6 +44,16 @@ private:
     CloudClient::CommandAckStatus status = CloudClient::CommandAckStatus::Applied;
   };
 
+  struct FactoryQaState {
+    bool active = false;
+    bool apSuppressed = false;
+    bool available = false;
+    bool buttonEventsEnabled = false;
+    bool resetRequested = false;
+    QaLedPattern ledPattern = QaLedPattern::Off;
+    String inputBuffer{};
+  };
+
   static constexpr size_t kPendingCommandAckQueueSize = 16;
   static constexpr size_t kIncomingCommandQueueSize = 16;
 
@@ -66,12 +76,16 @@ private:
   bool enqueueIncomingCommand_(const CloudClient::DeviceCommand& command);
   bool enqueuePendingAck_(const String& commandId, CloudClient::CommandAckStatus status, const String& failureReason);
   void enterState_(FirmwareState nextState);
+  void emitFactoryQaButtonEvent_(const char* kind);
+  void emitFactoryQaError_(const String& id, const char* cmd, const char* error);
   void flushPendingCommandAcks_();
   bool flushRuntimeSnapshot_();
+  bool handleFactoryQa_();
   bool hasAuthoritativeTime_() const;
   bool hasPendingAcks_();
   void migrateReadyForTrackingFlag_();
   void pollCommands_();
+  void processFactoryQaCommand_(const String& line);
   void processRealtimeCommands_();
   bool prepareTrackerForCurrentTime_();
   bool renderRecoveryVisualIfActive_(uint8_t brightness);
@@ -118,6 +132,7 @@ private:
   unsigned long nextWifiReconnectAttemptAtMs_ = 0;
   unsigned long wifiReconnectAttemptStartedAtMs_ = 0;
   bool recoveryRequestedAtBoot_ = false;
+  bool factoryQaRequestedAtBoot_ = false;
   bool factoryResetRequestedAtBoot_ = false;
   bool recoveryRequestedAtRuntime_ = false;
   bool pendingFactoryReset_ = false;
@@ -129,4 +144,5 @@ private:
   uint8_t wifiReconnectAttemptCount_ = 0;
   RecoveryVisualStage recoveryVisualStage_ = RecoveryVisualStage::PortalReady;
   unsigned long recoveryVisualUntilMs_ = 0;
+  FactoryQaState factoryQa_{};
 };

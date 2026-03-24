@@ -158,6 +158,40 @@ void BoardRenderer::renderResetHoldState(ResetHoldVisualStage stage, uint8_t bri
   FastLED.show();
 }
 
+void BoardRenderer::renderQaPattern(QaLedPattern pattern, uint8_t brightness, unsigned long elapsedMs) {
+  clear_();
+
+  switch (pattern) {
+    case QaLedPattern::White:
+      fill_solid(leds_, kTotalLeds, CRGB::White);
+      break;
+    case QaLedPattern::Red:
+      fill_solid(leds_, kTotalLeds, CRGB::Red);
+      break;
+    case QaLedPattern::Green:
+      fill_solid(leds_, kTotalLeds, CRGB::Green);
+      break;
+    case QaLedPattern::Blue:
+      fill_solid(leds_, kTotalLeds, CRGB::Blue);
+      break;
+    case QaLedPattern::Mapping: {
+      const uint16_t currentIndex = static_cast<uint16_t>((elapsedMs / 120UL) % kTotalLeds);
+      const uint16_t previousIndex = currentIndex == 0 ? static_cast<uint16_t>(kTotalLeds - 1) : static_cast<uint16_t>(currentIndex - 1);
+      leds_[0] = CRGB(255, 64, 64);
+      leds_[kTotalLeds - 1] = CRGB(64, 128, 255);
+      leds_[previousIndex] = CRGB(255, 180, 64);
+      leds_[currentIndex] = CRGB::White;
+      break;
+    }
+    case QaLedPattern::Off:
+    default:
+      break;
+  }
+
+  FastLED.setBrightness(brightness);
+  FastLED.show();
+}
+
 void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness) {
   clear_();
   Palette palette = paletteForPreset_(settings.palettePreset);

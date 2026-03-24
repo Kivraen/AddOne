@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "default_release_id": "factory-qa-candidate-20260323",
+  "releases": [
+    {
+      "id": "factory-qa-candidate-20260323",
+      "label": "Factory QA candidate · March 23 2026",
+      "source_ref": "codex/s2-factory-qa-plan",
+      "firmware_version": "2.0.0-beta.1",
+      "hardware_profile": "addone-v1",
+      "chip": "esp32",
+      "baud": 115200,
+      "artifacts": {
+        "bootloader": {
+          "path": "firmware/releases/factory-qa-candidate-20260323/bootloader.bin",
+          "sha256": "3d234a7471f67b013686dabd4dee7c1fa915c9928463616a94bc9297acf1abf8"
+        },
+        "partitions": {
+          "path": "firmware/releases/factory-qa-candidate-20260323/partitions.bin",
+          "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1"
+        },
+        "boot_app0": {
+          "path": "firmware/releases/factory-qa-candidate-20260323/boot_app0.bin",
+          "sha256": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"
+        },
+        "firmware": {
+          "path": "firmware/releases/factory-qa-candidate-20260323/firmware.bin",
+          "sha256": "fe7fab35504cd9d4c9dede1aa821f5d6ce0042187c5785bf51085667ca12afd2"
+        }
+      },
+      "flash_segments": [
+        { "offset": "0x1000", "artifact": "bootloader" },
+        { "offset": "0x8000", "artifact": "partitions" },
+        { "offset": "0xe000", "artifact": "boot_app0" },
+        { "offset": "0x10000", "artifact": "firmware" }
+      ]
+    }
+  ]
+}

@@ -12,11 +12,15 @@ public:
   String currentLocalDate() const;
   String currentLogicalDate() const;
   String currentUtcIsoTimestamp() const;
+  time_t currentUtc() const;
   bool hasAuthoritativeTime() const;
   bool hasValidTime() const;
+  bool isRtcPresent() const { return rtc_.isPresent(); }
   bool nowLogical(tm& outLocalTime) const;
   bool nowLocal(tm& outLocalTime) const;
+  bool readRtcUtc(time_t& outUtc) const;
   bool rtcLostPower() const { return rtc_.lostPower(); }
+  bool setRtcUtc(time_t utc);
   void update(bool wifiConnected);
 
 private:

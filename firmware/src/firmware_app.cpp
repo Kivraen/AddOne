@@ -18,6 +18,7 @@ constexpr unsigned long kRecoveryVisualCompletionMs = 1800;
 constexpr unsigned long kFactoryResetReconnectTimeoutMs = 6000;
 constexpr unsigned long kFactoryResetReconnectPollMs = 100;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
+constexpr size_t kFactoryQaCommandCapacity = 768;
 
 bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
   int year = 0;
@@ -272,7 +273,11 @@ unsigned long FirmwareApp::captureBootHoldDurationWithFeedback_() {
 
 void FirmwareApp::begin() {
   boardRenderer_.begin();
+  factoryQa_.inputBuffer.reserve(256);
   const unsigned long bootHoldDurationMs = captureBootHoldDurationWithFeedback_();
+  factoryQaRequestedAtBoot_ =
+      bootHoldDurationMs >= Config::kFactoryQaArmHoldMs &&
+      bootHoldDurationMs < Config::kRecoveryHoldMs;
   recoveryRequestedAtBoot_ =
       bootHoldDurationMs >= Config::kRecoveryHoldMs &&
       bootHoldDurationMs < Config::kFactoryResetHoldMs;
@@ -283,6 +288,8 @@ void FirmwareApp::begin() {
   habitTracker_.begin();
   habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
   provisioningStore_.begin();
+  const bool freshFactoryBoard = !provisioningStore_.hasPendingClaim() && !provisioningStore_.isReadyForTracking();
+  factoryQa_.available = factoryQaRequestedAtBoot_ || freshFactoryBoard;
   cloudClient_.begin(identity_);
   timeService_.begin();
   timeService_.applySettings(deviceSettings_.current());
@@ -313,6 +320,8 @@ void FirmwareApp::begin() {
   Serial.printf("Pending claim present: %s\n", provisioningStore_.hasPendingClaim() ? "yes" : "no");
   Serial.printf("Ready for tracking: %s\n", provisioningStore_.isReadyForTracking() ? "yes" : "no");
   Serial.printf("Authoritative time available: %s\n", hasAuthoritativeTime_() ? "yes" : "no");
+  Serial.printf("Factory QA available: %s\n", factoryQa_.available ? "yes" : "no");
+  Serial.printf("Factory QA armed at boot: %s\n", factoryQaRequestedAtBoot_ ? "yes" : "no");
   Serial.printf("Recovery requested at boot: %s\n", recoveryRequestedAtBoot_ ? "yes" : "no");
   Serial.printf("Factory reset requested at boot: %s\n", factoryResetRequestedAtBoot_ ? "yes" : "no");
   Serial.printf("Current reset epoch: %lu\n", static_cast<unsigned long>(provisioningStore_.resetEpoch()));
@@ -327,6 +336,10 @@ void FirmwareApp::begin() {
 }
 
 void FirmwareApp::loop() {
+  if (handleFactoryQa_()) {
+    return;
+  }
+
   switch (state_) {
     case FirmwareState::SetupRecovery:
       tickSetupRecovery_();
@@ -341,6 +354,231 @@ void FirmwareApp::loop() {
       tickTimeInvalid_();
       break;
   }
+}
+
+void FirmwareApp::emitFactoryQaError_(const String& id, const char* cmd, const char* error) {
+  DynamicJsonDocument responseDoc(256);
+  responseDoc["type"] = "qa_response";
+  responseDoc["id"] = id;
+  responseDoc["cmd"] = cmd ? cmd : "";
+  responseDoc["ok"] = false;
+  responseDoc["error"] = error ? error : "Unknown QA error.";
+  serializeJson(responseDoc, Serial);
+  Serial.println();
+}
+
+void FirmwareApp::emitFactoryQaButtonEvent_(const char* kind) {
+  DynamicJsonDocument eventDoc(256);
+  eventDoc["type"] = "qa_event";
+  eventDoc["event"] = "button";
+  eventDoc["kind"] = kind ? kind : "unknown";
+  eventDoc["at_ms"] = millis();
+  serializeJson(eventDoc, Serial);
+  Serial.println();
+}
+
+void FirmwareApp::processFactoryQaCommand_(const String& line) {
+  DynamicJsonDocument commandDoc(kFactoryQaCommandCapacity);
+  const DeserializationError error = deserializeJson(commandDoc, line);
+  if (error || !commandDoc.is<JsonObjectConst>()) {
+    emitFactoryQaError_("", "", "Invalid QA command.");
+    return;
+  }
+
+  const String id = commandDoc["id"] | "";
+  const char* cmd = commandDoc["cmd"] | "";
+  if (!cmd || cmd[0] == '\0') {
+    emitFactoryQaError_(id, cmd, "QA command name is required.");
+    return;
+  }
+
+  DynamicJsonDocument responseDoc(kFactoryQaCommandCapacity);
+  responseDoc["type"] = "qa_response";
+  responseDoc["id"] = id;
+  responseDoc["cmd"] = cmd;
+  responseDoc["ok"] = true;
+  JsonObject result = responseDoc.createNestedObject("result");
+
+  if (strcmp(cmd, "qa_status") == 0) {
+    result["available"] = factoryQa_.available;
+    result["active"] = factoryQa_.active;
+    result["required_hold_ms"] = Config::kFactoryQaArmHoldMs;
+    result["state"] = stateName(state_);
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+    return;
+  }
+
+  if (!factoryQa_.available) {
+    emitFactoryQaError_(id,
+                        cmd,
+                        "Factory QA access is unavailable on this boot.");
+    return;
+  }
+
+  if (strcmp(cmd, "qa_exit") == 0) {
+    factoryQa_.active = false;
+    factoryQa_.buttonEventsEnabled = false;
+    factoryQa_.ledPattern = QaLedPattern::Off;
+    factoryQa_.apSuppressed = false;
+    result["active"] = false;
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+    return;
+  }
+
+  factoryQa_.active = true;
+
+  if (strcmp(cmd, "device_info") == 0) {
+    result["hardware_uid"] = identity_.hardwareUid();
+    result["ap_ssid"] = identity_.apSsid();
+    result["firmware_version"] = Config::kFirmwareVersion;
+    result["hardware_profile"] = Config::kHardwareProfile;
+    result["state"] = stateName(state_);
+    result["pending_claim"] = provisioningStore_.hasPendingClaim();
+    result["ready_for_tracking"] = provisioningStore_.isReadyForTracking();
+    result["reset_epoch"] = provisioningStore_.resetEpoch();
+    result["rtc_present"] = timeService_.isRtcPresent();
+    result["rtc_lost_power"] = timeService_.rtcLostPower();
+    result["ambient_raw"] = ambientLight_.raw();
+    result["ambient_filtered_raw"] = ambientLight_.filteredRaw();
+    result["ambient_normalized"] = ambientLight_.normalized01();
+  } else if (strcmp(cmd, "button_test") == 0) {
+    const bool enabled = commandDoc["enabled"].isNull() ? true : commandDoc["enabled"].as<bool>();
+    while (buttonInput_.consumeShortPress()) {
+    }
+    while (buttonInput_.consumeLongHold()) {
+    }
+    factoryQa_.buttonEventsEnabled = enabled;
+    result["enabled"] = enabled;
+  } else if (strcmp(cmd, "led_test") == 0) {
+    const char* pattern = commandDoc["pattern"] | "";
+    if (strcmp(pattern, "white") == 0) {
+      factoryQa_.ledPattern = QaLedPattern::White;
+    } else if (strcmp(pattern, "red") == 0) {
+      factoryQa_.ledPattern = QaLedPattern::Red;
+    } else if (strcmp(pattern, "green") == 0) {
+      factoryQa_.ledPattern = QaLedPattern::Green;
+    } else if (strcmp(pattern, "blue") == 0) {
+      factoryQa_.ledPattern = QaLedPattern::Blue;
+    } else if (strcmp(pattern, "mapping") == 0) {
+      factoryQa_.ledPattern = QaLedPattern::Mapping;
+    } else if (strcmp(pattern, "off") == 0 || pattern[0] == '\0') {
+      factoryQa_.ledPattern = QaLedPattern::Off;
+    } else {
+      emitFactoryQaError_(id, cmd, "Unsupported LED QA pattern.");
+      return;
+    }
+    result["pattern"] = pattern[0] == '\0' ? "off" : pattern;
+  } else if (strcmp(cmd, "ambient_sample") == 0) {
+    result["raw"] = ambientLight_.raw();
+    result["filtered_raw"] = ambientLight_.filteredRaw();
+    result["normalized"] = ambientLight_.normalized01();
+  } else if (strcmp(cmd, "rtc_status") == 0) {
+    result["present"] = timeService_.isRtcPresent();
+    result["lost_power"] = timeService_.rtcLostPower();
+    time_t rtcUtc = 0;
+    if (timeService_.readRtcUtc(rtcUtc)) {
+      result["rtc_epoch"] = static_cast<int64_t>(rtcUtc);
+    } else {
+      result["rtc_epoch"] = nullptr;
+    }
+    result["system_utc"] = static_cast<int64_t>(timeService_.currentUtc());
+  } else if (strcmp(cmd, "rtc_set") == 0) {
+    if (commandDoc["epoch"].isNull()) {
+      emitFactoryQaError_(id, cmd, "RTC epoch is required.");
+      return;
+    }
+    const int64_t epoch = commandDoc["epoch"].as<int64_t>();
+    if (epoch <= 0) {
+      emitFactoryQaError_(id, cmd, "RTC epoch must be positive.");
+      return;
+    }
+    if (!timeService_.setRtcUtc(static_cast<time_t>(epoch))) {
+      emitFactoryQaError_(id, cmd, "RTC time could not be written.");
+      return;
+    }
+    result["rtc_epoch"] = epoch;
+  } else if (strcmp(cmd, "rtc_read") == 0) {
+    time_t rtcUtc = 0;
+    if (!timeService_.readRtcUtc(rtcUtc)) {
+      emitFactoryQaError_(id, cmd, "RTC time is not available.");
+      return;
+    }
+    result["rtc_epoch"] = static_cast<int64_t>(rtcUtc);
+    result["lost_power"] = timeService_.rtcLostPower();
+  } else if (strcmp(cmd, "factory_reset") == 0) {
+    factoryQa_.resetRequested = true;
+    result["accepted"] = true;
+  } else {
+    emitFactoryQaError_(id, cmd, "Unsupported QA command.");
+    return;
+  }
+
+  serializeJson(responseDoc, Serial);
+  Serial.println();
+}
+
+bool FirmwareApp::handleFactoryQa_() {
+  while (Serial.available() > 0) {
+    const char next = static_cast<char>(Serial.read());
+    if (next == '\r') {
+      continue;
+    }
+    if (next == '\n') {
+      if (!factoryQa_.inputBuffer.isEmpty()) {
+        const String commandLine = factoryQa_.inputBuffer;
+        factoryQa_.inputBuffer = "";
+        processFactoryQaCommand_(commandLine);
+      }
+      continue;
+    }
+    if (factoryQa_.inputBuffer.length() < 512) {
+      factoryQa_.inputBuffer += next;
+    }
+  }
+
+  if (!factoryQa_.active) {
+    return false;
+  }
+
+  buttonInput_.loop();
+  ambientLight_.loop();
+  timeService_.update(WiFi.status() == WL_CONNECTED);
+
+  if (!factoryQa_.apSuppressed && apServer_.isRunning()) {
+    apServer_.stop();
+    factoryQa_.apSuppressed = true;
+  }
+
+  if (factoryQa_.buttonEventsEnabled) {
+    while (buttonInput_.consumeShortPress()) {
+      emitFactoryQaButtonEvent_("short_press");
+    }
+    while (buttonInput_.consumeLongHold()) {
+      emitFactoryQaButtonEvent_("long_hold");
+    }
+  } else {
+    while (buttonInput_.consumeShortPress()) {
+    }
+    while (buttonInput_.consumeLongHold()) {
+    }
+  }
+
+  boardRenderer_.renderQaPattern(factoryQa_.ledPattern, Config::kSafeMaxBrightness, millis());
+
+  if (factoryQa_.resetRequested) {
+    factoryQa_.active = false;
+    factoryQa_.available = false;
+    factoryQa_.buttonEventsEnabled = false;
+    factoryQa_.ledPattern = QaLedPattern::Off;
+    factoryQa_.resetRequested = false;
+    factoryQa_.apSuppressed = false;
+    performFactoryReset_("Factory QA requested reset.", false);
+    return true;
+  }
+
+  return true;
 }
 
 void FirmwareApp::enterState_(FirmwareState nextState) {
