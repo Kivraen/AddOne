@@ -10,7 +10,7 @@ The coordinator owns this file.
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: `TBD after the next S3 reprioritization`
+- Next brief: [B-020-stage-s3-friends-proof-and-fixes.md](briefs/B-020-stage-s3-friends-proof-and-fixes.md)
 - Rule: only `S3` work should be actively delegated until the coordinator accepts, blocks, or revises the stage.
 - Scoped parallel track approved on March 18, 2026: timezone audit and timezone implementation work may run in parallel inside `S3` because they directly affect onboarding, settings, recovery, and device-behavior decisions.
 - Narrow repo-health support work is also allowed inside `S3` when it directly restores proof quality for the active UI stage.
@@ -32,7 +32,7 @@ The coordinator owns this file.
 | Task ID | Title | Subsystem | Status | Owner | Depends On | Task Brief | Latest Report | Success Gate | Next Coordinator Action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | T-000 | Project dashboard foundation | coordination | Closed | Codex | — | [T-000](tasks/T-000-project-dashboard-foundation.md) | [Report](agent-reports/2026-03-16-coordination-project-dashboard-foundation.md) | Strict gate | Accepted as historical coordination bootstrap work. |
-| T-001 | Beta Friends surface and social floor | app | Blocked | Unassigned | T-015, T-009 | [T-001](tasks/T-001-beta-friends-surface.md) | [Report](agent-reports/2026-03-16-app-beta-friends-surface.md) | Strict gate | Wait for second device or second account proof. Then use [B-012](briefs/B-012-stage-s3-beta-friends-verification-pass.md) for the final Friends verification sweep. |
+| T-001 | Beta Friends surface and social floor | app | In Progress | Unassigned | T-015, T-009 | [T-001](tasks/T-001-beta-friends-surface.md) | [Report](agent-reports/2026-03-16-app-beta-friends-surface.md) | Strict gate | Use [B-020](briefs/B-020-stage-s3-friends-proof-and-fixes.md) on `codex/s3-friends-proof-and-fixes`. The implementation is present; the remaining work is a narrow pre-proof repair plus the live two-account verification sweep. |
 | T-002 | Hosted beta bring-up | infra | Backlog | Unassigned | — | [T-002](tasks/T-002-hosted-beta-bring-up.md) | — | Strict gate | Return to this after the active UI stage is explicit enough to avoid cross-stage churn. |
 | T-003 | Real-device validation pass | firmware | Backlog | Unassigned | T-002 | [T-003](tasks/T-003-real-device-validation-pass.md) | — | Strict gate | Start after the hosted beta path is stable enough to support validation. |
 | T-004 | Truth cleanup after validation | docs | Backlog | Unassigned | T-001, T-002, T-003 | [T-004](tasks/T-004-truth-cleanup-after-validation.md) | — | Strict gate | Run after implementation and validation results are known. |

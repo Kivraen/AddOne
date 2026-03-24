@@ -50,7 +50,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The recovered latest UI baseline is now restored and promoted to `main` at `d589cdc`.
 - A real TestFlight install from that baseline now works.
 - The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
-- The first Friends sharing implementation now exists in the task branch, but it still needs a stricter verification pass before coordinator acceptance.
+- The first Friends sharing implementation now exists in the repo, and the March 24 Friends planning audit concluded that the remaining gap is proof quality, not missing architecture.
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
@@ -62,12 +62,12 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: `TBD after the next S3 slice is chosen`
-- Current execution task: `No new execution task is locked yet after T-018 acceptance`
+- Next brief: [B-020-stage-s3-friends-proof-and-fixes.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-020-stage-s3-friends-proof-and-fixes.md)
+- Current execution task: [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) on `codex/s3-friends-proof-and-fixes`
 
 ## Current Blockers
 
-- `T-001` is implemented and saved, but final acceptance is blocked until we have a second device or second account to complete the Friends proof sweep.
+- `T-001` is implemented and the March 24 audit says the likely pre-proof fix is removing the fake preview-board fallback from the real empty state; after that, the main blocker is the live two-account proof sweep.
 - The user has opened an approved parallel planning track for factory QA and ship-ready bring-up on `codex/s2-factory-qa-plan` because the next physical board build needs a repeatable flash-and-test workflow.
 - `T-008` remains the active parent onboarding slice while `T-001` proof is unavailable.
 - `T-018` is now accepted and no longer a lifecycle blocker.
