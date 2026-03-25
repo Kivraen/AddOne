@@ -85,11 +85,11 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-026-stage-s3-profile-ui-experiment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-026-stage-s3-profile-ui-experiment.md)
+  decide whether to keep or discard the accepted `T-033` Profile experiment before opening the next `S3` slice
 - Current execution task:
-  [T-033-profile-ui-experiment-hierarchy-and-gate-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-033-profile-ui-experiment-hierarchy-and-gate-polish.md)
+  `T-033` is accepted on `codex/s3-profile-ui-experiment`; the next step is a coordinator keep-or-discard decision, not another in-progress implementation task
 - Git durability note:
-  `main` now includes the accepted T-027 celebration slice at `1fd48b7`, `origin/main` matches it, the Profile audit is now durably captured under `T-032`, and the current reversible Profile experiment is isolated on `codex/s3-profile-ui-experiment`.
+  `main` now includes the accepted T-027 celebration slice at `1fd48b7`, `origin/main` matches it, the Profile audit is durably captured under `T-032`, and the accepted reversible Profile experiment is isolated on `codex/s3-profile-ui-experiment` until we decide whether to merge it.
 
 ## Where We Are Now
 
@@ -101,6 +101,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
   - the March 25 Profile audit concluded that Profile should be cleaned up before the Friends UI experiment because the current gate target is too dense and admin-first
+  - the March 25 Profile experiment is now accepted on `codex/s3-profile-ui-experiment` as a reversible checkpoint: cleaner hierarchy, simpler `from=friends` CTA flow, quieter account treatment, and stronger CTA typography across the shared button family
   - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards, merged into `main`
   - a reusable board transition plus friend-triggered temporary board reveal is now accepted on `codex/s3-friends-celebration-transition`
   - later reward-display choice is preserved as a separate follow-up, not part of the accepted celebration slice

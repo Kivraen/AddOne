@@ -63,15 +63,15 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-026-stage-s3-profile-ui-experiment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-026-stage-s3-profile-ui-experiment.md)
-- Current execution task: [T-033-profile-ui-experiment-hierarchy-and-gate-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-033-profile-ui-experiment-hierarchy-and-gate-polish.md)
+- Next brief: decide whether to keep or discard the accepted `T-033` Profile experiment before opening the next `S3` slice
+- Current execution task: no active implementation task is open inside `S3` until the `T-033` keep-or-discard decision is made
 
 ## Current Blockers
 
 - `T-001` is accepted and merged into `main`.
 - `T-027` is accepted and merged into `main`.
 - `T-032` is complete as a read-only audit and recommends cleaning up Profile before the Friends UI experiment.
-- `T-033` is now the active reversible experiment: tighten Profile hierarchy, simplify the Friends gate path, and reduce administrative density without changing the accepted identity or auth model.
+- `T-033` is now accepted on `codex/s3-profile-ui-experiment` as a reversible checkpoint: tighten Profile hierarchy, simplify the Friends gate path, reduce administrative density, and improve shared CTA typography without changing the accepted identity or auth model.
 - `T-024` reward-display selection remains preserved but intentionally deferred until after the accepted transition foundation.
 - `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.

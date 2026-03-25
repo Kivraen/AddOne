@@ -249,12 +249,14 @@ function FormField(props: {
 
 function ActionButton(props: {
   disabled?: boolean;
+  destructive?: boolean;
   label: string;
   loading?: boolean;
   onPress: () => void;
   secondary?: boolean;
 }) {
   const isDisabled = props.disabled || props.loading;
+  const isSecondaryDestructive = props.secondary && props.destructive;
 
   return (
     <Pressable
@@ -266,9 +268,15 @@ function ActionButton(props: {
         minHeight: 52,
         borderRadius: theme.radius.sheet,
         borderWidth: props.secondary ? 1 : 0,
-        borderColor: props.secondary ? withAlpha(theme.colors.textPrimary, 0.12) : "transparent",
+        borderColor: props.secondary
+          ? isSecondaryDestructive
+            ? withAlpha(theme.colors.statusErrorMuted, 0.18)
+            : withAlpha(theme.colors.textPrimary, 0.12)
+          : "transparent",
         backgroundColor: props.secondary
-          ? withAlpha(theme.colors.bgElevated, 0.72)
+          ? isSecondaryDestructive
+            ? withAlpha(theme.colors.statusErrorMuted, 0.1)
+            : withAlpha(theme.colors.bgElevated, 0.72)
           : isDisabled
             ? withAlpha(theme.colors.textPrimary, 0.12)
             : theme.colors.textPrimary,
@@ -281,7 +289,11 @@ function ActionButton(props: {
       ) : (
         <Text
           style={{
-            color: props.secondary ? theme.colors.textPrimary : theme.colors.textInverse,
+            color: props.secondary
+              ? isSecondaryDestructive
+                ? theme.colors.statusErrorMuted
+                : theme.colors.textPrimary
+              : theme.colors.textInverse,
             fontFamily: theme.typography.label.fontFamily,
             fontSize: 18,
             lineHeight: 22,
@@ -431,6 +443,16 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
   const isPreviewNamePlaceholder = previewName === "Your name";
   const isPreviewUsernamePlaceholder = !previewUsername;
   const isPreviewEmailPlaceholder = !userEmail?.trim();
+  const baselineDraft = useMemo(() => buildDraft(profile), [profileSignature]);
+  const hasDraftChanges = useMemo(() => {
+    return (
+      draft.firstName.trim() !== baselineDraft.firstName.trim() ||
+      draft.lastName.trim() !== baselineDraft.lastName.trim() ||
+      draft.username.trim().toLowerCase() !== baselineDraft.username.trim().toLowerCase()
+    );
+  }, [baselineDraft.firstName, baselineDraft.lastName, baselineDraft.username, draft.firstName, draft.lastName, draft.username]);
+  const hasAvatarChanges = Boolean(pendingAvatar) || (clearAvatar && Boolean(profile.avatarUrl));
+  const hasUnsavedChanges = hasDraftChanges || hasAvatarChanges;
 
   async function chooseFromLibrary() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -820,35 +842,32 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
             </GlassCard>
 
             <View style={{ gap: 12, paddingTop: 2 }}>
-              <ActionButton
-                label={isSaving ? "Saving…" : fromFriends ? "Save and open Friends" : "Save profile"}
-                loading={isSaving}
-                onPress={() => void handleSave()}
-              />
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                {mode === "cloud" ? (
+                  <View style={{ flex: 1 }}>
+                    <ActionButton
+                      disabled={isSaving}
+                      destructive
+                      label="Sign out"
+                      onPress={() => {
+                        void signOut().then(() => {
+                          router.replace("/sign-in");
+                        });
+                      }}
+                      secondary
+                    />
+                  </View>
+                ) : null}
 
-              {mode === "cloud" ? (
-                <Pressable
-                  onPress={async () => {
-                    await signOut();
-                    router.replace("/sign-in");
-                  }}
-                  style={{
-                    alignItems: "center",
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: theme.colors.statusErrorMuted,
-                      fontFamily: theme.typography.label.fontFamily,
-                      fontSize: 13,
-                      lineHeight: 18,
-                    }}
-                  >
-                    Sign out
-                  </Text>
-                </Pressable>
-              ) : null}
+                <View style={{ flex: 1 }}>
+                  <ActionButton
+                    disabled={!hasUnsavedChanges || isLoading}
+                    label={isSaving ? "Saving…" : "Save"}
+                    loading={isSaving}
+                    onPress={() => void handleSave()}
+                  />
+                </View>
+              </View>
             </View>
           </>
         )}
