@@ -126,7 +126,7 @@ Use it to capture:
 
 ### Friends and social beta
 
-- `Friends` planning is now the next active product slice inside `S3`. Onboarding and Wi-Fi recovery polish are intentionally being held as the final visible UI polish slice after the friends checkpoint.
+- `Friends` is now accepted as a real beta slice inside `S3`. The remaining follow-up is narrow realtime polish, not missing core flow.
 - The `Friends` tab now has a real first-beta sharing surface:
   - enter share code
   - approve or reject pending requests
@@ -151,7 +151,6 @@ Use it to capture:
   - comments
   - push notifications
 - Current known follow-up after the first Friends implementation:
-  - viewer revocation is still a later management pass
   - broader realtime invalidation polish may still need a later pass if the self-heal interval feels too soft in practice
 - Future social should still be preserved in the direction:
   - app-level activity log across connected boards
@@ -168,6 +167,21 @@ Use it to capture:
   - the personal board should remain the default device truth-view
   - if challenge ever reaches the device, it should not silently override the personal board
 - Do not build bespoke messaging infrastructure casually for beta.
+
+### Reward display and celebration beta
+
+- Reward display is now explicitly in beta scope and should stop being an internal-only implementation detail.
+- The next bounded reward slice should introduce:
+  - a real user-facing choice between `Clock` and `Artwork`
+  - one reusable board transition where source pixels disappear randomly and destination pixels appear randomly
+- The first `Artwork` implementation should be preset-backed, not AI-first.
+- The manual artwork editor should come after the transition foundation and should reuse the strongest parts of the history-editing interaction model without copying its complexity.
+- AI artwork generation should come only after the local artwork model is real; provider choice, output format, latency, and voice input should be explicit decisions.
+- Friend-triggered celebration playback should use the same transition engine after the reward foundation exists:
+  - temporary board swap
+  - explicit cooldown
+  - automatic return to the owner's board
+- Final onboarding and Wi-Fi recovery polish should happen after this reward-display scope is explicit.
 
 ### Cross-cutting UI quality
 
