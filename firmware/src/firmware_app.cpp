@@ -17,10 +17,24 @@ constexpr unsigned long kRecoveryVisualCloudGraceMs = 15000;
 constexpr unsigned long kRecoveryVisualCompletionMs = 1800;
 constexpr unsigned long kFactoryResetReconnectTimeoutMs = 6000;
 constexpr unsigned long kFactoryResetReconnectPollMs = 100;
-constexpr unsigned long kFriendCelebrationTotalMs =
-    Config::kFriendCelebrationDissolveMs + Config::kFriendCelebrationDwellMs + Config::kFriendCelebrationDissolveMs;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
 constexpr size_t kFactoryQaCommandCapacity = 768;
+
+BoardTransitionStyle transitionStyleForIndex(uint8_t styleIndex) {
+  if (styleIndex >= kBoardTransitionStyleCount) {
+    return BoardTransitionStyle::RandomMix;
+  }
+
+  return static_cast<BoardTransitionStyle>(styleIndex);
+}
+
+BoardTransitionStyle configuredFriendCelebrationStyle(uint8_t transitionCursor) {
+  if (Config::kFriendCelebrationTransitionSelection != Config::kFriendCelebrationTransitionAutoCycle) {
+    return transitionStyleForIndex(Config::kFriendCelebrationTransitionSelection);
+  }
+
+  return transitionStyleForIndex(transitionCursor % kBoardTransitionStyleCount);
+}
 
 bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
   int year = 0;
@@ -634,6 +648,7 @@ void FirmwareApp::updateFriendCelebrationSenderStateLocked_(const tm& logicalNow
   const String logicalDate = timeService_.currentLogicalDate();
   if (logicalDate.isEmpty()) {
     clearPendingFriendCelebrationSenderStateLocked_();
+    friendCelebrationSender_.emittedForCurrentToday = false;
     return;
   }
 
@@ -641,14 +656,19 @@ void FirmwareApp::updateFriendCelebrationSenderStateLocked_(const tm& logicalNow
     clearPendingFriendCelebrationSenderStateLocked_();
   }
 
+  if (!friendCelebrationSender_.pendingLocalDate.isEmpty() && friendCelebrationSender_.pendingLocalDate != logicalDate) {
+    friendCelebrationSender_.emittedForCurrentToday = false;
+  }
+
   const uint8_t todayRow = habitTracker_.todayRow(logicalNow);
   const bool todayDone = habitTracker_.grid().days[todayRow][0];
   if (!todayDone) {
     clearPendingFriendCelebrationSenderStateLocked_();
+    friendCelebrationSender_.emittedForCurrentToday = false;
     return;
   }
 
-  if (friendCelebrationSender_.lastEmittedLocalDate == logicalDate) {
+  if (friendCelebrationSender_.emittedForCurrentToday) {
     clearPendingFriendCelebrationSenderStateLocked_();
     return;
   }
@@ -780,7 +800,7 @@ bool FirmwareApp::tryEmitFriendCelebration_() {
 
   if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
     if (friendCelebrationSender_.pending && friendCelebrationSender_.pendingLocalDate == sourceLocalDate) {
-      friendCelebrationSender_.lastEmittedLocalDate = sourceLocalDate;
+      friendCelebrationSender_.emittedForCurrentToday = true;
       clearPendingFriendCelebrationSenderStateLocked_();
     }
     xSemaphoreGive(stateMutex_);
@@ -1374,6 +1394,7 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
 
     const int weeklyTarget = doc["weekly_target"] | 0;
+    const int requestedTransitionStyle = doc["transition_style"] | -1;
     const char* palettePreset = doc["palette_preset"] | "classic";
     JsonVariantConst boardDaysVariant = doc["board_days"];
     if (!boardDaysVariant.is<JsonArrayConst>() || weeklyTarget < 1 || weeklyTarget > Config::kDaysPerWeek) {
@@ -1409,9 +1430,26 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
       return false;
     }
 
+    if (requestedTransitionStyle >= 0 && requestedTransitionStyle < kBoardTransitionStyleCount) {
+      friendCelebrationPlayback_.style = transitionStyleForIndex(static_cast<uint8_t>(requestedTransitionStyle));
+    } else {
+      friendCelebrationPlayback_.style = configuredFriendCelebrationStyle(friendCelebrationTransitionCursor_);
+      ++friendCelebrationTransitionCursor_;
+    }
+    BoardTransition::preparePlan(
+        friendCelebrationPlayback_.ownerFrame, friendCelebrationPlayback_.friendFrame, friendCelebrationPlayback_.transitionPlan);
+    friendCelebrationPlayback_.dissolveDurationMs = BoardTransition::adaptiveDurationMs(
+        friendCelebrationPlayback_.transitionPlan,
+        Config::kFriendCelebrationMinDissolveMs,
+        Config::kFriendCelebrationMaxDissolveMs);
     friendCelebrationPlayback_.startedAtMs = millis();
     enterState_(FirmwareState::FriendCelebration);
-    Serial.printf("Playing friend celebration from %s\n", (doc["source_device_id"] | "friend"));
+    Serial.printf(
+        "Playing friend celebration from %s with %s (%u changed pixels, %lu ms)\n",
+        (doc["source_device_id"] | "friend"),
+        BoardTransition::styleName(friendCelebrationPlayback_.style),
+        friendCelebrationPlayback_.transitionPlan.changedPixelCount,
+        friendCelebrationPlayback_.dissolveDurationMs);
     return true;
   }
 
@@ -1858,35 +1896,41 @@ void FirmwareApp::tickFriendCelebration_() {
 
   const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
   const unsigned long elapsedMs = millis() - friendCelebrationPlayback_.startedAtMs;
-  if (elapsedMs >= kFriendCelebrationTotalMs) {
+  const unsigned long dissolveDurationMs = friendCelebrationPlayback_.dissolveDurationMs;
+  const unsigned long totalDurationMs = dissolveDurationMs + Config::kFriendCelebrationDwellMs + dissolveDurationMs;
+  if (elapsedMs >= totalDurationMs) {
     boardRenderer_.renderFrame(friendCelebrationPlayback_.ownerFrame, brightness);
     enterState_(FirmwareState::Tracking);
     return;
   }
 
-  if (elapsedMs < Config::kFriendCelebrationDissolveMs) {
+  if (elapsedMs < dissolveDurationMs) {
     BoardFrame transitionFrame{};
-    BoardTransition::applyRandomDissolve(
+    BoardTransition::applyTransition(
         friendCelebrationPlayback_.ownerFrame,
         friendCelebrationPlayback_.friendFrame,
+        friendCelebrationPlayback_.transitionPlan,
+        friendCelebrationPlayback_.style,
         elapsedMs,
-        Config::kFriendCelebrationDissolveMs,
+        dissolveDurationMs,
         transitionFrame);
     boardRenderer_.renderFrame(transitionFrame, brightness);
     return;
   }
 
-  if (elapsedMs < Config::kFriendCelebrationDissolveMs + Config::kFriendCelebrationDwellMs) {
+  if (elapsedMs < dissolveDurationMs + Config::kFriendCelebrationDwellMs) {
     boardRenderer_.renderFrame(friendCelebrationPlayback_.friendFrame, brightness);
     return;
   }
 
   BoardFrame transitionFrame{};
-  BoardTransition::applyRandomDissolve(
+  BoardTransition::applyTransition(
       friendCelebrationPlayback_.friendFrame,
       friendCelebrationPlayback_.ownerFrame,
-      elapsedMs - Config::kFriendCelebrationDissolveMs - Config::kFriendCelebrationDwellMs,
-      Config::kFriendCelebrationDissolveMs,
+      friendCelebrationPlayback_.transitionPlan,
+      friendCelebrationPlayback_.style,
+      elapsedMs - dissolveDurationMs - Config::kFriendCelebrationDwellMs,
+      dissolveDurationMs,
       transitionFrame);
   boardRenderer_.renderFrame(transitionFrame, brightness);
 }
