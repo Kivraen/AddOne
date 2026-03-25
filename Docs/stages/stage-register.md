@@ -14,7 +14,7 @@ Last updated: March 25, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: `TBD after the next S3 slice is chosen`
+- Next brief: `B-024 stage s3 friends ui experiment`
 
 ## Stage Notes
 
@@ -32,6 +32,7 @@ Last updated: March 25, 2026
 - `T-009` is now accepted.
 - `T-001` is now accepted on `codex/s3-friends-proof-and-fixes` after live two-account proof.
 - `T-027` is now accepted on `codex/s3-friends-celebration-transition` after hardware validation on two real boards.
+- `T-030` is now complete as a read-only audit, and `T-031` is the current experiment branch for Friends clarity plus technical UI cleanup.
 - `T-024` reward-display configuration is explicitly later than `T-027`.
 - `T-028` and `T-029` are now explicit first-priority `S4` backlog items for security hardening and update strategy.
 - `T-008` remains open as the final visible onboarding or recovery polish slice.

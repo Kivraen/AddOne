@@ -85,11 +85,11 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  `TBD after the next S3 slice is chosen`
+  [B-024-stage-s3-friends-ui-experiment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-024-stage-s3-friends-ui-experiment.md)
 - Current execution task:
-  `No single active task is locked after the T-027 acceptance on codex/s3-friends-celebration-transition`
+  [T-031-friends-ui-experiment-clarity-and-technical-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-031-friends-ui-experiment-clarity-and-technical-polish.md)
 - Git durability note:
-  `main` now points to the accepted Friends checkpoint at `e80047b`, `origin/main` matches it, and the accepted T-027 celebration work currently lives on codex/s3-friends-celebration-transition at d41a400 until it is merged. New implementation work should start from a fresh branch off main rather than continuing directly on main.
+  `main` now includes the accepted T-027 celebration slice at `1fd48b7`, `origin/main` matches it, and the current Friends UI experiment is isolated on `codex/s3-friends-ui-experiment` from the restore tag `ui-experiment-start-20260325`.
 
 ## Where We Are Now
 

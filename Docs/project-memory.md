@@ -63,13 +63,15 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: `TBD after the next S3 slice is chosen`
-- Current execution task: `No single S3 task is locked after the T-027 acceptance on codex/s3-friends-celebration-transition`
+- Next brief: [B-024-stage-s3-friends-ui-experiment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-024-stage-s3-friends-ui-experiment.md)
+- Current execution task: [T-031-friends-ui-experiment-clarity-and-technical-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-031-friends-ui-experiment-clarity-and-technical-polish.md)
 
 ## Current Blockers
 
 - `T-001` is accepted and merged into `main`.
-- `T-027` is accepted on `codex/s3-friends-celebration-transition`, but its branch state is not yet merged back to `main`.
+- `T-027` is accepted and merged into `main`.
+- `T-030` is complete: the audit says Home, onboarding or recovery, and settings are already the strongest surfaces; Friends and Profile are the main current UI drift points.
+- `T-031` is the current implementation experiment: Friends action clarity plus narrow technical UI cleanup on a disposable branch created from the restore point tagged `ui-experiment-start-20260325`.
 - `T-024` reward-display selection remains preserved but intentionally deferred until after the accepted transition foundation.
 - `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
