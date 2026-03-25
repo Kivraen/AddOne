@@ -46,6 +46,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 - `Friends` now has an accepted beta implementation with profile-gated sharing, owner controls, revoke and leave paths, and live read-only shared-board browsing verified with two real accounts.
 - `Profile` now includes the beta social-identity model, native photo entry points, and an account area that keeps email private but visible as auth-only context.
+- The March 25 Profile audit concluded that the next UI polish experiment should target Profile before Friends: the current gate target is too dense, too copy-heavy, and too administrative for a clean `from=friends` completion flow.
 - Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
 - Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
 - The accepted timezone audit in [2026-03-18-timezone-model-and-universal-flow-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) confirms that device timezone is the canonical scheduling setting, any future viewer/display timezone must stay separate, and unsupported zones currently fall back to Los Angeles rules on-device.
@@ -72,6 +73,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, treat the destructive lifecycle path, `T-001`, and `T-027` as accepted, then choose between the `T-011` timezone revision path and the final onboarding or Wi-Fi recovery polish slice. Keep later reward-display expansion as a separate follow-up, not part of this accepted transition slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
+Next, keep the destructive lifecycle path, `T-001`, and `T-027` accepted, run the narrow `T-033` Profile experiment, then re-evaluate whether the next visible UI experiment should return to Friends or move to the final onboarding or Wi-Fi recovery polish slice. Keep later reward-display expansion as a separate follow-up, not part of this accepted transition slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the accepted friends and celebration checkpoints.

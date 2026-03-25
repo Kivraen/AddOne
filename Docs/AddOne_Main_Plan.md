@@ -85,11 +85,11 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  `TBD after the next S3 slice is chosen`
+  [B-026-stage-s3-profile-ui-experiment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-026-stage-s3-profile-ui-experiment.md)
 - Current execution task:
-  `No single active task is locked after the T-027 acceptance on codex/s3-friends-celebration-transition`
+  [T-033-profile-ui-experiment-hierarchy-and-gate-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-033-profile-ui-experiment-hierarchy-and-gate-polish.md)
 - Git durability note:
-  `main` now points to the accepted Friends checkpoint at `e80047b`, `origin/main` matches it, and the accepted T-027 celebration work currently lives on codex/s3-friends-celebration-transition at d41a400 until it is merged. New implementation work should start from a fresh branch off main rather than continuing directly on main.
+  `main` now includes the accepted T-027 celebration slice at `1fd48b7`, `origin/main` matches it, the Profile audit is now durably captured under `T-032`, and the current reversible Profile experiment is isolated on `codex/s3-profile-ui-experiment`.
 
 ## Where We Are Now
 
@@ -100,6 +100,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current scope drift:
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
+  - the March 25 Profile audit concluded that Profile should be cleaned up before the Friends UI experiment because the current gate target is too dense and admin-first
   - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards, merged into `main`
   - a reusable board transition plus friend-triggered temporary board reveal is now accepted on `codex/s3-friends-celebration-transition`
   - later reward-display choice is preserved as a separate follow-up, not part of the accepted celebration slice
