@@ -63,13 +63,14 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: `TBD after the next S3 slice is chosen`
-- Current execution task: `No single S3 task is locked after the T-027 acceptance on codex/s3-friends-celebration-transition`
+- Next brief: [B-023-stage-s3-ui-skill-informed-beta-ui-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-023-stage-s3-ui-skill-informed-beta-ui-audit.md)
+- Current execution task: [T-030-ui-skill-informed-beta-ui-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-030-ui-skill-informed-beta-ui-audit.md)
 
 ## Current Blockers
 
 - `T-001` is accepted and merged into `main`.
 - `T-027` is accepted on `codex/s3-friends-celebration-transition`, but its branch state is not yet merged back to `main`.
+- `T-030` is the current audit slice: compare the current beta UI against the repo UI direction, `building-native-ui`, `react-native-design`, and the installed Vercel React Native guidance before choosing the next polish implementation task.
 - `T-024` reward-display selection remains preserved but intentionally deferred until after the accepted transition foundation.
 - `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
