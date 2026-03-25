@@ -85,9 +85,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  [B-021-stage-s3-reward-display-transition-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-021-stage-s3-reward-display-transition-foundation.md)
+  [B-022-stage-s3-friends-ambient-celebration-and-transition.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-022-stage-s3-friends-ambient-celebration-and-transition.md)
 - Current execution task:
-  [T-024-reward-display-modes-and-transition-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-024-reward-display-modes-and-transition-foundation.md)
+  [T-027-friends-ambient-celebration-playback.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-027-friends-ambient-celebration-playback.md)
 - Git durability note:
   `main` now points to the accepted Friends checkpoint at `e80047b`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
@@ -101,7 +101,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
   - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards, now merged into `main`
-  - reward display is still internally limited to the old clock and paint primitives; the next slice is to make that a real beta-visible configurable surface with a reusable transition engine
+  - reward display is still internally limited to the old clock and paint primitives; the next slice is to add the reusable transition engine and use it for friend-triggered board reveal, then later make reward display a real configurable surface
   - the main surfaced history flow is now the inline board editor from device settings, while the dedicated `/history` route still exists in code
 
 ### Backend and cloud
@@ -141,13 +141,21 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- add the next beta-visible reward-display slice:
+- add the next beta-visible social and reward foundation slice:
   - reusable random dissolve board transition
-  - selectable `Clock` vs preset-backed `Artwork` reward display
-  - keep AI generation and friend-triggered celebration playback behind that foundation
+  - friend-triggered temporary board reveal on connected devices
+  - then, after that foundation, selectable `Clock` vs preset-backed `Artwork` reward display
+  - keep AI generation behind the local artwork model
 - keep onboarding and Wi-Fi recovery polish as the later final visible UI polish slice after the reward-display work is explicit, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Rewards are now explicitly in beta scope; reminders and broader multi-device UX remain out unless we explicitly bring them in.
+
+5. Prepare for wider release.
+- run the beta security and production readiness audit
+- define the app and firmware update strategy:
+  - what is automatic by default
+  - what the user can disable or control
+  - rollback and recovery expectations
 
 2. Bring the hosted beta stack fully online.
 - Confirm beta app config, gateway env, broker credentials, and firmware beta headers.

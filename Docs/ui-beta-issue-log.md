@@ -171,10 +171,11 @@ Use it to capture:
 ### Reward display and celebration beta
 
 - Reward display is now explicitly in beta scope and should stop being an internal-only implementation detail.
-- The next bounded reward slice should introduce:
-  - a real user-facing choice between `Clock` and `Artwork`
+- The next bounded celebration slice should introduce:
   - one reusable board transition where source pixels disappear randomly and destination pixels appear randomly
+  - friend-triggered temporary board reveal on connected devices
 - The first `Artwork` implementation should be preset-backed, not AI-first.
+- The reward-display selector (`Clock` vs `Artwork`) should come after the transition-plus-friend-playback foundation, not before it.
 - The manual artwork editor should come after the transition foundation and should reuse the strongest parts of the history-editing interaction model without copying its complexity.
 - AI artwork generation should come only after the local artwork model is real; provider choice, output format, latency, and voice input should be explicit decisions.
 - Friend-triggered celebration playback should use the same transition engine after the reward foundation exists:
@@ -182,6 +183,14 @@ Use it to capture:
   - explicit cooldown
   - automatic return to the owner's board
 - Final onboarding and Wi-Fi recovery polish should happen after this reward-display scope is explicit.
+
+### Release hardening priorities
+
+- Before wider distribution, the repo needs an explicit security review rather than assuming the current beta stack is production-ready.
+- Before wider distribution, the repo also needs an explicit app and firmware update model:
+  - what updates automatically
+  - what the user can disable or control
+  - what rollback or recovery looks like when an update fails
 
 ### Cross-cutting UI quality
 

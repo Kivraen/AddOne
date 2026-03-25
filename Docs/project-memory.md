@@ -52,6 +52,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
 - The first Friends sharing flow is now implemented and live-verified on `codex/s3-friends-proof-and-fixes`, including owner approve, reject, revoke, viewer leave, and read-only shared-board browsing.
 - The reward system already has clock and generic paint support in firmware plus schema groundwork for `reward_artworks`, but it does not yet expose a real user-facing artwork mode, custom editing, AI generation, or a reusable board transition engine.
+- The user reprioritized the next beta-visible slice: transition plus friend-board reveal now, reward-screen choice later.
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
@@ -63,15 +64,17 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: [B-021-stage-s3-reward-display-transition-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-021-stage-s3-reward-display-transition-foundation.md)
-- Current execution task: [T-024-reward-display-modes-and-transition-foundation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-024-reward-display-modes-and-transition-foundation.md) after a fresh implementation branch is created from `main`
+- Next brief: [B-022-stage-s3-friends-ambient-celebration-and-transition.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-022-stage-s3-friends-ambient-celebration-and-transition.md)
+- Current execution task: [T-027-friends-ambient-celebration-playback.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-027-friends-ambient-celebration-playback.md) after a fresh implementation branch is created from `main`
 
 ## Current Blockers
 
 - `T-001` is accepted and merged into `main`.
-- `T-024` is now the recommended next S3 slice: add the reusable random dissolve transition and make reward display a real user-facing choice between `Clock` and preset-backed `Artwork`.
-- `T-027` friend-triggered ambient board playback is intentionally deferred until after the transition engine exists.
+- `T-027` is now the recommended next S3 slice: add the reusable random dissolve transition and use it immediately for friend-triggered temporary board reveals.
+- `T-024` reward-display configuration is intentionally deferred until after the transition primitive exists.
 - `T-026` AI reward artwork generation is intentionally deferred behind the local artwork model because provider choice, output format, latency, and voice input should not block the first slice.
+- `T-028` beta security and production readiness audit is now one of the first planned `S4` priorities.
+- `T-029` app and firmware update strategy is also now a first planned `S4` priority because wider distribution without a clear update model is operationally risky.
 - The user has opened an approved parallel planning track for factory QA and ship-ready bring-up on `codex/s2-factory-qa-plan` because the next physical board build needs a repeatable flash-and-test workflow.
 - `T-008` remains the later final visible UI polish slice after the new reward-display work is explicit.
 - `T-018` is now accepted and no longer a lifecycle blocker.

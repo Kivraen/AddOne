@@ -55,7 +55,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - The March 22 setup follow-up is implemented and hardware-validated: shared onboarding or recovery flow stabilization, wrong-password retry handling, and `Reset history` as `Start new habit` are checkpointed rather than chat-only work.
 - The March 22 destructive lifecycle slice is also implemented and live-validated: full `Factory reset and remove`, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on reclaim, and editable earlier habit-start correction.
 - The remaining Friends follow-up is now narrow realtime polish: development logs still show noisy Supabase channel churn and occasional binding mismatch errors, but the verified owner/viewer flows still complete successfully.
-- The reward system is now explicitly in beta scope beyond the old clock and paint internals: the next bounded slice is a real reward-display choice plus a reusable board-transition engine that later powers friend-triggered board reveals.
+- The reward system is now explicitly in beta scope beyond the old clock and paint internals, but the user reprioritized the order: transition plus friend-triggered board reveal first, reward-display selection second.
 
 ## Open Risks / Blockers
 
@@ -63,7 +63,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
 - The current device offline or reconnect behavior is still unresolved and should be treated as a real validation problem after the remaining S3 product-shape work is done.
-- AI reward-art generation should not block the first reward-display slice; it depends on a stable local artwork model first.
+- AI reward-art generation should not block the first transition or friend-playback slice; it depends on a stable local artwork model first.
 
 ## Recommendation
 
@@ -71,6 +71,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, treat the destructive lifecycle path and `T-001` Friends checkpoint as accepted, then run the reward-display transition foundation as the next bounded S3 slice. After that, decide between the timezone revision path, friend-triggered celebration playback, and the final onboarding or Wi-Fi recovery polish slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
+Next, treat the destructive lifecycle path and `T-001` Friends checkpoint as accepted, then run the transition plus friend-celebration slice as the next bounded S3 step. After that, choose between the reward-display configuration slice, the timezone revision path, and the final onboarding or Wi-Fi recovery polish slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
 
-Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the new reward-display work is explicit enough.
+Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the transition and reward-display work are explicit enough.

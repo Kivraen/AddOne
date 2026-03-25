@@ -14,7 +14,7 @@ Last updated: March 24, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: `B-021 stage s3 reward display transition foundation`
+- Next brief: `B-022 stage s3 friends ambient celebration and transition`
 
 ## Stage Notes
 
@@ -31,8 +31,9 @@ Last updated: March 24, 2026
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
 - `T-001` is now accepted on `codex/s3-friends-proof-and-fixes` after live two-account proof.
-- `T-024` is now the recommended next S3 slice: reward display modes and the reusable board transition foundation.
-- `T-027` and `T-026` are explicitly later slices behind that foundation.
+- `T-027` is now the recommended next S3 slice: friends ambient celebration playback plus the reusable board transition foundation.
+- `T-024` reward-display configuration is now explicitly later than `T-027`.
+- `T-028` and `T-029` are now explicit first-priority `S4` backlog items for security hardening and update strategy.
 - `T-008` remains open as the final visible onboarding or recovery polish slice.
 - `T-011` still needs its revision pass accepted if timezone remains in the active S3 queue.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
