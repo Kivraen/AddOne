@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import DragList, { DragListRenderItemInfo } from "react-native-draglist";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -91,7 +91,7 @@ function ManageRow(
           </Text>
         </View>
 
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text
             numberOfLines={1}
             style={{
@@ -116,24 +116,32 @@ function ManageRow(
           </Text>
         </View>
 
-        <View style={{ alignItems: "flex-end", gap: 12 }}>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-            <Pressable
-              disabled={props.celebrationBusy}
-              hitSlop={10}
-              onPress={() =>
-                Alert.alert(
-                  "Friend board reveal",
-                  `When this is on, ${board.ownerName}'s board can briefly appear on your device after they complete today's check-in.`,
-                )
-              }
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {props.celebrationBusy ? (
+            <View
               style={{
                 alignItems: "center",
                 justifyContent: "center",
-                width: 34,
-                height: 34,
+                width: 38,
+                height: 38,
+              }}
+            >
+              <ActivityIndicator color={theme.colors.accentAmber} />
+            </View>
+          ) : (
+            <Pressable
+              disabled={props.celebrationBusy}
+              hitSlop={10}
+              onPress={() => props.onCelebrationEnabledChange(board, !board.celebrationEnabled)}
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 38,
+                height: 38,
                 borderRadius: theme.radius.full,
-                backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+                backgroundColor: board.celebrationEnabled
+                  ? withAlpha(theme.colors.accentAmber, 0.16)
+                  : withAlpha(theme.colors.textPrimary, 0.04),
                 opacity: props.celebrationBusy ? 0.6 : 1,
               }}
             >
@@ -143,27 +151,7 @@ function ManageRow(
                 size={18}
               />
             </Pressable>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: 12,
-                lineHeight: 16,
-              }}
-            >
-              Visible
-            </Text>
-            <Switch
-              disabled={props.celebrationBusy}
-              onValueChange={(enabled) => props.onCelebrationEnabledChange(board, enabled)}
-              thumbColor={theme.colors.bgSurface}
-              trackColor={{
-                false: withAlpha(theme.colors.textSecondary, 0.25),
-                true: withAlpha(theme.colors.accentAmber, 0.6),
-              }}
-              value={board.celebrationEnabled}
-            />
-          </View>
+          )}
 
           <Pressable
             disabled={isBusy}
@@ -210,6 +198,10 @@ export function FriendsArrangeScreen() {
   const [activeCelebrationMembershipId, setActiveCelebrationMembershipId] = useState<string | null>(null);
   const [activeRemoveMembershipId, setActiveRemoveMembershipId] = useState<string | null>(null);
   const data = useMemo(() => orderedBoards, [orderedBoards]);
+  const enabledCelebrationCount = useMemo(
+    () => data.filter((board) => board.celebrationEnabled).length,
+    [data],
+  );
   const showLoadingState = shouldHoldFriendsEmptyState({
     hasLoadedOnce: hasLoadedViewerBoards,
     isFetching: isLoadingViewerBoards || isFetchingViewerBoards,
@@ -220,16 +212,67 @@ export function FriendsArrangeScreen() {
   const showErrorBanner = !showLoadingState && hasBoards && sharedBoardsError;
   const listHeader = (
     <View style={{ gap: 10, marginBottom: 14 }}>
-      <Text
+      <View
         style={{
-          color: theme.colors.textSecondary,
-          fontFamily: theme.typography.body.fontFamily,
-          fontSize: theme.typography.body.fontSize,
-          lineHeight: theme.typography.body.lineHeight,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
         }}
       >
-        Drag to reorder shared boards, remove one from your account, or choose which friends can briefly appear on your board.
-      </Text>
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: 15,
+                lineHeight: 20,
+              }}
+            >
+              Board reveals
+            </Text>
+          </View>
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: theme.radius.full,
+              backgroundColor: withAlpha(theme.colors.textPrimary, 0.05),
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: 12,
+                lineHeight: 16,
+              }}
+            >
+              {enabledCelebrationCount}/{data.length} on
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          hitSlop={8}
+          onPress={() =>
+            Alert.alert(
+              "Board reveals",
+              "A friend's board can briefly appear on your device after they complete today's check-in. Tap the eye on any row to allow or hide that reveal. Drag to sort boards. Use the trash icon to remove one.",
+            )
+          }
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            borderRadius: theme.radius.full,
+            backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+          }}
+        >
+          <Ionicons color={theme.colors.textSecondary} name="information-circle-outline" size={18} />
+        </Pressable>
+      </View>
       {showErrorBanner ? (
         <GlassCard style={{ paddingHorizontal: 14, paddingVertical: 14 }}>
           <Text

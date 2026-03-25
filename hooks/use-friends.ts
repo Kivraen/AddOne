@@ -25,7 +25,8 @@ import {
 } from "@/lib/supabase/addone-repository";
 import { DeviceSharingState, SharedBoard } from "@/types/addone";
 
-const FRIENDS_SELF_HEAL_MS = 15_000;
+// Keep shared boards feeling near-live even if a realtime invalidation is missed.
+const FRIENDS_SELF_HEAL_MS = 3_000;
 
 export type FriendsDemoScenario = "connected" | "empty-boards" | "empty-owner" | "pending" | "profile-gate";
 

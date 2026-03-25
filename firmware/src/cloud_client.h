@@ -38,6 +38,14 @@ public:
   bool hasPersistedDeviceAuthToken() const;
   bool isConfigured() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);
+  bool queueFriendCelebration(const String& sourceLocalDate,
+                              const HabitTracker::WeekDate& currentWeekStart,
+                              uint8_t todayRow,
+                              uint8_t weeklyTarget,
+                              const String& boardDaysJson,
+                              const String& palettePreset,
+                              const String& paletteCustomJson,
+                              const String& emittedAt);
   bool reportFactoryReset(uint32_t resetEpoch);
   bool redeemPendingClaim(const ProvisioningContract::PendingClaim& claim, uint32_t resetEpoch);
   bool uploadRuntimeSnapshot(uint32_t revision,

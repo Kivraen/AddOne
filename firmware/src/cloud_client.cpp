@@ -258,6 +258,64 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
   return true;
 }
 
+bool CloudClient::queueFriendCelebration(const String& sourceLocalDate,
+                                         const HabitTracker::WeekDate& currentWeekStart,
+                                         uint8_t todayRow,
+                                         uint8_t weeklyTarget,
+                                         const String& boardDaysJson,
+                                         const String& palettePreset,
+                                         const String& paletteCustomJson,
+                                         const String& emittedAt) {
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  if (sourceLocalDate.isEmpty() || boardDaysJson.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_source_local_date\":\"";
+  payload += escapeJson(sourceLocalDate);
+  payload += "\",\"p_current_week_start\":\"";
+  payload += String(currentWeekStart.year);
+  payload += "-";
+  if (currentWeekStart.month < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.month);
+  payload += "-";
+  if (currentWeekStart.day < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.day);
+  payload += "\",\"p_today_row\":";
+  payload += String(todayRow);
+  payload += ",\"p_weekly_target\":";
+  payload += String(weeklyTarget);
+  payload += ",\"p_board_days\":";
+  payload += boardDaysJson;
+  payload += ",\"p_palette_preset\":\"";
+  payload += escapeJson(palettePreset.isEmpty() ? String("classic") : palettePreset);
+  payload += "\",\"p_palette_custom\":";
+  payload += paletteCustomJson.isEmpty() ? "{}" : paletteCustomJson;
+
+  if (!emittedAt.isEmpty()) {
+    payload += ",\"p_emitted_at\":\"";
+    payload += escapeJson(emittedAt);
+    payload += "\"";
+  }
+
+  payload += "}";
+
+  String response;
+  return postRpc_("queue_friend_celebration_from_device", payload, response);
+}
+
 bool CloudClient::reportFactoryReset(uint32_t resetEpoch) {
   if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
     return false;

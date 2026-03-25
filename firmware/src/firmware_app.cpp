@@ -716,7 +716,7 @@ bool FirmwareApp::shouldProcessTrackingShortPress_() {
 }
 
 bool FirmwareApp::tryEmitFriendCelebration_() {
-  if (!realtimeClient_.isConnected() || !hasAuthoritativeTime_()) {
+  if (!hasAuthoritativeTime_()) {
     return false;
   }
 
@@ -769,16 +769,31 @@ bool FirmwareApp::tryEmitFriendCelebration_() {
     return false;
   }
 
-  const bool published = realtimeClient_.publishFriendCelebrationReady(
-      cloudClient_.deviceAuthToken(),
-      sourceLocalDate,
-      currentWeekStart,
-      todayRow,
-      weeklyTarget,
-      boardDaysJson,
-      palettePreset,
-      paletteCustomJson,
-      emittedAt);
+  bool published = false;
+  if (realtimeClient_.isConnected()) {
+    published = realtimeClient_.publishFriendCelebrationReady(
+        cloudClient_.deviceAuthToken(),
+        sourceLocalDate,
+        currentWeekStart,
+        todayRow,
+        weeklyTarget,
+        boardDaysJson,
+        palettePreset,
+        paletteCustomJson,
+        emittedAt);
+  }
+
+  if (!published) {
+    published = cloudClient_.queueFriendCelebration(
+        sourceLocalDate,
+        currentWeekStart,
+        todayRow,
+        weeklyTarget,
+        boardDaysJson,
+        palettePreset,
+        paletteCustomJson,
+        emittedAt);
+  }
   if (!published) {
     return false;
   }
@@ -1573,9 +1588,7 @@ void FirmwareApp::syncTask_() {
     processRealtimeCommands_();
 
     const bool realtimeConnected = realtimeClient_.isConnected();
-    if (realtimeConnected) {
-      tryEmitFriendCelebration_();
-    }
+    tryEmitFriendCelebration_();
 
     if (runtimeSnapshotDirty_ && millis() - lastRuntimeSnapshotAttemptAtMs_ >= kRuntimeSnapshotSyncIntervalMs) {
       lastRuntimeSnapshotAttemptAtMs_ = millis();
