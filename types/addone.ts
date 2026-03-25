@@ -156,6 +156,7 @@ export type RestoreChoice = "restore" | "fresh";
 export type ResetFlowState = "idle" | "confirming" | "queued";
 
 export interface SharedBoard {
+  celebrationEnabled: boolean;
   id: string;
   viewerMembershipId: string;
   ownerName: string;

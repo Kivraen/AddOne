@@ -14,6 +14,10 @@ export function dayStateEventTopic(prefix, hardwareUid) {
   return `${sanitizeSegment(prefix)}/device/${sanitizeSegment(hardwareUid)}/event/day-state`;
 }
 
+export function friendCelebrationReadyTopic(prefix, hardwareUid) {
+  return `${sanitizeSegment(prefix)}/device/${sanitizeSegment(hardwareUid)}/event/friend-celebration-ready`;
+}
+
 export function presenceTopic(prefix, hardwareUid) {
   return `${sanitizeSegment(prefix)}/device/${sanitizeSegment(hardwareUid)}/presence`;
 }
@@ -32,6 +36,10 @@ export function ackWildcard(prefix) {
 
 export function dayStateEventWildcard(prefix) {
   return `${sanitizeSegment(prefix)}/device/+/event/day-state`;
+}
+
+export function friendCelebrationReadyWildcard(prefix) {
+  return `${sanitizeSegment(prefix)}/device/+/event/friend-celebration-ready`;
 }
 
 export function presenceWildcard(prefix) {

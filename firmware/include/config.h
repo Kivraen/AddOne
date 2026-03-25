@@ -41,6 +41,10 @@ constexpr uint8_t kI2cSclPin = 22;
 constexpr uint32_t kI2cClockHz = 100000;
 
 constexpr uint16_t kRewardAutoDismissMs = 2500;
+constexpr unsigned long kFriendCelebrationStableMs = 15000;
+constexpr unsigned long kFriendCelebrationEmitWindowMs = 60000;
+constexpr unsigned long kFriendCelebrationDissolveMs = 700;
+constexpr unsigned long kFriendCelebrationDwellMs = 2500;
 constexpr uint16_t kMainLoopDelayMs = 10;
 constexpr unsigned long kWifiReconnectTimeoutMs = 15000;
 constexpr unsigned long kNtpResyncMs = 3600000;

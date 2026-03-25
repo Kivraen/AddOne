@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from "react-native";
 import DragList, { DragListRenderItemInfo } from "react-native-draglist";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -23,8 +23,16 @@ function moveBoard<T>(items: T[], fromIndex: number, toIndex: number) {
   return nextItems;
 }
 
-function ManageRow(props: DragListRenderItemInfo<SharedBoard> & { busy: boolean; onRemove: (board: SharedBoard) => void }) {
+function ManageRow(
+  props: DragListRenderItemInfo<SharedBoard> & {
+    celebrationBusy: boolean;
+    onCelebrationEnabledChange: (board: SharedBoard, enabled: boolean) => void;
+    onRemove: (board: SharedBoard) => void;
+    removeBusy: boolean;
+  },
+) {
   const { item: board, isActive, onDragEnd, onDragStart } = props;
+  const isBusy = props.celebrationBusy || props.removeBusy;
   const initials =
     board.ownerName
       .split(/\s+/)
@@ -37,7 +45,7 @@ function ManageRow(props: DragListRenderItemInfo<SharedBoard> & { busy: boolean;
     <GlassCard
       style={{
         marginBottom: 10,
-        opacity: isActive || props.busy ? 0.92 : 1,
+        opacity: isActive || isBusy ? 0.92 : 1,
         paddingHorizontal: 14,
         paddingVertical: 14,
       }}
@@ -90,44 +98,69 @@ function ManageRow(props: DragListRenderItemInfo<SharedBoard> & { busy: boolean;
           </Text>
         </View>
 
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Pressable
-            disabled={props.busy}
-            hitSlop={10}
-            onPress={() => props.onRemove(board)}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 38,
-              height: 38,
-              borderRadius: theme.radius.full,
-              backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
-              opacity: props.busy ? 0.6 : 1,
-            }}
-          >
-            {props.busy ? (
-              <ActivityIndicator color={theme.colors.statusErrorMuted} />
-            ) : (
-              <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
-            )}
-          </Pressable>
-          <Pressable
-            disabled={props.busy}
-            hitSlop={10}
-            onPressIn={onDragStart}
-            onPressOut={onDragEnd}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 38,
-              height: 38,
-              borderRadius: theme.radius.full,
-              backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-              opacity: props.busy ? 0.6 : 1,
-            }}
-          >
-            <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
-          </Pressable>
+        <View style={{ alignItems: "flex-end", gap: 10 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: 12,
+                lineHeight: 16,
+              }}
+            >
+              Show celebrations
+            </Text>
+            <Switch
+              disabled={props.celebrationBusy}
+              onValueChange={(enabled) => props.onCelebrationEnabledChange(board, enabled)}
+              thumbColor={theme.colors.bgSurface}
+              trackColor={{
+                false: withAlpha(theme.colors.textSecondary, 0.25),
+                true: withAlpha(theme.colors.accentAmber, 0.6),
+              }}
+              value={board.celebrationEnabled}
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              disabled={isBusy}
+              hitSlop={10}
+              onPress={() => props.onRemove(board)}
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 38,
+                height: 38,
+                borderRadius: theme.radius.full,
+                backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
+                opacity: isBusy ? 0.6 : 1,
+              }}
+            >
+              {props.removeBusy ? (
+                <ActivityIndicator color={theme.colors.statusErrorMuted} />
+              ) : (
+                <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
+              )}
+            </Pressable>
+            <Pressable
+              disabled={isBusy}
+              hitSlop={10}
+              onPressIn={onDragStart}
+              onPressOut={onDragEnd}
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 38,
+                height: 38,
+                borderRadius: theme.radius.full,
+                backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+                opacity: isBusy ? 0.6 : 1,
+              }}
+            >
+              <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
+            </Pressable>
+          </View>
         </View>
       </View>
     </GlassCard>
@@ -142,13 +175,16 @@ export function FriendsArrangeScreen() {
     isFetchingViewerBoards,
     isLeavingSharedBoard,
     isLoadingViewerBoards,
+    isUpdatingSharedBoardCelebration,
     leaveSharedBoard,
     refreshViewerBoards,
+    setSharedBoardCelebrationEnabled,
     sharedBoards,
     sharedBoardsError,
   } = useFriends();
   const { orderedBoards, saveBoardOrder } = useFriendsBoardOrder(sharedBoards);
-  const [activeMembershipId, setActiveMembershipId] = useState<string | null>(null);
+  const [activeCelebrationMembershipId, setActiveCelebrationMembershipId] = useState<string | null>(null);
+  const [activeRemoveMembershipId, setActiveRemoveMembershipId] = useState<string | null>(null);
   const data = useMemo(() => orderedBoards, [orderedBoards]);
   const showLoadingState = shouldHoldFriendsEmptyState({
     hasLoadedOnce: hasLoadedViewerBoards,
@@ -168,7 +204,7 @@ export function FriendsArrangeScreen() {
           lineHeight: theme.typography.body.lineHeight,
         }}
       >
-        Drag to reorder shared boards or remove one from your account.
+        Drag to reorder shared boards, remove one from your account, or choose which friends can briefly appear on your board.
       </Text>
       {showErrorBanner ? (
         <GlassCard style={{ paddingHorizontal: 14, paddingVertical: 14 }}>
@@ -206,7 +242,7 @@ export function FriendsArrangeScreen() {
           text: "Remove",
           onPress: () => {
             void (async () => {
-              setActiveMembershipId(board.viewerMembershipId);
+              setActiveRemoveMembershipId(board.viewerMembershipId);
 
               try {
                 await leaveSharedBoard({
@@ -222,7 +258,7 @@ export function FriendsArrangeScreen() {
                 );
               } finally {
                 if (isMountedRef.current) {
-                  setActiveMembershipId(null);
+                  setActiveRemoveMembershipId(null);
                 }
               }
             })();
@@ -231,6 +267,34 @@ export function FriendsArrangeScreen() {
       ]);
     },
     [isMountedRef, leaveSharedBoard],
+  );
+
+  const handleCelebrationEnabledChange = useCallback(
+    (board: SharedBoard, enabled: boolean) => {
+      void (async () => {
+        setActiveCelebrationMembershipId(board.viewerMembershipId);
+
+        try {
+          await setSharedBoardCelebrationEnabled({
+            deviceId: board.id,
+            enabled,
+            membershipId: board.viewerMembershipId,
+          });
+          triggerPrimaryActionSuccessHaptic();
+        } catch (error) {
+          triggerPrimaryActionFailureHaptic();
+          Alert.alert(
+            "Couldn't update celebration setting",
+            error instanceof Error ? error.message : "Try again.",
+          );
+        } finally {
+          if (isMountedRef.current) {
+            setActiveCelebrationMembershipId(null);
+          }
+        }
+      })();
+    },
+    [isMountedRef, setSharedBoardCelebrationEnabled],
   );
 
   return (
@@ -322,8 +386,13 @@ export function FriendsArrangeScreen() {
               renderItem={(info) => (
                 <ManageRow
                   {...info}
-                  busy={isLeavingSharedBoard && activeMembershipId === info.item.viewerMembershipId}
+                  celebrationBusy={
+                    isUpdatingSharedBoardCelebration &&
+                    activeCelebrationMembershipId === info.item.viewerMembershipId
+                  }
+                  onCelebrationEnabledChange={handleCelebrationEnabledChange}
                   onRemove={confirmRemove}
+                  removeBusy={isLeavingSharedBoard && activeRemoveMembershipId === info.item.viewerMembershipId}
                 />
               )}
               showsVerticalScrollIndicator={false}

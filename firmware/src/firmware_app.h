@@ -23,6 +23,7 @@ enum class FirmwareState : uint8_t {
   Tracking = 1,
   Reward = 2,
   TimeInvalid = 3,
+  FriendCelebration = 4,
 };
 
 class FirmwareApp {
@@ -54,6 +55,21 @@ private:
     String inputBuffer{};
   };
 
+  struct FriendCelebrationSenderState {
+    String lastEmittedLocalDate{};
+    String pendingLocalDate{};
+    unsigned long emitExpiresAtMs = 0;
+    unsigned long stableUntilMs = 0;
+    bool pending = false;
+  };
+
+  struct FriendCelebrationPlaybackState {
+    BoardFrame friendFrame{};
+    BoardFrame ownerFrame{};
+    unsigned long startedAtMs = 0;
+    bool active = false;
+  };
+
   static constexpr size_t kPendingCommandAckQueueSize = 16;
   static constexpr size_t kIncomingCommandQueueSize = 16;
 
@@ -61,6 +77,7 @@ private:
   void beginWifiReconnect_();
   bool bootReadyForTracking_() const;
   unsigned long captureBootHoldDurationWithFeedback_();
+  void clearPendingFriendCelebrationSenderStateLocked_();
   void performFactoryReset_(const char* reason, bool allowReconnectForCloudReport = false);
   static void syncTaskEntry_(void* context);
   bool copyRuntimeSnapshotPayload_(String& boardDaysJson,
@@ -91,14 +108,18 @@ private:
   bool renderRecoveryVisualIfActive_(uint8_t brightness);
   void resetWifiReconnectPolicy_();
   void setRecoveryVisualStage_(RecoveryVisualStage stage);
+  bool shouldProcessTrackingShortPress_();
   void startRecoveryVisualCompletion_();
   void syncTask_();
+  void tickFriendCelebration_();
   void tickReward_();
   void tickSetupRecovery_();
   void tickTracking_();
   void tickTimeInvalid_();
   bool tickWifiReconnectPolicy_(bool allowRecoveryEscalation);
+  bool tryEmitFriendCelebration_();
   bool tryReconnectForFactoryResetReport_(uint32_t nextResetEpoch);
+  void updateFriendCelebrationSenderStateLocked_(const tm& logicalNow);
   unsigned long wifiReconnectBackoffMs_(uint8_t attemptNumber) const;
   void markRuntimeSnapshotDirty_();
 
@@ -131,10 +152,13 @@ private:
   unsigned long ignoreRecoveryCommandsUntilMs_ = 0;
   unsigned long nextWifiReconnectAttemptAtMs_ = 0;
   unsigned long wifiReconnectAttemptStartedAtMs_ = 0;
+  FriendCelebrationSenderState friendCelebrationSender_{};
+  FriendCelebrationPlaybackState friendCelebrationPlayback_{};
   bool recoveryRequestedAtBoot_ = false;
   bool factoryQaRequestedAtBoot_ = false;
   bool factoryResetRequestedAtBoot_ = false;
   bool recoveryRequestedAtRuntime_ = false;
+  bool deferredShortPressAfterFriendCelebration_ = false;
   bool pendingFactoryReset_ = false;
   volatile bool runtimeSnapshotDirty_ = true;
   bool lastWifiConnected_ = false;

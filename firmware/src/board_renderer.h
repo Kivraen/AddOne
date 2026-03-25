@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <FastLED.h>
 
+#include "board_transition.h"
 #include "device_settings.h"
 #include "habit_tracker.h"
 
@@ -32,7 +33,14 @@ enum class QaLedPattern : uint8_t {
 class BoardRenderer {
 public:
   void begin();
+  bool buildSnapshotFrame(const String& boardDaysJson,
+                          uint8_t weeklyTarget,
+                          const char* palettePreset,
+                          const String& paletteCustomJson,
+                          BoardFrame& outFrame) const;
+  void buildTrackingFrame(const HabitTracker& tracker, const DeviceSettingsState& settings, BoardFrame& outFrame) const;
   void renderQaPattern(QaLedPattern pattern, uint8_t brightness, unsigned long elapsedMs);
+  void renderFrame(const BoardFrame& frame, uint8_t brightness);
   void renderResetHoldState(ResetHoldVisualStage stage, uint8_t brightness);
   void render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness);
   void renderRecoveryState(RecoveryVisualStage stage, uint8_t brightness);
@@ -53,8 +61,11 @@ private:
   };
 
   static void applyCustomPalette_(Palette& palette, const DeviceSettingsState& settings);
+  static void applyCustomPaletteJson_(Palette& palette, const String& paletteCustomJson);
+  static void clearFrame_(BoardFrame& frame);
   static CRGB colorFromHex_(const char* hex, const CRGB& fallback);
   static Palette paletteForPreset_(const char* presetId);
+  static void setFramePixel_(BoardFrame& frame, uint8_t row, uint8_t col, const CRGB& color);
   static bool digitPixel_(uint8_t digit, uint8_t row, uint8_t col);
   static constexpr uint16_t kTotalLeds = Config::kPanelRows * Config::kPanelCols;
 

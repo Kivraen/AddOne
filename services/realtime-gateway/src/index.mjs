@@ -5,8 +5,17 @@ import mqtt from "mqtt";
 import WebSocket from "ws";
 
 import { config } from "./config.mjs";
+import { parseFriendCelebrationReadyEvent } from "./friend-celebration.mjs";
 import { createSupabaseAdmin, fetchQueuedCommandEnvelope, listQueuedCommandEnvelopes } from "./supabase-admin.mjs";
-import { ackWildcard, commandTopic, dayStateEventWildcard, parseTopic, presenceWildcard, runtimeSnapshotWildcard } from "./topics.mjs";
+import {
+  ackWildcard,
+  commandTopic,
+  dayStateEventWildcard,
+  friendCelebrationReadyWildcard,
+  parseTopic,
+  presenceWildcard,
+  runtimeSnapshotWildcard,
+} from "./topics.mjs";
 
 if (typeof globalThis.WebSocket === "undefined") {
   globalThis.WebSocket = WebSocket;
@@ -210,6 +219,31 @@ async function handleRuntimeSnapshotMessage(hardwareUid, payload) {
   }
 }
 
+async function handleFriendCelebrationReadyMessage(hardwareUid, payload) {
+  const body = parseFriendCelebrationReadyEvent(payload);
+  if (!body) {
+    log(`ignored invalid friend celebration event from ${hardwareUid}`);
+    return;
+  }
+
+  const { error } = await supabase.rpc("queue_friend_celebration_from_device", {
+    p_board_days: body.boardDays,
+    p_current_week_start: body.currentWeekStart,
+    p_device_auth_token: body.deviceAuthToken,
+    p_emitted_at: body.emittedAt,
+    p_hardware_uid: hardwareUid,
+    p_palette_custom: body.paletteCustom,
+    p_palette_preset: body.palettePreset,
+    p_source_local_date: body.sourceLocalDate,
+    p_today_row: body.todayRow,
+    p_weekly_target: body.weeklyTarget,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 async function routeDeviceMessage(topic, message) {
   const parsedTopic = parseTopic(config.mqtt.topicPrefix, topic);
   if (!parsedTopic) {
@@ -231,6 +265,11 @@ async function routeDeviceMessage(topic, message) {
 
   if (route === "event/day-state") {
     await handleDayStateEventMessage(hardwareUid, payload);
+    return;
+  }
+
+  if (route === "event/friend-celebration-ready") {
+    await handleFriendCelebrationReadyMessage(hardwareUid, payload);
     return;
   }
 
@@ -295,6 +334,7 @@ mqttClient.on("connect", () => {
     [
       ackWildcard(config.mqtt.topicPrefix),
       dayStateEventWildcard(config.mqtt.topicPrefix),
+      friendCelebrationReadyWildcard(config.mqtt.topicPrefix),
       presenceWildcard(config.mqtt.topicPrefix),
       runtimeSnapshotWildcard(config.mqtt.topicPrefix),
     ],

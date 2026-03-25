@@ -49,6 +49,14 @@ CRGB pulseColor(const CRGB& base, uint8_t minScale, uint8_t maxScale) {
 
 } // namespace
 
+void BoardRenderer::clearFrame_(BoardFrame& frame) {
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      frame.pixels[row][col] = CRGB::Black;
+    }
+  }
+}
+
 void BoardRenderer::begin() {
   FastLED.addLeds<NEOPIXEL, Config::kLedPin>(leds_, kTotalLeds);
   FastLED.setDither(BINARY_DITHER);
@@ -111,8 +119,12 @@ CRGB BoardRenderer::colorFromHex_(const char* hex, const CRGB& fallback) {
 }
 
 void BoardRenderer::applyCustomPalette_(Palette& palette, const DeviceSettingsState& settings) {
+  applyCustomPaletteJson_(palette, settings.paletteCustomJson);
+}
+
+void BoardRenderer::applyCustomPaletteJson_(Palette& palette, const String& paletteCustomJson) {
   DynamicJsonDocument doc(384);
-  if (deserializeJson(doc, settings.paletteCustomJson) != DeserializationError::Ok || !doc.is<JsonObject>()) {
+  if (deserializeJson(doc, paletteCustomJson) != DeserializationError::Ok || !doc.is<JsonObject>()) {
     return;
   }
 
@@ -126,6 +138,14 @@ void BoardRenderer::applyCustomPalette_(Palette& palette, const DeviceSettingsSt
   if (custom["weekFail"].is<const char*>()) {
     palette.weekFail = colorFromHex_(custom["weekFail"], palette.weekFail);
   }
+}
+
+void BoardRenderer::setFramePixel_(BoardFrame& frame, uint8_t row, uint8_t col, const CRGB& color) {
+  if (row >= Config::kPanelRows || col >= Config::kPanelCols) {
+    return;
+  }
+
+  frame.pixels[row][col] = color;
 }
 
 void BoardRenderer::renderResetHoldState(ResetHoldVisualStage stage, uint8_t brightness) {
@@ -192,8 +212,8 @@ void BoardRenderer::renderQaPattern(QaLedPattern pattern, uint8_t brightness, un
   FastLED.show();
 }
 
-void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness) {
-  clear_();
+void BoardRenderer::buildTrackingFrame(const HabitTracker& tracker, const DeviceSettingsState& settings, BoardFrame& outFrame) const {
+  clearFrame_(outFrame);
   Palette palette = paletteForPreset_(settings.palettePreset);
   applyCustomPalette_(palette, settings);
 
@@ -201,19 +221,87 @@ void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsStat
   for (uint8_t week = 0; week < Config::kWeeks; ++week) {
     for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
       if (grid.days[day][week]) {
-        setPixel_(day, week, palette.dayOn);
+        setFramePixel_(outFrame, day, week, palette.dayOn);
       }
     }
 
     if (grid.success[week] > 0) {
-      setPixel_(Config::kPanelRows - 1, week, palette.weekSuccess);
+      setFramePixel_(outFrame, Config::kPanelRows - 1, week, palette.weekSuccess);
     } else if (grid.success[week] == 0) {
-      setPixel_(Config::kPanelRows - 1, week, palette.weekFail);
+      setFramePixel_(outFrame, Config::kPanelRows - 1, week, palette.weekFail);
+    }
+  }
+}
+
+bool BoardRenderer::buildSnapshotFrame(const String& boardDaysJson,
+                                       uint8_t weeklyTarget,
+                                       const char* palettePreset,
+                                       const String& paletteCustomJson,
+                                       BoardFrame& outFrame) const {
+  clearFrame_(outFrame);
+  Palette palette = paletteForPreset_(palettePreset);
+  applyCustomPaletteJson_(palette, paletteCustomJson);
+
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, boardDaysJson);
+  if (error) {
+    return false;
+  }
+
+  JsonArrayConst weeks = doc.as<JsonArrayConst>();
+  if (weeks.isNull() || weeks.size() != Config::kWeeks) {
+    return false;
+  }
+
+  const uint8_t normalizedWeeklyTarget = constrain(weeklyTarget, 1, Config::kDaysPerWeek);
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    JsonArrayConst weekDays = weeks[week].as<JsonArrayConst>();
+    if (weekDays.isNull() || weekDays.size() != Config::kDaysPerWeek) {
+      return false;
+    }
+
+    uint8_t count = 0;
+    for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
+      if (weekDays[day].as<bool>()) {
+        setFramePixel_(outFrame, day, week, palette.dayOn);
+        count++;
+      }
+    }
+
+    if (week == 0) {
+      if (count >= normalizedWeeklyTarget) {
+        setFramePixel_(outFrame, Config::kPanelRows - 1, week, palette.weekSuccess);
+      }
+      continue;
+    }
+
+    setFramePixel_(
+        outFrame,
+        Config::kPanelRows - 1,
+        week,
+        count >= normalizedWeeklyTarget ? palette.weekSuccess : palette.weekFail);
+  }
+
+  return true;
+}
+
+void BoardRenderer::renderFrame(const BoardFrame& frame, uint8_t brightness) {
+  clear_();
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      setPixel_(row, col, frame.pixels[row][col]);
     }
   }
 
   FastLED.setBrightness(brightness);
   FastLED.show();
+}
+
+void BoardRenderer::render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness) {
+  (void)localNow;
+  BoardFrame frame{};
+  buildTrackingFrame(tracker, settings, frame);
+  renderFrame(frame, brightness);
 }
 
 bool BoardRenderer::digitPixel_(uint8_t digit, uint8_t row, uint8_t col) {

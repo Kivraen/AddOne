@@ -348,12 +348,13 @@ function mapDeviceRowToAppDevice(input: {
 }
 
 function mapDeviceRowToSharedBoard(input: {
+  celebrationEnabled: boolean;
   device: DeviceRow;
   ownerName: string;
   snapshot?: RuntimeSnapshotRow | null;
   viewerMembershipId: string;
 }): SharedBoard {
-  const { device, ownerName, snapshot, viewerMembershipId } = input;
+  const { celebrationEnabled, device, ownerName, snapshot, viewerMembershipId } = input;
   const projection = buildRuntimeBoardProjection({
     resetTime: device.day_reset_time,
     snapshot: snapshot
@@ -368,6 +369,7 @@ function mapDeviceRowToSharedBoard(input: {
   });
 
   return {
+    celebrationEnabled,
     id: device.id,
     viewerMembershipId,
     ownerName,
@@ -672,14 +674,19 @@ export async function fetchSharedBoards(userId: string) {
   return withTransientNetworkRetry(async () => {
     const membershipsResponse = await supabase
       .from("device_memberships")
-      .select("id, device_id, device:devices(*)")
+      .select("id, device_id, celebration_enabled, device:devices(*)")
       .eq("user_id", userId)
       .eq("role", "viewer")
       .eq("status", "approved");
 
     const memberships = assertData(
       membershipsResponse.error,
-      (membershipsResponse.data ?? []) as Array<{ id: string; device_id: string; device: DeviceRow | null }>,
+      (membershipsResponse.data ?? []) as Array<{
+        celebration_enabled: boolean;
+        device: DeviceRow | null;
+        device_id: string;
+        id: string;
+      }>,
       "Failed to load shared boards.",
     ).filter((row) => row.device);
 
@@ -722,6 +729,7 @@ export async function fetchSharedBoards(userId: string) {
 
     return devices.map((device) =>
       mapDeviceRowToSharedBoard({
+        celebrationEnabled: memberships.find((membership) => membership.device_id === device.id)?.celebration_enabled ?? true,
         device,
         ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
         viewerMembershipId: memberships.find((membership) => membership.device_id === device.id)?.id ?? device.id,
@@ -1401,4 +1409,19 @@ export async function leaveSharedBoard(params: { deviceId: string; membershipId:
   }
 
   return membership;
+}
+
+export async function setSharedBoardCelebrationEnabled(params: {
+  deviceId: string;
+  enabled: boolean;
+  membershipId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("set_shared_board_celebration_enabled", {
+    p_device_id: params.deviceId,
+    p_enabled: params.enabled,
+    p_membership_id: params.membershipId,
+  });
+
+  return assertData(error, data as MembershipRow, "Failed to update celebration preference.");
 }

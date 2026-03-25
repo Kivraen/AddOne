@@ -308,6 +308,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by_user_id: string | null
+          celebration_enabled: boolean
           created_at: string
           device_id: string
           id: string
@@ -321,6 +322,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by_user_id?: string | null
+          celebration_enabled?: boolean
           created_at?: string
           device_id: string
           id?: string
@@ -334,6 +336,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by_user_id?: string | null
+          celebration_enabled?: boolean
           created_at?: string
           device_id?: string
           id?: string
@@ -1427,6 +1430,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      queue_friend_celebration_from_device: {
+        Args: {
+          p_board_days: Json
+          p_current_week_start: string
+          p_device_auth_token: string
+          p_emitted_at?: string
+          p_hardware_uid: string
+          p_palette_custom?: Json
+          p_palette_preset: string
+          p_source_local_date: string
+          p_today_row: number
+          p_weekly_target: number
+        }
+        Returns: Json
+      }
       record_day_state_event: {
         Args: {
           p_client_event_id?: string
@@ -1453,6 +1471,33 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "device_day_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_shared_board_celebration_enabled: {
+        Args: {
+          p_device_id: string
+          p_enabled: boolean
+          p_membership_id: string
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by_user_id: string | null
+          celebration_enabled: boolean
+          created_at: string
+          device_id: string
+          id: string
+          reminder_enabled: boolean
+          reminder_time: string | null
+          role: Database["public"]["Enums"]["device_membership_role"]
+          status: Database["public"]["Enums"]["device_membership_status"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_memberships"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1885,6 +1930,7 @@ export type Database = {
         | "factory_reset"
         | "restore_board_backup"
         | "reset_history"
+        | "play_friend_celebration"
       device_command_status:
         | "queued"
         | "delivered"
@@ -2063,6 +2109,7 @@ export const Constants = {
         "factory_reset",
         "restore_board_backup",
         "reset_history",
+        "play_friend_celebration",
       ],
       device_command_status: [
         "queued",

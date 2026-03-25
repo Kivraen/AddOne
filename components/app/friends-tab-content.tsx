@@ -310,6 +310,7 @@ function makePreviewBoard(
   syncState: SharedBoard["syncState"] = "online",
 ): SharedBoard {
   return {
+    celebrationEnabled: true,
     id,
     viewerMembershipId: `${id}-viewer-membership`,
     ownerName,

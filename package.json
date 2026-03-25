@@ -8,6 +8,7 @@
     "start:lan": "expo start --host lan",
     "start:tunnel": "expo start --host tunnel -c",
     "android": "expo run:android",
+    "test:friend-celebration-gateway": "node --test tests/friend-celebration-gateway.test.mjs",
     "test:friends-state": "node tests/friends-state.test.mjs",
     "ios": "expo run:ios",
     "test:runtime": "node tests/runtime-board-projection.test.mjs",

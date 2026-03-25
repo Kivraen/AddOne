@@ -22,6 +22,15 @@ public:
                        const String& firmwareVersion,
                        const String& hardwareProfile,
                        const String& lastSyncAt);
+  bool publishFriendCelebrationReady(const String& deviceAuthToken,
+                                     const String& sourceLocalDate,
+                                     const HabitTracker::WeekDate& currentWeekStart,
+                                     uint8_t todayRow,
+                                     uint8_t weeklyTarget,
+                                     const String& boardDaysJson,
+                                     const String& palettePreset,
+                                     const String& paletteCustomJson,
+                                     const String& emittedAt);
   bool publishRuntimeSnapshot(const String& deviceAuthToken,
                               uint32_t revision,
                               const HabitTracker::WeekDate& currentWeekStart,
@@ -45,6 +54,7 @@ private:
   String ackTopic_() const;
   String commandTopic_() const;
   String clientId_() const;
+  String friendCelebrationReadyTopic_() const;
   String presenceTopic_() const;
   String runtimeSnapshotTopic_() const;
 

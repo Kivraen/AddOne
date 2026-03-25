@@ -19,6 +19,7 @@ import {
   leaveSharedBoard as leaveSharedBoardFromRepository,
   rejectDeviceViewRequest,
   requestDeviceViewAccess,
+  setSharedBoardCelebrationEnabled as setSharedBoardCelebrationEnabledFromRepository,
   revokeDeviceViewerMembership,
   rotateDeviceShareCode,
 } from "@/lib/supabase/addone-repository";
@@ -65,6 +66,7 @@ function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] 
 
   return [
     {
+      celebrationEnabled: true,
       id: "demo-shared-board",
       viewerMembershipId: "demo-viewer-membership",
       ownerName: "Morgan Lee",
@@ -484,6 +486,46 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
     },
   });
 
+  const setSharedBoardCelebrationMutation = useMutation({
+    mutationFn: (params: { deviceId: string; enabled: boolean; membershipId: string }) => {
+      friendsDebugLog("mutation:set-shared-board-celebration:start", params);
+      if (isProofScenario || mode === "demo") {
+        return Promise.resolve({
+          celebration_enabled: params.enabled,
+          id: params.membershipId,
+        });
+      }
+
+      return setSharedBoardCelebrationEnabledFromRepository(params);
+    },
+    onMutate: async (params) => {
+      await queryClient.cancelQueries({ queryKey: viewerBoardsKey });
+
+      const previousBoards = queryClient.getQueryData<SharedBoard[]>(viewerBoardsKey) ?? [];
+      queryClient.setQueryData<SharedBoard[]>(viewerBoardsKey, (current) =>
+        (current ?? []).map((board) =>
+          board.viewerMembershipId === params.membershipId
+            ? {
+                ...board,
+                celebrationEnabled: params.enabled,
+              }
+            : board,
+        ),
+      );
+
+      return { previousBoards };
+    },
+    onError: (_error, _params, context) => {
+      if (context?.previousBoards) {
+        queryClient.setQueryData<SharedBoard[]>(viewerBoardsKey, context.previousBoards);
+      }
+    },
+    onSuccess: async (_membership, params) => {
+      friendsDebugLog("mutation:set-shared-board-celebration:success", params);
+      await refetchViewerBoards();
+    },
+  });
+
   return {
     approveRequest: approveRequestMutation.mutateAsync,
     hasLoadedOwnerSharing: ownerSharingQuery.dataUpdatedAt > 0,
@@ -505,6 +547,7 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
     isRequestingAccess: requestAccessMutation.isPending,
     isRotatingCode: rotateCodeMutation.isPending,
     isRevokingViewer: revokeViewerMutation.isPending,
+    isUpdatingSharedBoardCelebration: setSharedBoardCelebrationMutation.isPending,
     leaveSharedBoard: leaveSharedBoardMutation.mutateAsync,
     ownerSharing,
     ownerSharingError: ownerSharingQuery.error,
@@ -517,6 +560,7 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
     requestAccess: requestAccessMutation.mutateAsync,
     requestAccessError: requestAccessMutation.error,
     rotateShareCode: rotateCodeMutation.mutateAsync,
+    setSharedBoardCelebrationEnabled: setSharedBoardCelebrationMutation.mutateAsync,
     sharedBoards: viewerBoards,
     sharedBoardsError: viewerBoardsQuery.error,
     sharingError: ownerSharingQuery.error,

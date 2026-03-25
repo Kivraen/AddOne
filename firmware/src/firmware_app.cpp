@@ -17,6 +17,8 @@ constexpr unsigned long kRecoveryVisualCloudGraceMs = 15000;
 constexpr unsigned long kRecoveryVisualCompletionMs = 1800;
 constexpr unsigned long kFactoryResetReconnectTimeoutMs = 6000;
 constexpr unsigned long kFactoryResetReconnectPollMs = 100;
+constexpr unsigned long kFriendCelebrationTotalMs =
+    Config::kFriendCelebrationDissolveMs + Config::kFriendCelebrationDwellMs + Config::kFriendCelebrationDissolveMs;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
 constexpr size_t kFactoryQaCommandCapacity = 768;
 
@@ -74,6 +76,8 @@ const char* stateName(FirmwareState state) {
       return "Reward";
     case FirmwareState::TimeInvalid:
       return "TimeInvalid";
+    case FirmwareState::FriendCelebration:
+      return "FriendCelebration";
     default:
       return "Unknown";
   }
@@ -353,6 +357,9 @@ void FirmwareApp::loop() {
     case FirmwareState::TimeInvalid:
       tickTimeInvalid_();
       break;
+    case FirmwareState::FriendCelebration:
+      tickFriendCelebration_();
+      break;
   }
 }
 
@@ -598,6 +605,14 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
     recoveryVisualStage_ = RecoveryVisualStage::PortalReady;
     recoveryVisualUntilMs_ = 0;
   }
+  if (nextState == FirmwareState::FriendCelebration) {
+    friendCelebrationPlayback_.active = true;
+  } else {
+    friendCelebrationPlayback_.active = false;
+  }
+  if (nextState != FirmwareState::Tracking && nextState != FirmwareState::FriendCelebration) {
+    deferredShortPressAfterFriendCelebration_ = false;
+  }
   if (nextState != FirmwareState::Reward) {
     rewardEngine_.clear();
   }
@@ -606,6 +621,46 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
 
 void FirmwareApp::markRuntimeSnapshotDirty_() {
   runtimeSnapshotDirty_ = true;
+}
+
+void FirmwareApp::clearPendingFriendCelebrationSenderStateLocked_() {
+  friendCelebrationSender_.pending = false;
+  friendCelebrationSender_.pendingLocalDate = "";
+  friendCelebrationSender_.stableUntilMs = 0;
+  friendCelebrationSender_.emitExpiresAtMs = 0;
+}
+
+void FirmwareApp::updateFriendCelebrationSenderStateLocked_(const tm& logicalNow) {
+  const String logicalDate = timeService_.currentLogicalDate();
+  if (logicalDate.isEmpty()) {
+    clearPendingFriendCelebrationSenderStateLocked_();
+    return;
+  }
+
+  if (friendCelebrationSender_.pending && friendCelebrationSender_.pendingLocalDate != logicalDate) {
+    clearPendingFriendCelebrationSenderStateLocked_();
+  }
+
+  const uint8_t todayRow = habitTracker_.todayRow(logicalNow);
+  const bool todayDone = habitTracker_.grid().days[todayRow][0];
+  if (!todayDone) {
+    clearPendingFriendCelebrationSenderStateLocked_();
+    return;
+  }
+
+  if (friendCelebrationSender_.lastEmittedLocalDate == logicalDate) {
+    clearPendingFriendCelebrationSenderStateLocked_();
+    return;
+  }
+
+  if (!friendCelebrationSender_.pending) {
+    friendCelebrationSender_.pending = true;
+    friendCelebrationSender_.pendingLocalDate = logicalDate;
+    friendCelebrationSender_.stableUntilMs = millis() + Config::kFriendCelebrationStableMs;
+    friendCelebrationSender_.emitExpiresAtMs =
+        friendCelebrationSender_.stableUntilMs + Config::kFriendCelebrationEmitWindowMs;
+    Serial.printf("Friend celebration armed for %s\n", logicalDate.c_str());
+  }
 }
 
 void FirmwareApp::setRecoveryVisualStage_(RecoveryVisualStage stage) {
@@ -643,6 +698,95 @@ bool FirmwareApp::renderRecoveryVisualIfActive_(uint8_t brightness) {
   }
 
   boardRenderer_.renderRecoveryState(recoveryVisualStage_, brightness);
+  return true;
+}
+
+bool FirmwareApp::shouldProcessTrackingShortPress_() {
+  if (deferredShortPressAfterFriendCelebration_) {
+    deferredShortPressAfterFriendCelebration_ = false;
+    return true;
+  }
+
+  return buttonInput_.consumeShortPress();
+}
+
+bool FirmwareApp::tryEmitFriendCelebration_() {
+  if (!realtimeClient_.isConnected() || !hasAuthoritativeTime_()) {
+    return false;
+  }
+
+  String boardDaysJson;
+  String emittedAt;
+  String paletteCustomJson;
+  String palettePreset;
+  String sourceLocalDate;
+  HabitTracker::WeekDate currentWeekStart{};
+  uint8_t todayRow = 0;
+  uint8_t weeklyTarget = Config::kDefaultWeeklyMinimum;
+
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+    return false;
+  }
+
+  bool readyToPublish = false;
+  tm logicalNow{};
+  if (timeService_.nowLogical(logicalNow)) {
+    updateFriendCelebrationSenderStateLocked_(logicalNow);
+    if (friendCelebrationSender_.pending) {
+      if (millis() > friendCelebrationSender_.emitExpiresAtMs) {
+        Serial.println("Friend celebration expired before delivery.");
+        clearPendingFriendCelebrationSenderStateLocked_();
+      } else if (millis() >= friendCelebrationSender_.stableUntilMs) {
+        DeviceSettingsState settings = deviceSettings_.current();
+        HabitTracker::WeekDate weekStart{};
+        if (habitTracker_.currentWeekStart(weekStart)) {
+          boardDaysJson = buildBoardDaysJson(habitTracker_.grid());
+          emittedAt = timeService_.currentUtcIsoTimestamp();
+          paletteCustomJson = settings.paletteCustomJson;
+          palettePreset = settings.palettePreset;
+          sourceLocalDate = friendCelebrationSender_.pendingLocalDate;
+          currentWeekStart = weekStart;
+          todayRow = habitTracker_.todayRow(logicalNow);
+          weeklyTarget = settings.weeklyTarget;
+          readyToPublish = !emittedAt.isEmpty() && !sourceLocalDate.isEmpty();
+        }
+      }
+    }
+  } else {
+    clearPendingFriendCelebrationSenderStateLocked_();
+  }
+
+  if (stateMutex_) {
+    xSemaphoreGive(stateMutex_);
+  }
+
+  if (!readyToPublish) {
+    return false;
+  }
+
+  const bool published = realtimeClient_.publishFriendCelebrationReady(
+      cloudClient_.deviceAuthToken(),
+      sourceLocalDate,
+      currentWeekStart,
+      todayRow,
+      weeklyTarget,
+      boardDaysJson,
+      palettePreset,
+      paletteCustomJson,
+      emittedAt);
+  if (!published) {
+    return false;
+  }
+
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+    if (friendCelebrationSender_.pending && friendCelebrationSender_.pendingLocalDate == sourceLocalDate) {
+      friendCelebrationSender_.lastEmittedLocalDate = sourceLocalDate;
+      clearPendingFriendCelebrationSenderStateLocked_();
+    }
+    xSemaphoreGive(stateMutex_);
+  }
+
+  Serial.printf("Published friend celebration for %s\n", sourceLocalDate.c_str());
   return true;
 }
 
@@ -1193,6 +1337,84 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     return true;
   }
 
+  if (command.kind == "play_friend_celebration") {
+    if (state_ != FirmwareState::Tracking || recoveryVisualActive_ || pendingFactoryReset_ || recoveryRequestedAtRuntime_ ||
+        friendCelebrationPlayback_.active) {
+      Serial.println("Ignoring friend celebration while tracking is unavailable.");
+      return true;
+    }
+
+    if (!hasAuthoritativeTime_()) {
+      Serial.println("Ignoring friend celebration because time is unavailable.");
+      return true;
+    }
+
+    if (command.payloadJson.isEmpty()) {
+      failureReason = "Friend celebration payload is empty.";
+      return false;
+    }
+
+    DynamicJsonDocument doc(12288);
+    DeserializationError error = deserializeJson(doc, command.payloadJson);
+    if (error) {
+      failureReason = "Failed to parse friend celebration payload.";
+      return false;
+    }
+
+    const String expiresAt = doc["expires_at"] | "";
+    if (expiresAt.isEmpty()) {
+      failureReason = "Friend celebration payload is missing expires_at.";
+      return false;
+    }
+
+    const String currentUtc = timeService_.currentUtcIsoTimestamp();
+    if (!currentUtc.isEmpty() && currentUtc >= expiresAt) {
+      Serial.println("Ignoring expired friend celebration.");
+      return true;
+    }
+
+    const int weeklyTarget = doc["weekly_target"] | 0;
+    const char* palettePreset = doc["palette_preset"] | "classic";
+    JsonVariantConst boardDaysVariant = doc["board_days"];
+    if (!boardDaysVariant.is<JsonArrayConst>() || weeklyTarget < 1 || weeklyTarget > Config::kDaysPerWeek) {
+      failureReason = "Friend celebration payload is missing board_days or weekly_target.";
+      return false;
+    }
+
+    String boardDaysJson;
+    serializeJson(boardDaysVariant, boardDaysJson);
+
+    String paletteCustomJson = "{}";
+    if (doc["palette_custom"].is<JsonObjectConst>()) {
+      serializeJson(doc["palette_custom"], paletteCustomJson);
+    }
+
+    if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
+      failureReason = "Device state busy.";
+      return false;
+    }
+
+    boardRenderer_.buildTrackingFrame(habitTracker_, deviceSettings_.current(), friendCelebrationPlayback_.ownerFrame);
+    if (stateMutex_) {
+      xSemaphoreGive(stateMutex_);
+    }
+
+    if (!boardRenderer_.buildSnapshotFrame(
+            boardDaysJson,
+            static_cast<uint8_t>(weeklyTarget),
+            palettePreset,
+            paletteCustomJson,
+            friendCelebrationPlayback_.friendFrame)) {
+      failureReason = "Friend celebration snapshot is invalid.";
+      return false;
+    }
+
+    friendCelebrationPlayback_.startedAtMs = millis();
+    enterState_(FirmwareState::FriendCelebration);
+    Serial.printf("Playing friend celebration from %s\n", (doc["source_device_id"] | "friend"));
+    return true;
+  }
+
   failureReason = "Unsupported command kind.";
   return false;
 }
@@ -1338,6 +1560,10 @@ void FirmwareApp::syncTask_() {
     processRealtimeCommands_();
 
     const bool realtimeConnected = realtimeClient_.isConnected();
+    if (realtimeConnected) {
+      tryEmitFriendCelebration_();
+    }
+
     if (runtimeSnapshotDirty_ && millis() - lastRuntimeSnapshotAttemptAtMs_ >= kRuntimeSnapshotSyncIntervalMs) {
       lastRuntimeSnapshotAttemptAtMs_ = millis();
       flushRuntimeSnapshot_();
@@ -1388,6 +1614,11 @@ void FirmwareApp::tickSetupRecovery_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
+
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+    clearPendingFriendCelebrationSenderStateLocked_();
+    xSemaphoreGive(stateMutex_);
+  }
 
   if (buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;
@@ -1503,7 +1734,7 @@ void FirmwareApp::tickTracking_() {
         markRuntimeSnapshotDirty_();
       }
 
-      if (buttonInput_.consumeShortPress()) {
+      if (shouldProcessTrackingShortPress_()) {
         bool isDone = false;
         const int8_t weekSuccessBefore = habitTracker_.currentWeekSuccess();
         if (habitTracker_.queueLocalToggleToday(logicalNow, isDone)) {
@@ -1515,6 +1746,7 @@ void FirmwareApp::tickTracking_() {
 
           const int8_t weekSuccessAfter = habitTracker_.currentWeekSuccess();
           if (rewardEngine_.shouldTrigger(deviceSettings_.current(), isDone, weekSuccessBefore, weekSuccessAfter)) {
+            updateFriendCelebrationSenderStateLocked_(logicalNow);
             rewardEngine_.start(deviceSettings_.current());
             xSemaphoreGive(stateMutex_);
             enterState_(FirmwareState::Reward);
@@ -1522,6 +1754,8 @@ void FirmwareApp::tickTracking_() {
           }
         }
       }
+
+      updateFriendCelebrationSenderStateLocked_(logicalNow);
 
       const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
       if (!renderRecoveryVisualIfActive_(brightness)) {
@@ -1572,6 +1806,11 @@ void FirmwareApp::tickReward_() {
   DeviceSettingsState settings{};
   uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
   if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+    if (logicalNowPtr) {
+      updateFriendCelebrationSenderStateLocked_(logicalNow);
+    } else {
+      clearPendingFriendCelebrationSenderStateLocked_();
+    }
     settings = deviceSettings_.current();
     brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
     xSemaphoreGive(stateMutex_);
@@ -1580,11 +1819,88 @@ void FirmwareApp::tickReward_() {
       settings, rewardEngine_.type(), logicalNowPtr, rewardEngine_.elapsedMs(), brightness);
 }
 
+void FirmwareApp::tickFriendCelebration_() {
+  buttonInput_.loop();
+  ambientLight_.loop();
+  timeService_.update(WiFi.status() == WL_CONNECTED);
+  tickWifiReconnectPolicy_(false);
+  drainIncomingCommands_();
+
+  if (buttonInput_.consumeLongHold()) {
+    recoveryRequestedAtRuntime_ = true;
+  }
+
+  if (!hasAuthoritativeTime_()) {
+    enterState_(FirmwareState::TimeInvalid);
+    return;
+  }
+
+  if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
+    enterWifiRecoveryMode_();
+    return;
+  }
+
+  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+    performFactoryReset_("App-triggered factory reset requested.");
+    return;
+  }
+
+  if (buttonInput_.consumeShortPress()) {
+    deferredShortPressAfterFriendCelebration_ = true;
+    enterState_(FirmwareState::Tracking);
+    return;
+  }
+
+  if (!friendCelebrationPlayback_.active) {
+    enterState_(FirmwareState::Tracking);
+    return;
+  }
+
+  const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  const unsigned long elapsedMs = millis() - friendCelebrationPlayback_.startedAtMs;
+  if (elapsedMs >= kFriendCelebrationTotalMs) {
+    boardRenderer_.renderFrame(friendCelebrationPlayback_.ownerFrame, brightness);
+    enterState_(FirmwareState::Tracking);
+    return;
+  }
+
+  if (elapsedMs < Config::kFriendCelebrationDissolveMs) {
+    BoardFrame transitionFrame{};
+    BoardTransition::applyRandomDissolve(
+        friendCelebrationPlayback_.ownerFrame,
+        friendCelebrationPlayback_.friendFrame,
+        elapsedMs,
+        Config::kFriendCelebrationDissolveMs,
+        transitionFrame);
+    boardRenderer_.renderFrame(transitionFrame, brightness);
+    return;
+  }
+
+  if (elapsedMs < Config::kFriendCelebrationDissolveMs + Config::kFriendCelebrationDwellMs) {
+    boardRenderer_.renderFrame(friendCelebrationPlayback_.friendFrame, brightness);
+    return;
+  }
+
+  BoardFrame transitionFrame{};
+  BoardTransition::applyRandomDissolve(
+      friendCelebrationPlayback_.friendFrame,
+      friendCelebrationPlayback_.ownerFrame,
+      elapsedMs - Config::kFriendCelebrationDissolveMs - Config::kFriendCelebrationDwellMs,
+      Config::kFriendCelebrationDissolveMs,
+      transitionFrame);
+  boardRenderer_.renderFrame(transitionFrame, brightness);
+}
+
 void FirmwareApp::tickTimeInvalid_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
   drainIncomingCommands_();
+
+  if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
+    clearPendingFriendCelebrationSenderStateLocked_();
+    xSemaphoreGive(stateMutex_);
+  }
 
   if (buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;

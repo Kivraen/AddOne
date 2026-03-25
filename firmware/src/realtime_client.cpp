@@ -151,6 +151,57 @@ bool RealtimeClient::publishPresence(const String& deviceAuthToken,
   return publishJson_(presenceTopic_(), payload);
 }
 
+bool RealtimeClient::publishFriendCelebrationReady(const String& deviceAuthToken,
+                                                   const String& sourceLocalDate,
+                                                   const HabitTracker::WeekDate& currentWeekStart,
+                                                   uint8_t todayRow,
+                                                   uint8_t weeklyTarget,
+                                                   const String& boardDaysJson,
+                                                   const String& palettePreset,
+                                                   const String& paletteCustomJson,
+                                                   const String& emittedAt) {
+  if (deviceAuthToken.isEmpty() || sourceLocalDate.isEmpty() || boardDaysJson.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken);
+  payload += "\",\"source_local_date\":\"";
+  payload += escapeJson(sourceLocalDate);
+  payload += "\",\"current_week_start\":\"";
+  payload += String(currentWeekStart.year);
+  payload += "-";
+  if (currentWeekStart.month < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.month);
+  payload += "-";
+  if (currentWeekStart.day < 10) {
+    payload += "0";
+  }
+  payload += String(currentWeekStart.day);
+  payload += "\",\"today_row\":";
+  payload += String(todayRow);
+  payload += ",\"weekly_target\":";
+  payload += String(weeklyTarget);
+  payload += ",\"board_days\":";
+  payload += boardDaysJson;
+  payload += ",\"palette_preset\":\"";
+  payload += escapeJson(palettePreset.isEmpty() ? String("classic") : palettePreset);
+  payload += "\",\"palette_custom\":";
+  payload += paletteCustomJson.isEmpty() ? "{}" : paletteCustomJson;
+
+  if (!emittedAt.isEmpty()) {
+    payload += ",\"emitted_at\":\"";
+    payload += escapeJson(emittedAt);
+    payload += "\"";
+  }
+
+  payload += "}";
+  return publishJson_(friendCelebrationReadyTopic_(), payload);
+}
+
 bool RealtimeClient::publishRuntimeSnapshot(const String& deviceAuthToken,
                                             uint32_t revision,
                                             const HabitTracker::WeekDate& currentWeekStart,
@@ -306,6 +357,11 @@ bool RealtimeClient::replaceExistingQueuedCommand_(const CloudClient::DeviceComm
       return true;
     }
 
+    if (command.kind == "play_friend_celebration" && queued.kind == "play_friend_celebration") {
+      queued = command;
+      return true;
+    }
+
     if (command.kind == "set_day_state" &&
         queued.kind == "set_day_state" &&
         !command.localDate.isEmpty() &&
@@ -442,6 +498,14 @@ String RealtimeClient::presenceTopic_() const {
   topic += "/device/";
   topic += identity_ ? identity_->hardwareUid() : String("unknown");
   topic += "/presence";
+  return topic;
+}
+
+String RealtimeClient::friendCelebrationReadyTopic_() const {
+  String topic = CloudConfig::kMqttTopicPrefix;
+  topic += "/device/";
+  topic += identity_ ? identity_->hardwareUid() : String("unknown");
+  topic += "/event/friend-celebration-ready";
   return topic;
 }
 
