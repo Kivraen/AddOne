@@ -1,4 +1,5 @@
-import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import NetInfo from "@react-native-community/netinfo";
+import { focusManager, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PropsWithChildren, useEffect, useState } from "react";
 import { AppState } from "react-native";
 
@@ -26,6 +27,14 @@ export function AppProviders({ children }: PropsWithChildren) {
     return () => {
       subscription.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    return onlineManager.setEventListener((setOnline) => {
+      return NetInfo.addEventListener((state) => {
+        setOnline(Boolean(state.isConnected) && state.isInternetReachable !== false);
+      });
+    });
   }, []);
 
   return (

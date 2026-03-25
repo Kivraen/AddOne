@@ -1,13 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 
 import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useFriends } from "@/hooks/use-friends";
+import { useIsMountedRef } from "@/hooks/use-is-mounted-ref";
 import { withAlpha } from "@/lib/color";
+import { shouldHoldFriendsEmptyState } from "@/lib/friends-state";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { DeviceShareRequest, DeviceViewer } from "@/types/addone";
 
@@ -73,23 +76,6 @@ function formatRelativeTimestamp(value: string | null | undefined) {
 
   const diffDays = Math.round(diffHours / 24);
   return `${diffDays}d ago`;
-}
-
-function PreviewNote({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        color: theme.colors.textTertiary,
-        fontFamily: theme.typography.micro.fontFamily,
-        fontSize: theme.typography.micro.fontSize,
-        lineHeight: theme.typography.micro.lineHeight,
-        letterSpacing: theme.typography.micro.letterSpacing,
-        textTransform: "uppercase",
-      }}
-    >
-      {children}
-    </Text>
-  );
 }
 
 function CompactIconAction(props: {
@@ -268,42 +254,39 @@ function ViewerItem(props: {
   );
 }
 
-function previewRequest(): DeviceShareRequest {
-  return {
-    createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    id: "preview-request",
-    requesterDisplayName: "Avery Stone",
-    requesterUserId: "preview-requester",
-    status: "pending",
-  };
-}
-
-function previewViewer(): DeviceViewer {
-  return {
-    approvedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    displayName: "Riley Hart",
-    membershipId: "preview-viewer",
-    userId: "preview-user",
-  };
-}
-
 export function FriendsRequestsScreen() {
   const router = useRouter();
+  const isMountedRef = useIsMountedRef();
   const {
     approveRequest,
+    hasLoadedSharing,
     isApprovingRequest,
+    isFetchingSharing,
     isLoadingSharing,
     isRejectingRequest,
     isRevokingViewer,
     rejectRequest,
+    refreshSharedBoards,
+    refreshSharing,
     revokeViewer,
     sharingError,
     sharingState,
   } = useFriends();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const previewRequestCard = useMemo(() => previewRequest(), []);
-  const previewViewerCard = useMemo(() => previewViewer(), []);
+  const totalRows = sharingState.pendingRequests.length + sharingState.viewers.length;
+  const shouldHoldEmptyState = shouldHoldFriendsEmptyState({
+    hasLoadedOnce: hasLoadedSharing,
+    isFetching: isLoadingSharing || isFetchingSharing,
+    itemCount: totalRows,
+  });
+  const showErrorCard = !shouldHoldEmptyState && totalRows === 0 && sharingError;
+  const showErrorBanner = !shouldHoldEmptyState && totalRows > 0 && sharingError;
 
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([refreshSharing(), refreshSharedBoards()]);
+    }, [refreshSharedBoards, refreshSharing]),
+  );
   async function handleApprove(requestId: string) {
     setActiveId(requestId);
     try {
@@ -313,7 +296,9 @@ export function FriendsRequestsScreen() {
       triggerPrimaryActionFailureHaptic();
       Alert.alert("Couldn't approve request", error instanceof Error ? error.message : "Try again.");
     } finally {
-      setActiveId(null);
+      if (isMountedRef.current) {
+        setActiveId(null);
+      }
     }
   }
 
@@ -326,20 +311,60 @@ export function FriendsRequestsScreen() {
       triggerPrimaryActionFailureHaptic();
       Alert.alert("Couldn't reject request", error instanceof Error ? error.message : "Try again.");
     } finally {
-      setActiveId(null);
+      if (isMountedRef.current) {
+        setActiveId(null);
+      }
     }
   }
 
   async function handleRemove(viewer: DeviceViewer) {
+    if (__DEV__) {
+      console.info("[friends] requests:prompt-remove", {
+        membershipId: viewer.membershipId,
+        userId: viewer.userId,
+      });
+    }
+
+    Alert.alert("Remove access?", `Remove ${viewer.displayName} from this board?`, [
+      {
+        style: "cancel",
+        text: "Cancel",
+      },
+      {
+        style: "destructive",
+        text: "Remove",
+        onPress: () => {
+          void confirmRemove(viewer);
+        },
+      },
+    ]);
+  }
+
+  async function confirmRemove(viewer: DeviceViewer) {
+    if (__DEV__) {
+      console.info("[friends] requests:confirm-remove", {
+        membershipId: viewer.membershipId,
+        userId: viewer.userId,
+      });
+    }
+
     setActiveId(viewer.membershipId);
     try {
       await revokeViewer(viewer.membershipId);
       triggerPrimaryActionSuccessHaptic();
     } catch (error) {
+      if (__DEV__) {
+        console.info("[friends] requests:confirm-remove:error", {
+          error: error instanceof Error ? error.message : String(error),
+          membershipId: viewer.membershipId,
+        });
+      }
       triggerPrimaryActionFailureHaptic();
       Alert.alert("Couldn't remove access", error instanceof Error ? error.message : "Try again.");
     } finally {
-      setActiveId(null);
+      if (isMountedRef.current) {
+        setActiveId(null);
+      }
     }
   }
 
@@ -385,7 +410,7 @@ export function FriendsRequestsScreen() {
         safeAreaEdges={["left", "right", "bottom"]}
       >
         <ScreenSection style={{ gap: 18 }}>
-          {isLoadingSharing ? (
+          {shouldHoldEmptyState ? (
             <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
               <ActivityIndicator color={theme.colors.accentAmber} />
               <Text
@@ -401,9 +426,10 @@ export function FriendsRequestsScreen() {
             </GlassCard>
           ) : null}
 
-          {!isLoadingSharing && sharingError ? (
+          {showErrorCard ? (
             <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
               <Text
+                selectable
                 style={{
                   color: theme.colors.statusErrorMuted,
                   fontFamily: theme.typography.body.fontFamily,
@@ -416,15 +442,27 @@ export function FriendsRequestsScreen() {
             </GlassCard>
           ) : null}
 
-          {!isLoadingSharing && !sharingError ? (
+          {!shouldHoldEmptyState && !showErrorCard ? (
             <>
+              {showErrorBanner ? (
+                <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+                  <Text
+                    selectable
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                    }}
+                  >
+                    {sharingError instanceof Error ? sharingError.message : "We couldn't refresh every request right now."}
+                  </Text>
+                </GlassCard>
+              ) : null}
+
               <View style={{ gap: 12 }}>
-                <PreviewNote>Pending</PreviewNote>
                 {sharingState.pendingRequests.length === 0 ? (
-                  <>
-                    <EmptyMessage title="No pending requests" body="Requests appear here after someone uses your code." />
-                    <RequestItem busy={false} onApprove={() => {}} onReject={() => {}} preview request={previewRequestCard} />
-                  </>
+                  <EmptyMessage title="No pending requests" body="Requests appear here after someone uses your code." />
                 ) : (
                   sharingState.pendingRequests.map((request) => (
                     <RequestItem
@@ -439,18 +477,14 @@ export function FriendsRequestsScreen() {
               </View>
 
               <View style={{ gap: 12 }}>
-                <PreviewNote>Connected people</PreviewNote>
                 {sharingState.viewers.length === 0 ? (
-                  <>
-                    <EmptyMessage title="No connected people" body="Approved people stay here until you remove access." />
-                    <ViewerItem busy={false} onRemove={() => {}} viewer={previewViewerCard} />
-                  </>
+                  <EmptyMessage title="No connected people" body="Approved people stay here until you remove access." />
                 ) : (
                   sharingState.viewers.map((viewer) => (
                     <ViewerItem
                       key={viewer.membershipId}
                       busy={isRevokingViewer && activeId === viewer.membershipId}
-                      onRemove={() => handleRemove(viewer)}
+                      onRemove={() => void handleRemove(viewer)}
                       viewer={viewer}
                     />
                   ))

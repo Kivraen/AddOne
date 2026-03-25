@@ -150,8 +150,43 @@ function isMissingRemovalFinalizerBackendMessage(message: string) {
   return /finalize_stale_device_account_removals_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
 }
 
+function isMissingRevokeViewerBackendMessage(message: string) {
+  return /revoke_device_viewer_membership/i.test(message) && /schema cache|could not find the function/i.test(message);
+}
+
+function isMissingLeaveSharedBoardBackendMessage(message: string) {
+  return /leave_shared_board/i.test(message) && /schema cache|could not find the function/i.test(message);
+}
+
 function isTransientNetworkFailureMessage(message: string) {
   return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function withTransientNetworkRetry<T>(operation: () => Promise<T>, options?: { attempts?: number; delayMs?: number }) {
+  const attempts = options?.attempts ?? 3;
+  const delayMs = options?.delayMs ?? 600;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof Error) || !isTransientNetworkFailureMessage(error.message) || attempt >= attempts) {
+        throw error;
+      }
+
+      await sleep(delayMs * attempt);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("The request failed.");
 }
 
 function stripSeconds(value: string | null | undefined, fallback = "00:00") {
@@ -316,8 +351,9 @@ function mapDeviceRowToSharedBoard(input: {
   device: DeviceRow;
   ownerName: string;
   snapshot?: RuntimeSnapshotRow | null;
+  viewerMembershipId: string;
 }): SharedBoard {
-  const { device, ownerName, snapshot } = input;
+  const { device, ownerName, snapshot, viewerMembershipId } = input;
   const projection = buildRuntimeBoardProjection({
     resetTime: device.day_reset_time,
     snapshot: snapshot
@@ -333,6 +369,7 @@ function mapDeviceRowToSharedBoard(input: {
 
   return {
     id: device.id,
+    viewerMembershipId,
     ownerName,
     habitName: device.name,
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
@@ -346,24 +383,30 @@ function mapDeviceRowToSharedBoard(input: {
   };
 }
 
-async function fetchLatestRuntimeSnapshots(deviceIds: string[]) {
+async function fetchLatestRuntimeSnapshots(deviceIds: string[], options?: { allowEmptyOnTransientFailure?: boolean }) {
   if (deviceIds.length === 0) {
     return [] as RuntimeSnapshotRow[];
   }
 
   const supabase = ensureSupabase();
-  const { data, error } = await supabase
-    .from("device_runtime_snapshots")
-    .select("*")
-    .in("device_id", deviceIds)
-    .order("generated_at", { ascending: false })
-    .order("created_at", { ascending: false });
+  try {
+    return await withTransientNetworkRetry(async () => {
+      const { data, error } = await supabase
+        .from("device_runtime_snapshots")
+        .select("*")
+        .in("device_id", deviceIds)
+        .order("generated_at", { ascending: false })
+        .order("created_at", { ascending: false });
 
-  if (error && isTransientNetworkFailureMessage(error.message)) {
-    return [] as RuntimeSnapshotRow[];
+      return assertData(error, (data ?? []) as RuntimeSnapshotRow[], "Failed to load device runtime snapshots.");
+    });
+  } catch (error) {
+    if (options?.allowEmptyOnTransientFailure !== false && error instanceof Error && isTransientNetworkFailureMessage(error.message)) {
+      return [] as RuntimeSnapshotRow[];
+    }
+
+    throw error;
   }
-
-  return assertData(error, (data ?? []) as RuntimeSnapshotRow[], "Failed to load device runtime snapshots.");
 }
 
 function resolveAuthoritativeSnapshotForDevice(device: DeviceRow, snapshots: RuntimeSnapshotRow[]) {
@@ -408,19 +451,24 @@ async function fetchOwnedDeviceHistoryMetrics() {
   );
 }
 
-async function fetchProfiles(userIds: string[]) {
+async function fetchProfiles(userIds: string[], options?: { allowEmptyOnTransientFailure?: boolean }) {
   if (userIds.length === 0) {
     return [] as ProfileRow[];
   }
 
   const supabase = ensureSupabase();
-  const { data, error } = await supabase.from("profiles").select("*").in("user_id", userIds);
+  try {
+    return await withTransientNetworkRetry(async () => {
+      const { data, error } = await supabase.from("profiles").select("*").in("user_id", userIds);
+      return assertData(error, (data ?? []) as ProfileRow[], "Failed to load profiles.");
+    });
+  } catch (error) {
+    if (options?.allowEmptyOnTransientFailure !== false && error instanceof Error && isTransientNetworkFailureMessage(error.message)) {
+      return [] as ProfileRow[];
+    }
 
-  if (error && isTransientNetworkFailureMessage(error.message)) {
-    return [] as ProfileRow[];
+    throw error;
   }
-
-  return assertData(error, (data ?? []) as ProfileRow[], "Failed to load profiles.");
 }
 
 function mapShareRequestRow(row: ShareRequestListRow): DeviceShareRequest {
@@ -472,12 +520,14 @@ function mapDeviceOnboardingSessionRow(
 
 export async function fetchProfile(userId: string): Promise<ProfileRow | null> {
   const supabase = ensureSupabase();
-  const { data, error } = await supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle();
-  if (error) {
-    throw new Error(error.message);
-  }
+  return withTransientNetworkRetry(async () => {
+    const { data, error } = await supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle();
+    if (error) {
+      throw new Error(error.message);
+    }
 
-  return (data as ProfileRow | null) ?? null;
+    return (data as ProfileRow | null) ?? null;
+  });
 }
 
 export async function saveProfile(params: {
@@ -499,23 +549,31 @@ export async function saveProfile(params: {
     username: normalizeUsername(profile.username),
   };
 
-  const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("*").single();
+  return withTransientNetworkRetry(async () => {
+    const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("*").single();
 
-  if (error) {
-    const combinedMessage = `${error.message} ${error.details ?? ""}`;
+    if (error) {
+      const combinedMessage = `${error.message} ${error.details ?? ""}`;
 
-    if (isProfileMigrationMessage(combinedMessage)) {
-      throw new ProfileMigrationRequiredError();
+      if (isProfileMigrationMessage(combinedMessage)) {
+        throw new ProfileMigrationRequiredError();
+      }
+
+      if (error.code === "23505" && /username/i.test(combinedMessage)) {
+        throw new UsernameConflictError();
+      }
+
+      throw new Error(error.message);
     }
 
-    if (error.code === "23505" && /username/i.test(combinedMessage)) {
-      throw new UsernameConflictError();
+    return data as ProfileRow;
+  }).catch((error) => {
+    if (error instanceof Error && isTransientNetworkFailureMessage(error.message)) {
+      throw new Error("Network request failed while saving your profile. Keep the app open for a few seconds, confirm the phone still has internet access, then try again.");
     }
 
-    throw new Error(error.message);
-  }
-
-  return data as ProfileRow;
+    throw error;
+  });
 }
 
 export async function uploadProfileAvatar(params: { mimeType?: string | null; uri: string; userId: string }) {
@@ -611,82 +669,109 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
 
 export async function fetchSharedBoards(userId: string) {
   const supabase = ensureSupabase();
-  const membershipsResponse = await supabase
-    .from("device_memberships")
-    .select("device_id, device:devices(*)")
-    .eq("user_id", userId)
-    .eq("role", "viewer")
-    .eq("status", "approved");
-
-  const memberships = assertData(
-    membershipsResponse.error,
-    (membershipsResponse.data ?? []) as Array<{ device_id: string; device: DeviceRow | null }>,
-    "Failed to load shared boards.",
-  ).filter((row) => row.device);
-
-  const devices = memberships.map((row) => row.device as DeviceRow);
-  const deviceIds = devices.map((device) => device.id);
-
-  if (deviceIds.length === 0) {
-    return [] as SharedBoard[];
-  }
-
-  const [snapshots, ownerMembershipsResponse] = await Promise.all([
-    fetchLatestRuntimeSnapshots(deviceIds),
-    supabase
+  return withTransientNetworkRetry(async () => {
+    const membershipsResponse = await supabase
       .from("device_memberships")
-      .select("device_id, user_id")
-      .in("device_id", deviceIds)
-      .eq("role", "owner")
-      .eq("status", "approved"),
-  ]);
+      .select("id, device_id, device:devices(*)")
+      .eq("user_id", userId)
+      .eq("role", "viewer")
+      .eq("status", "approved");
 
-  const ownerMemberships = assertData(
-    ownerMembershipsResponse.error,
-    (ownerMembershipsResponse.data ?? []) as Array<Pick<MembershipRow, "device_id" | "user_id">>,
-    "Failed to load shared board owners.",
-  );
-  const profiles = await fetchProfiles(ownerMemberships.map((membership) => membership.user_id));
+    const memberships = assertData(
+      membershipsResponse.error,
+      (membershipsResponse.data ?? []) as Array<{ id: string; device_id: string; device: DeviceRow | null }>,
+      "Failed to load shared boards.",
+    ).filter((row) => row.device);
 
-  const ownerByDeviceId = ownerMemberships.reduce<Record<string, string>>((accumulator, membership) => {
-    const profile = profiles.find((entry) => entry.user_id === membership.user_id);
-    accumulator[membership.device_id] = profile?.display_name ?? "AddOne User";
-    return accumulator;
-  }, {});
+    const devices = memberships.map((row) => row.device as DeviceRow);
+    const deviceIds = devices.map((device) => device.id);
 
-  return devices.map((device) =>
-    mapDeviceRowToSharedBoard({
-      device,
-      ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
-      snapshot: resolveAuthoritativeSnapshotForDevice(device, snapshots),
-    }),
-  );
+    if (deviceIds.length === 0) {
+      return [] as SharedBoard[];
+    }
+
+    const [snapshots, ownerRowsResponse] = await Promise.all([
+      fetchLatestRuntimeSnapshots(deviceIds, { allowEmptyOnTransientFailure: false }),
+      (supabase.rpc as any)("list_shared_board_owners", {
+        p_device_ids: deviceIds,
+      }),
+    ]);
+
+    const ownerRows = assertData(
+      ownerRowsResponse.error,
+      (ownerRowsResponse.data ?? []) as Array<{
+        device_id: string;
+        owner_display_name: string | null;
+        owner_user_id: string;
+      }>,
+      "Failed to load shared board owners.",
+    );
+
+    if (__DEV__) {
+      console.info("[friends] fetchSharedBoards", {
+        ownerMembershipCount: ownerRows.length,
+        userId,
+        viewerDeviceCount: deviceIds.length,
+      });
+    }
+
+    const ownerByDeviceId = ownerRows.reduce<Record<string, string>>((accumulator, ownerRow) => {
+      accumulator[ownerRow.device_id] = ownerRow.owner_display_name ?? "AddOne User";
+      return accumulator;
+    }, {});
+
+    return devices.map((device) =>
+      mapDeviceRowToSharedBoard({
+        device,
+        ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
+        viewerMembershipId: memberships.find((membership) => membership.device_id === device.id)?.id ?? device.id,
+        snapshot: resolveAuthoritativeSnapshotForDevice(device, snapshots),
+      }),
+    );
+  });
 }
 
 export async function fetchDeviceSharing(deviceId: string): Promise<DeviceSharingState> {
   const supabase = ensureSupabase();
 
-  const [shareCodeResponse, requestsResponse, viewersResponse] = await Promise.all([
-    supabase.from("device_share_codes").select("*").eq("device_id", deviceId).maybeSingle(),
-    (supabase.rpc as any)("list_device_share_requests", { p_device_id: deviceId }),
-    (supabase.rpc as any)("list_device_viewers", { p_device_id: deviceId }),
-  ]);
+  if (__DEV__) {
+    console.info("[friends] fetchDeviceSharing:start", { deviceId });
+  }
 
-  const shareCode = assertData(
-    shareCodeResponse.error,
-    (shareCodeResponse.data as ShareCodeRow | null) ?? null,
-    "Failed to load share code.",
-  );
-  const pendingRequests = assertData(
-    requestsResponse.error,
-    (requestsResponse.data ?? []) as ShareRequestListRow[],
-    "Failed to load share requests.",
-  ).map(mapShareRequestRow);
-  const viewers = assertData(
-    viewersResponse.error,
-    (viewersResponse.data ?? []) as ViewerListRow[],
-    "Failed to load viewers.",
-  ).map(mapViewerRow);
+  const { pendingRequests, shareCode, viewers } = await withTransientNetworkRetry(async () => {
+    const [shareCodeResponse, requestsResponse, viewersResponse] = await Promise.all([
+      supabase.from("device_share_codes").select("*").eq("device_id", deviceId).maybeSingle(),
+      (supabase.rpc as any)("list_device_share_requests", { p_device_id: deviceId }),
+      (supabase.rpc as any)("list_device_viewers", { p_device_id: deviceId }),
+    ]);
+
+    return {
+      shareCode: assertData(
+        shareCodeResponse.error,
+        (shareCodeResponse.data as ShareCodeRow | null) ?? null,
+        "Failed to load share code.",
+      ),
+      pendingRequests: assertData(
+        requestsResponse.error,
+        (requestsResponse.data ?? []) as ShareRequestListRow[],
+        "Failed to load share requests.",
+      ).map(mapShareRequestRow),
+      viewers: assertData(
+        viewersResponse.error,
+        (viewersResponse.data ?? []) as ViewerListRow[],
+        "Failed to load viewers.",
+      ).map(mapViewerRow),
+    };
+  });
+
+  if (__DEV__) {
+    console.info("[friends] fetchDeviceSharing:done", {
+      deviceId,
+      hasCode: Boolean(shareCode?.code),
+      pendingRequestIds: pendingRequests.map((request) => request.id),
+      viewerMembershipIds: viewers.map((viewer) => viewer.membershipId),
+    });
+  }
 
   return {
     code: shareCode?.code ?? null,
@@ -1154,7 +1239,12 @@ export async function rejectDeviceViewRequest(requestId: string) {
 
 export async function revokeDeviceViewerMembership(params: { deviceId: string; membershipId: string }) {
   const supabase = ensureSupabase();
-  const { data, error } = await ((supabase.from("device_memberships") as any)
+
+  if (__DEV__) {
+    console.info("[friends] revokeViewer:start", params);
+  }
+
+  const directUpdateResponse = await ((supabase.from("device_memberships") as any)
     .update({
       status: "revoked",
     } as TablesUpdate<"device_memberships">)
@@ -1162,8 +1252,153 @@ export async function revokeDeviceViewerMembership(params: { deviceId: string; m
     .eq("device_id", params.deviceId)
     .eq("role", "viewer")
     .eq("status", "approved")
-    .select("id")
-    .single() as any);
+    .select("*")
+    .maybeSingle() as any);
 
-  return assertData(error, data as { id: string }, "Failed to remove viewer access.");
+  if (__DEV__) {
+    console.info("[friends] revokeViewer:direct-update", {
+      dataStatus: (directUpdateResponse.data as MembershipRow | null)?.status ?? null,
+      deviceId: params.deviceId,
+      error: directUpdateResponse.error?.message ?? null,
+      membershipId: params.membershipId,
+    });
+  }
+
+  if (!directUpdateResponse.error && directUpdateResponse.data) {
+    return directUpdateResponse.data as MembershipRow;
+  }
+
+  const rpcResponse = await (supabase.rpc as any)("revoke_device_viewer_membership", {
+    p_device_id: params.deviceId,
+    p_membership_id: params.membershipId,
+  });
+
+  if (!rpcResponse.error) {
+    if (__DEV__) {
+      console.info("[friends] revokeViewer:rpc-success", {
+        deviceId: params.deviceId,
+        membershipId: params.membershipId,
+        status: (rpcResponse.data as MembershipRow | null)?.status ?? null,
+      });
+    }
+
+    return rpcResponse.data as MembershipRow;
+  }
+
+  if (!isMissingRevokeViewerBackendMessage(rpcResponse.error.message)) {
+    if (__DEV__) {
+      console.info("[friends] revokeViewer:rpc-error", {
+        deviceId: params.deviceId,
+        error: rpcResponse.error.message,
+        membershipId: params.membershipId,
+      });
+    }
+
+    throw new Error(rpcResponse.error.message);
+  }
+
+  if (__DEV__) {
+    console.info("[friends] revokeViewer:fallback-update", params);
+  }
+
+  const { data, error } = directUpdateResponse;
+
+  if (__DEV__) {
+    console.info("[friends] revokeViewer:fallback-result", {
+      deviceId: params.deviceId,
+      error: error?.message ?? null,
+      membershipId: params.membershipId,
+      status: (data as MembershipRow | null)?.status ?? null,
+    });
+  }
+
+  const membership = assertData(error, data as MembershipRow | null, "Failed to remove viewer access.");
+  if (!membership) {
+    throw new Error("Failed to remove viewer access.");
+  }
+
+  return membership;
+}
+
+export async function leaveSharedBoard(params: { deviceId: string; membershipId: string }) {
+  const supabase = ensureSupabase();
+
+  if (__DEV__) {
+    console.info("[friends] leaveSharedBoard:start", params);
+  }
+
+  const directUpdateResponse = await ((supabase.from("device_memberships") as any)
+    .update({
+      status: "revoked",
+    } as TablesUpdate<"device_memberships">)
+    .eq("id", params.membershipId)
+    .eq("device_id", params.deviceId)
+    .eq("role", "viewer")
+    .eq("status", "approved")
+    .select("*")
+    .maybeSingle() as any);
+
+  if (__DEV__) {
+    console.info("[friends] leaveSharedBoard:direct-update", {
+      dataStatus: (directUpdateResponse.data as MembershipRow | null)?.status ?? null,
+      deviceId: params.deviceId,
+      error: directUpdateResponse.error?.message ?? null,
+      membershipId: params.membershipId,
+    });
+  }
+
+  if (!directUpdateResponse.error && directUpdateResponse.data) {
+    return directUpdateResponse.data as MembershipRow;
+  }
+
+  const rpcResponse = await (supabase.rpc as any)("leave_shared_board", {
+    p_device_id: params.deviceId,
+    p_membership_id: params.membershipId,
+  });
+
+  if (!rpcResponse.error) {
+    if (__DEV__) {
+      console.info("[friends] leaveSharedBoard:rpc-success", {
+        deviceId: params.deviceId,
+        membershipId: params.membershipId,
+        status: (rpcResponse.data as MembershipRow | null)?.status ?? null,
+      });
+    }
+
+    return rpcResponse.data as MembershipRow;
+  }
+
+  if (!isMissingLeaveSharedBoardBackendMessage(rpcResponse.error.message)) {
+    if (__DEV__) {
+      console.info("[friends] leaveSharedBoard:rpc-error", {
+        deviceId: params.deviceId,
+        error: rpcResponse.error.message,
+        membershipId: params.membershipId,
+      });
+    }
+
+    throw new Error(rpcResponse.error.message);
+  }
+
+  if (__DEV__) {
+    console.info("[friends] leaveSharedBoard:fallback-update", params);
+  }
+
+  const { data, error } = directUpdateResponse;
+
+  if (__DEV__) {
+    console.info("[friends] leaveSharedBoard:fallback-result", {
+      deviceId: params.deviceId,
+      error: error?.message ?? null,
+      membershipId: params.membershipId,
+      status: (data as MembershipRow | null)?.status ?? null,
+    });
+  }
+
+  const membership = assertData(error, data as MembershipRow | null, "Failed to remove this shared board.");
+  if (!membership) {
+    throw new Error("Failed to remove this shared board.");
+  }
+
+  return membership;
 }

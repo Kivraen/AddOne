@@ -44,16 +44,17 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 ## Evidence
 
-- `Friends` now has a first implementation of profile-gated sharing, owner controls, and read-only shared-board browsing in `components/app/friends-tab-content.tsx`, but the full manual-proof sweep is still incomplete.
+- `Friends` now has an accepted beta implementation with profile-gated sharing, owner controls, revoke and leave paths, and live read-only shared-board browsing verified with two real accounts.
 - `Profile` now includes the beta social-identity model, native photo entry points, and an account area that keeps email private but visible as auth-only context.
 - Onboarding and Wi-Fi recovery are real flows, but they are still long, state-dense guided experiences that need a polish and verification pass.
 - Timezone is currently stored as an IANA string in the app and backend, but routine settings still expose a raw text field while firmware only maps a small subset of IANA zones to POSIX rules.
 - The accepted timezone audit in [2026-03-18-timezone-model-and-universal-flow-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-18-timezone-model-and-universal-flow-audit.md) confirms that device timezone is the canonical scheduling setting, any future viewer/display timezone must stay separate, and unsupported zones currently fall back to Los Angeles rules on-device.
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 - The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install from `d589cdc`.
-- The March 24 Friends planning audit concluded that the current Friends implementation is functionally in place and that the remaining likely code repair is narrow: make the real empty state truthful instead of falling back to preview boards before the final two-account proof sweep.
+- The March 24 Friends audit and follow-up proof pass closed `T-001` on `codex/s3-friends-proof-and-fixes`, including owner approve, reject, revoke, viewer leave, truthful empty state, and live read-only board visibility.
 - The March 22 setup follow-up is implemented and hardware-validated: shared onboarding or recovery flow stabilization, wrong-password retry handling, and `Reset history` as `Start new habit` are checkpointed rather than chat-only work.
 - The March 22 destructive lifecycle slice is also implemented and live-validated: full `Factory reset and remove`, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on reclaim, and editable earlier habit-start correction.
+- The remaining Friends follow-up is now narrow realtime polish: development logs still show noisy Supabase channel churn and occasional binding mismatch errors, but the verified owner/viewer flows still complete successfully.
 
 ## Open Risks / Blockers
 
@@ -68,6 +69,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, treat the destructive lifecycle path as accepted and shift the remaining work back to the still-open S3 items: the active [T-001-beta-friends-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-001-beta-friends-surface.md) proof-and-fixes pass under [B-020-stage-s3-friends-proof-and-fixes.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/briefs/B-020-stage-s3-friends-proof-and-fixes.md), the `T-011` timezone revision path if it stays active, and the final onboarding or Wi-Fi recovery polish slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
+Next, treat the destructive lifecycle path and `T-001` Friends checkpoint as accepted, then shift the remaining S3 work to the `T-011` timezone revision path if it stays active and the final onboarding or Wi-Fi recovery polish slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
 
 Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.

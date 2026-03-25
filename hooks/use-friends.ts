@@ -1,31 +1,58 @@
+import { REALTIME_SUBSCRIBE_STATES, RealtimeChannel } from "@supabase/supabase-js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RealtimeChannel } from "@supabase/supabase-js";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { useDevices } from "@/hooks/use-devices";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import {
+  reconcileViewerSharedBoards,
+  removePendingRequestFromOwnerSharing,
+  removeViewerBoardByMembershipId,
+  removeViewerFromOwnerSharing,
+} from "@/lib/friends-state";
+import { getSupabaseClient } from "@/lib/supabase";
+import {
   approveDeviceViewRequest,
   fetchDeviceSharing,
   fetchSharedBoards,
+  leaveSharedBoard as leaveSharedBoardFromRepository,
   rejectDeviceViewRequest,
-  revokeDeviceViewerMembership,
   requestDeviceViewAccess,
+  revokeDeviceViewerMembership,
   rotateDeviceShareCode,
 } from "@/lib/supabase/addone-repository";
-import { getSupabaseClient } from "@/lib/supabase";
-import { DeviceShareRequest, DeviceSharingState, SharedBoard } from "@/types/addone";
+import { DeviceSharingState, SharedBoard } from "@/types/addone";
 
 const FRIENDS_SELF_HEAL_MS = 15_000;
 
 export type FriendsDemoScenario = "connected" | "empty-boards" | "empty-owner" | "pending" | "profile-gate";
 
-const EMPTY_SHARING_STATE: DeviceSharingState = {
+const EMPTY_OWNER_SHARING_STATE: DeviceSharingState = {
   code: null,
   pendingRequests: [],
   viewers: [],
 };
+
+function friendsDebugLog(event: string, payload?: Record<string, unknown>) {
+  if (!__DEV__) {
+    return;
+  }
+
+  console.info(`[friends] ${event}`, payload ?? {});
+}
+
+function assertRevokedMembership(result: { id?: string; status?: string | null } | null | undefined, message: string) {
+  if (result?.status === undefined || result?.status === null) {
+    return result;
+  }
+
+  if (result.status !== "revoked") {
+    throw new Error(message);
+  }
+
+  return result;
+}
 
 function emptyBoardDays() {
   return Array.from({ length: 21 }, () => Array.from({ length: 7 }, () => false));
@@ -39,6 +66,7 @@ function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] 
   return [
     {
       id: "demo-shared-board",
+      viewerMembershipId: "demo-viewer-membership",
       ownerName: "Morgan Lee",
       habitName: "Morning Stretch",
       syncState: "online",
@@ -58,9 +86,9 @@ function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] 
   ];
 }
 
-function demoSharingState(scenario?: FriendsDemoScenario | null): DeviceSharingState {
+function demoOwnerSharingState(scenario?: FriendsDemoScenario | null): DeviceSharingState {
   if (!scenario || scenario === "profile-gate" || scenario === "empty-boards") {
-    return EMPTY_SHARING_STATE;
+    return EMPTY_OWNER_SHARING_STATE;
   }
 
   if (scenario === "empty-owner") {
@@ -122,43 +150,73 @@ export function formatFriendsError(error: unknown, fallback: string) {
 }
 
 export function useFriends(demoScenario?: FriendsDemoScenario | null) {
-  const { activeDeviceId } = useDevices();
+  const { activeDeviceId, isLoading: isLoadingDevices } = useDevices();
   const { mode, status, user } = useAuth();
   const queryClient = useQueryClient();
-  const isProofScenario = demoScenario !== null;
+  const isProofScenario = demoScenario != null;
   const isCloudSignedIn = mode === "cloud" && status === "signedIn" && !!user?.id;
-  const sharedBoardsKey = addOneQueryKeys.sharedBoards(user?.id);
-  const sharingKey = addOneQueryKeys.deviceSharing(activeDeviceId);
+  const ownerSharingKey = useMemo(() => addOneQueryKeys.ownerSharing(activeDeviceId), [activeDeviceId]);
+  const viewerBoardsKey = useMemo(() => addOneQueryKeys.viewerSharedBoards(user?.id), [user?.id]);
+  const isResolvingOwnerSharingScope =
+    !isProofScenario && mode !== "demo" && isCloudSignedIn && isLoadingDevices && !activeDeviceId;
 
-  const sharedBoardsQuery = useQuery({
+  const viewerBoardsQuery = useQuery({
     enabled: isProofScenario || mode === "demo" || isCloudSignedIn,
     queryFn: async () => {
       if (isProofScenario || mode === "demo") {
         return demoSharedBoards(demoScenario);
       }
 
-      return fetchSharedBoards(user!.id);
+      const nextBoards = await fetchSharedBoards(user!.id);
+      const previousBoards = queryClient.getQueryData<SharedBoard[]>(viewerBoardsKey) ?? [];
+      return reconcileViewerSharedBoards(previousBoards, nextBoards);
     },
-    queryKey: sharedBoardsKey,
+    queryKey: viewerBoardsKey,
     refetchInterval: isCloudSignedIn ? FRIENDS_SELF_HEAL_MS : false,
     refetchIntervalInBackground: true,
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
-  const sharingQuery = useQuery({
+  const ownerSharingQuery = useQuery({
     enabled: (isProofScenario || mode === "demo" || isCloudSignedIn) && !!activeDeviceId,
     queryFn: async () => {
       if (isProofScenario || mode === "demo") {
-        return demoSharingState(demoScenario);
+        return demoOwnerSharingState(demoScenario);
       }
 
       return fetchDeviceSharing(activeDeviceId!);
     },
-    queryKey: sharingKey,
+    queryKey: ownerSharingKey,
     refetchInterval: activeDeviceId && isCloudSignedIn && !isProofScenario ? FRIENDS_SELF_HEAL_MS : false,
     refetchIntervalInBackground: true,
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
-  const sharedBoardIds = useMemo(() => (sharedBoardsQuery.data ?? []).map((board) => board.id).sort(), [sharedBoardsQuery.data]);
+  const viewerBoards = viewerBoardsQuery.data ?? [];
+  const ownerSharing = ownerSharingQuery.data ?? EMPTY_OWNER_SHARING_STATE;
+  const sharedBoardIdsSignature = useMemo(() => viewerBoards.map((board) => board.id).sort().join(","), [viewerBoards]);
+  const sharedBoardIds = useMemo(
+    () => (sharedBoardIdsSignature ? sharedBoardIdsSignature.split(",") : []),
+    [sharedBoardIdsSignature],
+  );
+
+  const refetchOwnerSharing = useCallback(async () => {
+    if (!activeDeviceId) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ownerSharingKey });
+    await queryClient.refetchQueries({ queryKey: ownerSharingKey, type: "active" });
+  }, [activeDeviceId, ownerSharingKey, queryClient]);
+
+  const refetchViewerBoards = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: viewerBoardsKey });
+    await queryClient.refetchQueries({ queryKey: viewerBoardsKey, type: "active" });
+  }, [queryClient, viewerBoardsKey]);
 
   useEffect(() => {
     if (isProofScenario || !isCloudSignedIn || !user?.id) {
@@ -172,16 +230,44 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
 
     const channels: RealtimeChannel[] = [];
 
-    const invalidateSharedBoards = () => {
-      void queryClient.invalidateQueries({ queryKey: sharedBoardsKey });
+    const handleChannelStatus = (scope: string, refetch: () => Promise<void>) => {
+      return (status: REALTIME_SUBSCRIBE_STATES, error?: Error) => {
+        friendsDebugLog(`realtime:${scope}`, {
+          error: error?.message ?? null,
+          status,
+        });
+
+        if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+          void refetch();
+          return;
+        }
+
+        if (
+          status === REALTIME_SUBSCRIBE_STATES.CLOSED ||
+          status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
+          status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
+        ) {
+          void refetch();
+        }
+      };
     };
 
-    const invalidateSharing = () => {
+    const invalidateViewerBoards = () => {
+      friendsDebugLog("invalidate:viewer-boards", {
+        userId: user.id,
+      });
+      void refetchViewerBoards();
+    };
+
+    const invalidateOwnerSharing = () => {
       if (!activeDeviceId) {
         return;
       }
 
-      void queryClient.invalidateQueries({ queryKey: sharingKey });
+      friendsDebugLog("invalidate:owner-sharing", {
+        deviceId: activeDeviceId,
+      });
+      void refetchOwnerSharing();
     };
 
     const membershipChannel = supabase
@@ -194,9 +280,9 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
           schema: "public",
           table: "device_memberships",
         },
-        invalidateSharedBoards,
+        invalidateViewerBoards,
       )
-      .subscribe();
+      .subscribe(handleChannelStatus("memberships", refetchViewerBoards));
     channels.push(membershipChannel);
 
     if (activeDeviceId) {
@@ -210,7 +296,7 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
             schema: "public",
             table: "device_share_codes",
           },
-          invalidateSharing,
+          invalidateOwnerSharing,
         )
         .on(
           "postgres_changes",
@@ -220,7 +306,7 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
             schema: "public",
             table: "device_share_requests",
           },
-          invalidateSharing,
+          invalidateOwnerSharing,
         )
         .on(
           "postgres_changes",
@@ -230,9 +316,9 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
             schema: "public",
             table: "device_memberships",
           },
-          invalidateSharing,
+          invalidateOwnerSharing,
         )
-        .subscribe();
+        .subscribe(handleChannelStatus("owner", refetchOwnerSharing));
       channels.push(ownerChannel);
     }
 
@@ -247,7 +333,7 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
             schema: "public",
             table: "devices",
           },
-          invalidateSharedBoards,
+          invalidateViewerBoards,
         )
         .on(
           "postgres_changes",
@@ -257,9 +343,9 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
             schema: "public",
             table: "device_runtime_snapshots",
           },
-          invalidateSharedBoards,
+          invalidateViewerBoards,
         )
-        .subscribe();
+        .subscribe(handleChannelStatus(`shared-board:${boardId}`, refetchViewerBoards));
       channels.push(boardChannel);
     }
 
@@ -268,46 +354,75 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
         void supabase.removeChannel(channel);
       }
     };
-  }, [activeDeviceId, isCloudSignedIn, isProofScenario, queryClient, sharedBoardIds, sharedBoardsKey, sharingKey, user?.id]);
+  }, [activeDeviceId, isCloudSignedIn, isProofScenario, refetchOwnerSharing, refetchViewerBoards, sharedBoardIds, user?.id]);
 
   const requestAccessMutation = useMutation({
-    mutationFn: requestDeviceViewAccess,
+    mutationFn: async (code: string) => {
+      friendsDebugLog("mutation:request-access:start", { code });
+      return requestDeviceViewAccess(code);
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: sharedBoardsKey });
+      friendsDebugLog("mutation:request-access:success");
+      await refetchViewerBoards();
     },
   });
 
   const rotateCodeMutation = useMutation({
-    mutationFn: (deviceId: string) => rotateDeviceShareCode(deviceId),
-    onSuccess: async () => {
-      if (activeDeviceId) {
-        await queryClient.invalidateQueries({ queryKey: sharingKey });
-      }
+    mutationFn: async (deviceId: string) => {
+      friendsDebugLog("mutation:rotate-code:start", { deviceId });
+      return rotateDeviceShareCode(deviceId);
+    },
+    onSuccess: async (shareCode) => {
+      friendsDebugLog("mutation:rotate-code:success", {
+        code: shareCode.code,
+      });
+      queryClient.setQueryData<DeviceSharingState>(ownerSharingKey, (current) => ({
+        ...(current ?? EMPTY_OWNER_SHARING_STATE),
+        code: shareCode.code,
+      }));
+      await refetchOwnerSharing();
     },
   });
 
   const approveRequestMutation = useMutation({
-    mutationFn: (requestId: string) => approveDeviceViewRequest(requestId),
-    onSuccess: async () => {
-      if (activeDeviceId) {
-        await queryClient.invalidateQueries({ queryKey: sharingKey });
-      }
+    mutationFn: async (requestId: string) => {
+      friendsDebugLog("mutation:approve-request:start", { activeDeviceId, requestId });
+      return approveDeviceViewRequest(requestId);
+    },
+    onSuccess: async (_request, requestId) => {
+      friendsDebugLog("mutation:approve-request:success", { requestId });
+      queryClient.setQueryData<DeviceSharingState>(ownerSharingKey, (current) =>
+        removePendingRequestFromOwnerSharing(current ?? EMPTY_OWNER_SHARING_STATE, requestId),
+      );
 
-      await queryClient.invalidateQueries({ queryKey: sharedBoardsKey });
+      await Promise.all([refetchOwnerSharing(), refetchViewerBoards()]);
     },
   });
 
   const rejectRequestMutation = useMutation({
-    mutationFn: (requestId: string) => rejectDeviceViewRequest(requestId),
-    onSuccess: async () => {
-      if (activeDeviceId) {
-        await queryClient.invalidateQueries({ queryKey: sharingKey });
-      }
+    mutationFn: async (requestId: string) => {
+      friendsDebugLog("mutation:reject-request:start", { activeDeviceId, requestId });
+      return rejectDeviceViewRequest(requestId);
+    },
+    onSuccess: async (_request, requestId) => {
+      friendsDebugLog("mutation:reject-request:success", { requestId });
+      queryClient.setQueryData<DeviceSharingState>(ownerSharingKey, (current) =>
+        removePendingRequestFromOwnerSharing(current ?? EMPTY_OWNER_SHARING_STATE, requestId),
+      );
+
+      await refetchOwnerSharing();
     },
   });
 
   const revokeViewerMutation = useMutation({
     mutationFn: async (membershipId: string) => {
+      friendsDebugLog("mutation:revoke-viewer:start", {
+        activeDeviceId,
+        isProofScenario,
+        membershipId,
+        mode,
+      });
+
       if (isProofScenario || mode === "demo") {
         return { id: membershipId };
       }
@@ -316,37 +431,97 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
         throw new Error("No owned device connected.");
       }
 
-      return revokeDeviceViewerMembership({
+      const result = await revokeDeviceViewerMembership({
         deviceId: activeDeviceId,
         membershipId,
       });
+      friendsDebugLog("mutation:revoke-viewer:resolved", {
+        membershipId,
+        status: result?.status ?? null,
+      });
+
+      return assertRevokedMembership(result, "Viewer removal did not stick on the backend.");
     },
-    onSuccess: async () => {
-      if (activeDeviceId) {
-        await queryClient.invalidateQueries({ queryKey: sharingKey });
+    onSuccess: async (_membership, membershipId) => {
+      friendsDebugLog("mutation:revoke-viewer:success", {
+        activeDeviceId,
+        membershipId,
+      });
+      queryClient.setQueryData<DeviceSharingState>(ownerSharingKey, (current) =>
+        removeViewerFromOwnerSharing(current ?? EMPTY_OWNER_SHARING_STATE, membershipId),
+      );
+      queryClient.setQueryData<SharedBoard[]>(viewerBoardsKey, (current) =>
+        removeViewerBoardByMembershipId(current ?? [], membershipId),
+      );
+
+      await Promise.all([refetchOwnerSharing(), refetchViewerBoards()]);
+    },
+  });
+
+  const leaveSharedBoardMutation = useMutation({
+    mutationFn: (params: { deviceId: string; membershipId: string }) => {
+      friendsDebugLog("mutation:leave-shared-board:start", params);
+      if (isProofScenario || mode === "demo") {
+        return Promise.resolve({ id: params.membershipId });
       }
 
-      await queryClient.invalidateQueries({ queryKey: sharedBoardsKey });
+      return leaveSharedBoardFromRepository(params).then((result) => {
+        friendsDebugLog("mutation:leave-shared-board:resolved", {
+          membershipId: params.membershipId,
+          status: result?.status ?? null,
+        });
+
+        return assertRevokedMembership(result, "Shared board removal did not stick on the backend.");
+      });
+    },
+    onSuccess: async (_membership, params) => {
+      friendsDebugLog("mutation:leave-shared-board:success", params);
+      queryClient.setQueryData<SharedBoard[]>(viewerBoardsKey, (current) =>
+        removeViewerBoardByMembershipId(current ?? [], params.membershipId),
+      );
+
+      await refetchViewerBoards();
     },
   });
 
   return {
     approveRequest: approveRequestMutation.mutateAsync,
+    hasLoadedOwnerSharing: ownerSharingQuery.dataUpdatedAt > 0,
+    hasLoadedSharing: ownerSharingQuery.dataUpdatedAt > 0,
+    hasLoadedViewerBoards: viewerBoardsQuery.dataUpdatedAt > 0,
     isApprovingRequest: approveRequestMutation.isPending,
-    isLoadingSharedBoards: sharedBoardsQuery.isLoading,
-    isLoadingSharing: Boolean(activeDeviceId) && sharingQuery.isLoading,
+    isFetchingOwnerSharing: ownerSharingQuery.isFetching,
+    isFetchingSharedBoards: viewerBoardsQuery.isFetching,
+    isFetchingSharing: ownerSharingQuery.isFetching,
+    isFetchingViewerBoards: viewerBoardsQuery.isFetching,
+    isLeavingSharedBoard: leaveSharedBoardMutation.isPending,
+    isLoadingOwnerSharing: isResolvingOwnerSharingScope || (Boolean(activeDeviceId) && ownerSharingQuery.isLoading),
+    isLoadingSharedBoards: viewerBoardsQuery.isLoading,
+    isLoadingSharing: isResolvingOwnerSharingScope || (Boolean(activeDeviceId) && ownerSharingQuery.isLoading),
+    isLoadingViewerBoards: viewerBoardsQuery.isLoading,
+    isRefetchErrorOwnerSharing: ownerSharingQuery.isRefetchError,
+    isRefetchErrorViewerBoards: viewerBoardsQuery.isRefetchError,
     isRejectingRequest: rejectRequestMutation.isPending,
     isRequestingAccess: requestAccessMutation.isPending,
     isRotatingCode: rotateCodeMutation.isPending,
     isRevokingViewer: revokeViewerMutation.isPending,
+    leaveSharedBoard: leaveSharedBoardMutation.mutateAsync,
+    ownerSharing,
+    ownerSharingError: ownerSharingQuery.error,
+    refreshOwnerSharing: refetchOwnerSharing,
+    refreshSharedBoards: refetchViewerBoards,
+    refreshSharing: refetchOwnerSharing,
+    refreshViewerBoards: refetchViewerBoards,
     rejectRequest: rejectRequestMutation.mutateAsync,
     revokeViewer: revokeViewerMutation.mutateAsync,
     requestAccess: requestAccessMutation.mutateAsync,
     requestAccessError: requestAccessMutation.error,
     rotateShareCode: rotateCodeMutation.mutateAsync,
-    sharedBoards: sharedBoardsQuery.data ?? [],
-    sharedBoardsError: sharedBoardsQuery.error,
-    sharingError: sharingQuery.error,
-    sharingState: sharingQuery.data ?? EMPTY_SHARING_STATE,
+    sharedBoards: viewerBoards,
+    sharedBoardsError: viewerBoardsQuery.error,
+    sharingError: ownerSharingQuery.error,
+    sharingState: ownerSharing,
+    viewerSharedBoards: viewerBoards,
+    viewerSharedBoardsError: viewerBoardsQuery.error,
   };
 }

@@ -87,9 +87,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current execution brief:
   `TBD after the next S3 slice is chosen`
 - Current execution task:
-  `No single active task is locked yet after the T-018 acceptance`
+  `No single active task is locked yet after the T-001 acceptance on codex/s3-friends-proof-and-fixes`
 - Git durability note:
-  `main` now points to the tested recovered baseline at `d589cdc`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
+  `main` now points to the tested factory-station baseline at `453af7b`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
 
 ## Where We Are Now
 
@@ -100,7 +100,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current scope drift:
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
-  - `Friends` now has the profile gate and a first implementation of code-sharing and live read-only shared boards, but `T-001` still needs second-device proof before acceptance
+  - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards on `codex/s3-friends-proof-and-fixes`
   - the main surfaced history flow is now the inline board editor from device settings, while the dedicated `/history` route still exists in code
 
 ### Backend and cloud
@@ -140,7 +140,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice while Friends proof is externally blocked, with destructive reset plus fresh re-add now treated as accepted lifecycle groundwork rather than an open blocker
+- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice now that Friends is accepted, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
 - Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
 

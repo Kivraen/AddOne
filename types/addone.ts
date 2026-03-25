@@ -157,6 +157,7 @@ export type ResetFlowState = "idle" | "confirming" | "queued";
 
 export interface SharedBoard {
   id: string;
+  viewerMembershipId: string;
   ownerName: string;
   habitName: string;
   syncState: SyncState;

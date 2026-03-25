@@ -1,68 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
-import DragList, { DragListRenderItemInfo } from "react-native-draglist";
+import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
-import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
+import DragList, { DragListRenderItemInfo } from "react-native-draglist";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useFriends } from "@/hooks/use-friends";
 import { useFriendsBoardOrder } from "@/hooks/use-friends-board-order";
+import { useIsMountedRef } from "@/hooks/use-is-mounted-ref";
 import { withAlpha } from "@/lib/color";
+import { shouldHoldFriendsEmptyState } from "@/lib/friends-state";
+import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { SharedBoard } from "@/types/addone";
-
-function emptyBoardDays() {
-  return Array.from({ length: 21 }, () => Array.from({ length: 7 }, () => false));
-}
-
-function makePreviewBoard(
-  id: string,
-  ownerName: string,
-  habitName: string,
-  paletteId: string,
-  marks: number[][],
-): SharedBoard {
-  const days = emptyBoardDays();
-  marks.forEach((weekMarks, weekIndex) => {
-    weekMarks.forEach((dayIndex) => {
-      if (days[weekIndex]?.[dayIndex] !== undefined) {
-        days[weekIndex][dayIndex] = true;
-      }
-    });
-  });
-
-  return {
-    id,
-    ownerName,
-    habitName,
-    syncState: "online",
-    lastSnapshotAt: new Date().toISOString(),
-    weeklyTarget: 4,
-    paletteId,
-    days,
-    dateGrid: undefined,
-    logicalToday: new Date().toISOString().slice(0, 10),
-    today: {
-      weekIndex: 0,
-      dayIndex: 4,
-    },
-  };
-}
-
-function previewBoards(): SharedBoard[] {
-  return [
-    makePreviewBoard(
-      "preview-amber",
-      "Alexandria Montgomery-Winters",
-      "Night Run",
-      "amber",
-      [[0, 2, 4], [1, 3, 5], [0, 1, 2, 4], [0, 2], [1, 2, 4]],
-    ),
-    makePreviewBoard("preview-ice", "Riley Hart", "Gymium", "ice", [[1, 2, 3], [0, 2], [1, 3, 5], [1, 2, 4], [2, 4]]),
-    makePreviewBoard("preview-geek", "Avery Stone", "Deep Work", "geek", [[0, 1], [2, 4], [0, 2, 4], [1, 3], [2]]),
-  ];
-}
 
 function moveBoard<T>(items: T[], fromIndex: number, toIndex: number) {
   const nextItems = [...items];
@@ -71,7 +23,7 @@ function moveBoard<T>(items: T[], fromIndex: number, toIndex: number) {
   return nextItems;
 }
 
-function ArrangeRow(props: DragListRenderItemInfo<SharedBoard>) {
+function ManageRow(props: DragListRenderItemInfo<SharedBoard> & { busy: boolean; onRemove: (board: SharedBoard) => void }) {
   const { item: board, isActive, onDragEnd, onDragStart } = props;
   const initials =
     board.ownerName
@@ -85,7 +37,7 @@ function ArrangeRow(props: DragListRenderItemInfo<SharedBoard>) {
     <GlassCard
       style={{
         marginBottom: 10,
-        opacity: isActive ? 0.92 : 1,
+        opacity: isActive || props.busy ? 0.92 : 1,
         paddingHorizontal: 14,
         paddingVertical: 14,
       }}
@@ -138,21 +90,45 @@ function ArrangeRow(props: DragListRenderItemInfo<SharedBoard>) {
           </Text>
         </View>
 
-        <Pressable
-          hitSlop={10}
-          onPressIn={onDragStart}
-          onPressOut={onDragEnd}
-          style={{
-            alignItems: "center",
-            justifyContent: "center",
-            width: 38,
-            height: 38,
-            borderRadius: theme.radius.full,
-            backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-          }}
-        >
-          <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable
+            disabled={props.busy}
+            hitSlop={10}
+            onPress={() => props.onRemove(board)}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              width: 38,
+              height: 38,
+              borderRadius: theme.radius.full,
+              backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
+              opacity: props.busy ? 0.6 : 1,
+            }}
+          >
+            {props.busy ? (
+              <ActivityIndicator color={theme.colors.statusErrorMuted} />
+            ) : (
+              <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
+            )}
+          </Pressable>
+          <Pressable
+            disabled={props.busy}
+            hitSlop={10}
+            onPressIn={onDragStart}
+            onPressOut={onDragEnd}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              width: 38,
+              height: 38,
+              borderRadius: theme.radius.full,
+              backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+              opacity: props.busy ? 0.6 : 1,
+            }}
+          >
+            <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
+          </Pressable>
+        </View>
       </View>
     </GlassCard>
   );
@@ -160,22 +136,101 @@ function ArrangeRow(props: DragListRenderItemInfo<SharedBoard>) {
 
 export function FriendsArrangeScreen() {
   const router = useRouter();
-  const { isLoadingSharedBoards, sharedBoards, sharedBoardsError } = useFriends();
-  const previewOnlyBoards = useMemo(() => previewBoards(), []);
-  const { orderedBoards, saveBoardOrder } = useFriendsBoardOrder(sharedBoards.length > 0 ? sharedBoards : previewOnlyBoards);
+  const isMountedRef = useIsMountedRef();
+  const {
+    hasLoadedViewerBoards,
+    isFetchingViewerBoards,
+    isLeavingSharedBoard,
+    isLoadingViewerBoards,
+    leaveSharedBoard,
+    refreshViewerBoards,
+    sharedBoards,
+    sharedBoardsError,
+  } = useFriends();
+  const { orderedBoards, saveBoardOrder } = useFriendsBoardOrder(sharedBoards);
+  const [activeMembershipId, setActiveMembershipId] = useState<string | null>(null);
   const data = useMemo(() => orderedBoards, [orderedBoards]);
+  const showLoadingState = shouldHoldFriendsEmptyState({
+    hasLoadedOnce: hasLoadedViewerBoards,
+    isFetching: isLoadingViewerBoards || isFetchingViewerBoards,
+    itemCount: data.length,
+  });
+  const hasBoards = data.length > 0;
+  const showErrorCard = !showLoadingState && !hasBoards && sharedBoardsError;
+  const showErrorBanner = !showLoadingState && hasBoards && sharedBoardsError;
   const listHeader = (
-    <Text
-      style={{
-        color: theme.colors.textSecondary,
-        fontFamily: theme.typography.body.fontFamily,
-        fontSize: theme.typography.body.fontSize,
-        lineHeight: theme.typography.body.lineHeight,
-        marginBottom: 14,
-      }}
-    >
-      Press and drag names into the order you want.
-    </Text>
+    <View style={{ gap: 10, marginBottom: 14 }}>
+      <Text
+        style={{
+          color: theme.colors.textSecondary,
+          fontFamily: theme.typography.body.fontFamily,
+          fontSize: theme.typography.body.fontSize,
+          lineHeight: theme.typography.body.lineHeight,
+        }}
+      >
+        Drag to reorder shared boards or remove one from your account.
+      </Text>
+      {showErrorBanner ? (
+        <GlassCard style={{ paddingHorizontal: 14, paddingVertical: 14 }}>
+          <Text
+            selectable
+            style={{
+              color: theme.colors.statusErrorMuted,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+            }}
+          >
+            {sharedBoardsError instanceof Error ? sharedBoardsError.message : "We couldn't refresh every board right now."}
+          </Text>
+        </GlassCard>
+      ) : null}
+    </View>
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshViewerBoards();
+    }, [refreshViewerBoards]),
+  );
+
+  const confirmRemove = useCallback(
+    (board: SharedBoard) => {
+      Alert.alert("Remove shared board?", `Remove ${board.ownerName}'s board from this account?`, [
+        {
+          style: "cancel",
+          text: "Cancel",
+        },
+        {
+          style: "destructive",
+          text: "Remove",
+          onPress: () => {
+            void (async () => {
+              setActiveMembershipId(board.viewerMembershipId);
+
+              try {
+                await leaveSharedBoard({
+                  deviceId: board.id,
+                  membershipId: board.viewerMembershipId,
+                });
+                triggerPrimaryActionSuccessHaptic();
+              } catch (error) {
+                triggerPrimaryActionFailureHaptic();
+                Alert.alert(
+                  "Couldn't remove board",
+                  error instanceof Error ? error.message : "Try again.",
+                );
+              } finally {
+                if (isMountedRef.current) {
+                  setActiveMembershipId(null);
+                }
+              }
+            })();
+          },
+        },
+      ]);
+    },
+    [isMountedRef, leaveSharedBoard],
   );
 
   return (
@@ -183,7 +238,7 @@ export function FriendsArrangeScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: "Arrange boards",
+          title: "Manage boards",
           headerTitleAlign: "center",
           headerShadowVisible: false,
           headerStyle: { backgroundColor: theme.colors.bgBase },
@@ -223,49 +278,82 @@ export function FriendsArrangeScreen() {
             paddingBottom: theme.layout.scrollBottom,
           }}
         >
-        {isLoadingSharedBoards ? (
-          <GlassCard style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              Loading boards…
-            </Text>
-          </GlassCard>
-        ) : null}
+          {showLoadingState ? (
+            <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
+              <ActivityIndicator color={theme.colors.accentAmber} />
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Loading shared boards…
+              </Text>
+            </GlassCard>
+          ) : null}
 
-        {!isLoadingSharedBoards && sharedBoardsError ? (
-          <GlassCard style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
-            <Text
-              style={{
-                color: theme.colors.statusErrorMuted,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: theme.typography.body.fontSize,
-                lineHeight: theme.typography.body.lineHeight,
-              }}
-            >
-              {sharedBoardsError instanceof Error ? sharedBoardsError.message : "We couldn't load boards right now."}
-            </Text>
-          </GlassCard>
-        ) : null}
+          {showErrorCard ? (
+            <GlassCard style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+              <Text
+                selectable
+                style={{
+                  color: theme.colors.statusErrorMuted,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                {sharedBoardsError instanceof Error ? sharedBoardsError.message : "We couldn't load boards right now."}
+              </Text>
+            </GlassCard>
+          ) : null}
 
-        {!isLoadingSharedBoards && !sharedBoardsError && data.length > 0 ? (
-          <DragList
-            data={data}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={listHeader}
-            onReordered={async (fromIndex, toIndex) => {
-              const nextData = moveBoard(data, fromIndex, toIndex);
-              await saveBoardOrder(nextData.map((board) => board.id));
-            }}
-            renderItem={(info) => <ArrangeRow {...info} />}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : null}
+          {!showLoadingState && hasBoards ? (
+            <DragList
+              data={data}
+              keyExtractor={(item) => item.id}
+              ListHeaderComponent={listHeader}
+              onReordered={async (fromIndex, toIndex) => {
+                const nextData = moveBoard(data, fromIndex, toIndex);
+                await saveBoardOrder(nextData.map((board) => board.id));
+              }}
+              renderItem={(info) => (
+                <ManageRow
+                  {...info}
+                  busy={isLeavingSharedBoard && activeMembershipId === info.item.viewerMembershipId}
+                  onRemove={confirmRemove}
+                />
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : null}
+
+          {!showLoadingState && !showErrorCard && !hasBoards ? (
+            <GlassCard style={{ gap: 6, paddingHorizontal: 16, paddingVertical: 16 }}>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: 15,
+                  lineHeight: 20,
+                }}
+              >
+                No shared boards yet
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: theme.typography.body.fontSize,
+                  lineHeight: theme.typography.body.lineHeight,
+                }}
+              >
+                Approved boards will appear here after you connect to someone&apos;s code.
+              </Text>
+            </GlassCard>
+          ) : null}
         </View>
       </SafeAreaView>
     </>

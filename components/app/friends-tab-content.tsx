@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionSheetIOS, ActivityIndicator, Modal, Pressable, ScrollView, Share, Text, TextInput, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { captureRef } from "react-native-view-shot";
@@ -16,9 +17,11 @@ import { theme } from "@/constants/theme";
 import { useDevices } from "@/hooks/use-devices";
 import { useFriendsBoardOrder } from "@/hooks/use-friends-board-order";
 import { FriendsDemoScenario, useFriends, formatFriendsError } from "@/hooks/use-friends";
+import { useIsMountedRef } from "@/hooks/use-is-mounted-ref";
 import { useSocialProfile } from "@/hooks/use-social-profile";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
+import { shouldHoldFriendsEmptyState } from "@/lib/friends-state";
 import {
   triggerNavigationHaptic,
   triggerPrimaryActionFailureHaptic,
@@ -31,7 +34,7 @@ interface FriendsTabContentProps {
 }
 
 type FeedbackTone = "error" | "success";
-type FriendsSheetKey = "join" | "share" | "connections" | "boards" | null;
+type FriendsSheetKey = "controls" | "join" | "share" | "connections" | "boards" | null;
 
 function SectionEyebrow({ children }: { children: string }) {
   return (
@@ -308,6 +311,7 @@ function makePreviewBoard(
 ): SharedBoard {
   return {
     id,
+    viewerMembershipId: `${id}-viewer-membership`,
     ownerName,
     habitName,
     syncState,
@@ -546,6 +550,7 @@ function SharedBoardCard({ board, width }: { board: SharedBoard; width: number }
   const boardWidth = Math.max(300, Math.min(width - 12, 460));
   const stats = useMemo(() => sharedBoardStats(board), [board]);
   const shareSnapshotRef = useRef<View>(null);
+  const isMountedRef = useIsMountedRef();
   const [isSharingCard, setIsSharingCard] = useState(false);
 
   async function handleShareCard() {
@@ -580,7 +585,9 @@ function SharedBoardCard({ board, width }: { board: SharedBoard; width: number }
       triggerPrimaryActionFailureHaptic();
       console.warn("Failed to share friend board card", error);
     } finally {
-      setIsSharingCard(false);
+      if (isMountedRef.current) {
+        setIsSharingCard(false);
+      }
     }
   }
 
@@ -1015,6 +1022,7 @@ function SheetCloseButton({ onPress }: { onPress: () => void }) {
 
 export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }: FriendsTabContentProps) {
   const router = useRouter();
+  const isMountedRef = useIsMountedRef();
   const params = useLocalSearchParams<{ proofState?: string | string[] }>();
   const { width } = useWindowDimensions();
   const { activeDevice } = useDevices();
@@ -1022,12 +1030,16 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
   const { isComplete, isLoading: isLoadingProfile } = useSocialProfile();
   const {
     approveRequest,
+    hasLoadedViewerBoards,
     isApprovingRequest,
+    isFetchingViewerBoards,
     isLoadingSharedBoards,
     isLoadingSharing,
     isRejectingRequest,
     isRequestingAccess,
     isRotatingCode,
+    refreshOwnerSharing,
+    refreshViewerBoards,
     rejectRequest,
     requestAccess,
     requestAccessError,
@@ -1057,18 +1069,25 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
   const pendingCount = sharingState.pendingRequests.length;
   const viewerCount = sharingState.viewers.length;
   const sharedCount = sharedBoards.length;
-  const previewOnlyBoards = useMemo(() => previewBoards(), []);
   const { orderedBoards } = useFriendsBoardOrder(sharedBoards);
-  const showcaseBoards = sharedBoards.length > 0 ? orderedBoards : previewOnlyBoards;
   const previewRequestCard = useMemo(() => previewPendingRequest(), []);
   const previewViewerCard = useMemo(() => previewViewer(), []);
   const activePalette = getMergedPalette(activeDevice?.paletteId ?? "amber", activeDevice?.customPalette);
   const galleryWidth = Math.max(300, Math.min(width - 40, 620));
   const codeReady = Boolean(sharingState.code);
+  const shouldHoldSharedBoardsEmptyState = shouldHoldFriendsEmptyState({
+    hasLoadedOnce: hasLoadedViewerBoards,
+    isFetching: isLoadingSharedBoards || isFetchingViewerBoards,
+    itemCount: sharedBoards.length,
+  });
+  const showSharedBoardsErrorCard = !shouldHoldSharedBoardsEmptyState && sharedBoards.length === 0 && sharedBoardsError;
+  const showSharedBoardsErrorBanner = !shouldHoldSharedBoardsEmptyState && sharedBoards.length > 0 && sharedBoardsError;
   const isBootstrappingCode =
     Boolean(activeDevice?.id) && !codeReady && !sharingError && !isLoadingSharing && (isRotatingCode || autoCodeDeviceIdRef.current === activeDevice?.id);
   const dialogMaxHeight = useMemo(() => {
     switch (activeSheet) {
+      case "controls":
+        return "46%";
       case "join":
         return "52%";
       case "share":
@@ -1087,11 +1106,21 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     router.push("/profile?from=friends");
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      if (isProofScenario || !effectiveIsComplete) {
+        return;
+      }
+
+      void Promise.all([refreshOwnerSharing(), refreshViewerBoards()]);
+    }, [effectiveIsComplete, isProofScenario, refreshOwnerSharing, refreshViewerBoards]),
+  );
+
   const openControlsMenu = () => {
     triggerNavigationHaptic();
 
     if (process.env.EXPO_OS === "ios") {
-      const options = ["Requests", "Arrange boards", "Connect by code", "Share your code", "Cancel"];
+      const options = ["Requests", "Manage boards", "Connect by code", "Share your code", "Cancel"];
       ActionSheetIOS.showActionSheetWithOptions(
         {
           cancelButtonIndex: 4,
@@ -1122,7 +1151,7 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
       return;
     }
 
-    setActiveSheet("share");
+    setActiveSheet("controls");
   };
 
   const handleCopyShareCode = async () => {
@@ -1167,6 +1196,8 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
   }, [activeDevice?.id]);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (
       isProofScenario ||
       !effectiveIsComplete ||
@@ -1183,22 +1214,33 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     autoCodeDeviceIdRef.current = activeDevice.id;
     void rotateShareCode(activeDevice.id)
       .then(() => {
-        setOwnerFeedback({
-          message: "Share code ready.",
-          tone: "success",
-        });
+        if (!cancelled && isMountedRef.current) {
+          setOwnerFeedback({
+            message: "Share code ready.",
+            tone: "success",
+          });
+        }
       })
       .catch((error) => {
+        if (cancelled || !isMountedRef.current) {
+          return;
+        }
+
         autoCodeDeviceIdRef.current = null;
         setOwnerFeedback({
           message: formatFriendsError(error, "We couldn't prepare the share code right now."),
           tone: "error",
         });
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeDevice?.id,
     codeReady,
     effectiveIsComplete,
+    isMountedRef,
     isLoadingSharing,
     isProofScenario,
     isRotatingCode,
@@ -1220,17 +1262,21 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     try {
       await requestAccess(normalizedCode);
       triggerPrimaryActionSuccessHaptic();
-      setShareCodeInput("");
-      setShareCodeFeedback({
-        message: "Request sent. The owner will need to approve it before the board appears here.",
-        tone: "success",
-      });
+      if (isMountedRef.current) {
+        setShareCodeInput("");
+        setShareCodeFeedback({
+          message: "Request sent. The owner will need to approve it before the board appears here.",
+          tone: "success",
+        });
+      }
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
-      setShareCodeFeedback({
-        message: formatFriendsError(error, "We couldn't send that share request."),
-        tone: "error",
-      });
+      if (isMountedRef.current) {
+        setShareCodeFeedback({
+          message: formatFriendsError(error, "We couldn't send that share request."),
+          tone: "error",
+        });
+      }
     }
   };
 
@@ -1242,16 +1288,20 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     try {
       await rotateShareCode(activeDevice.id);
       triggerPrimaryActionSuccessHaptic();
-      setOwnerFeedback({
-        message: sharingState.code ? "Share code rotated. Use the new code for any future requests." : "Share code created.",
-        tone: "success",
-      });
+      if (isMountedRef.current) {
+        setOwnerFeedback({
+          message: sharingState.code ? "Share code rotated. Use the new code for any future requests." : "Share code created.",
+          tone: "success",
+        });
+      }
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
-      setOwnerFeedback({
-        message: formatFriendsError(error, "We couldn't rotate the share code right now."),
-        tone: "error",
-      });
+      if (isMountedRef.current) {
+        setOwnerFeedback({
+          message: formatFriendsError(error, "We couldn't rotate the share code right now."),
+          tone: "error",
+        });
+      }
     }
   };
 
@@ -1261,18 +1311,24 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     try {
       await approveRequest(requestId);
       triggerPrimaryActionSuccessHaptic();
-      setOwnerFeedback({
-        message: "Request approved. That board should now appear for the viewer.",
-        tone: "success",
-      });
+      if (isMountedRef.current) {
+        setOwnerFeedback({
+          message: "Request approved. That board should now appear for the viewer.",
+          tone: "success",
+        });
+      }
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
-      setOwnerFeedback({
-        message: formatFriendsError(error, "We couldn't approve that request."),
-        tone: "error",
-      });
+      if (isMountedRef.current) {
+        setOwnerFeedback({
+          message: formatFriendsError(error, "We couldn't approve that request."),
+          tone: "error",
+        });
+      }
     } finally {
-      setActiveRequestActionId(null);
+      if (isMountedRef.current) {
+        setActiveRequestActionId(null);
+      }
     }
   };
 
@@ -1282,23 +1338,31 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     try {
       await rejectRequest(requestId);
       triggerPrimaryActionSuccessHaptic();
-      setOwnerFeedback({
-        message: "Request rejected.",
-        tone: "success",
-      });
+      if (isMountedRef.current) {
+        setOwnerFeedback({
+          message: "Request rejected.",
+          tone: "success",
+        });
+      }
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
-      setOwnerFeedback({
-        message: formatFriendsError(error, "We couldn't reject that request."),
-        tone: "error",
-      });
+      if (isMountedRef.current) {
+        setOwnerFeedback({
+          message: formatFriendsError(error, "We couldn't reject that request."),
+          tone: "error",
+        });
+      }
     } finally {
-      setActiveRequestActionId(null);
+      if (isMountedRef.current) {
+        setActiveRequestActionId(null);
+      }
     }
   };
 
   const currentSheetTitle =
-    activeSheet === "join"
+    activeSheet === "controls"
+      ? "Friends options"
+      : activeSheet === "join"
       ? "Join a board"
       : activeSheet === "share"
         ? activeDevice
@@ -1306,18 +1370,20 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
           : "Share your board"
         : activeSheet === "connections"
           ? "Requests"
-          : "Connected boards";
+          : "Manage boards";
 
   const currentSheetSubtitle =
-    activeSheet === "join"
+    activeSheet === "controls"
+      ? "Choose what to do next."
+      : activeSheet === "join"
       ? "Enter a board code."
       : activeSheet === "share"
         ? null
         : activeSheet === "connections"
           ? null
           : sharedBoards.length > 0
-            ? "Read-only boards."
-            : "Preview mode.";
+            ? "Reorder or remove boards you follow."
+            : "Approved boards will appear here.";
   const currentSheetNote =
     activeSheet === "share"
       ? sharingState.code
@@ -1374,13 +1440,30 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                     </GlassCard>
                   ) : null}
 
-                  {!isLoadingSharedBoards && sharedBoardsError ? (
+                  {showSharedBoardsErrorCard ? (
                     <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
                       <BodyCopy tone="error">{formatFriendsError(sharedBoardsError, "We couldn't load the shared boards.")}</BodyCopy>
                     </GlassCard>
                   ) : null}
 
-                  {!isLoadingSharedBoards && !sharedBoardsError ? showcaseBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />) : null}
+                  {showSharedBoardsErrorBanner ? (
+                    <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+                      <BodyCopy tone="error">
+                        {formatFriendsError(sharedBoardsError, "We couldn't refresh every shared board right now.")}
+                      </BodyCopy>
+                    </GlassCard>
+                  ) : null}
+
+                  {!shouldHoldSharedBoardsEmptyState && !showSharedBoardsErrorCard && sharedBoards.length === 0 ? (
+                    <EmptyMessage
+                      body="Use the menu to connect by code or share your board."
+                      title="No shared boards yet"
+                    />
+                  ) : null}
+
+                  {!shouldHoldSharedBoardsEmptyState && sharedBoards.length > 0
+                    ? orderedBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />)
+                    : null}
                 </View>
               ) : null}
             </>
@@ -1478,6 +1561,42 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
               </View>
 
               <ScrollView contentContainerStyle={{ gap: activeSheet === "share" ? 22 : 18, paddingBottom: 22, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
+              {activeSheet === "controls" ? (
+                <View style={{ gap: 12 }}>
+                  <ActionButton
+                    label={pendingCount > 0 ? `Requests (${pendingCount})` : "Requests"}
+                    onPress={() => {
+                      setActiveSheet(null);
+                      router.push("/friends-requests");
+                    }}
+                    secondary
+                  />
+                  <ActionButton
+                    label="Manage boards"
+                    onPress={() => {
+                      setActiveSheet(null);
+                      router.push("/friends-arrange");
+                    }}
+                    secondary
+                  />
+                  <ActionButton
+                    label="Connect by code"
+                    onPress={() => {
+                      setShareCodeFeedback(null);
+                      setActiveSheet("join");
+                    }}
+                    secondary
+                  />
+                  <ActionButton
+                    label="Share your code"
+                    onPress={() => {
+                      setOwnerFeedback(null);
+                      setActiveSheet("share");
+                    }}
+                  />
+                </View>
+              ) : null}
+
               {activeSheet === "join" ? (
                 <View style={{ gap: 14 }}>
                   <TextInput
@@ -1603,17 +1722,19 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                             body="Requests appear here after someone uses your code."
                             title="No pending requests"
                           />
-                          <View style={{ gap: 8 }}>
-                            <PreviewNote>Preview</PreviewNote>
-                            <RequestRow
-                              isApproving={false}
-                              isRejecting={false}
-                              onApprove={() => {}}
-                              onReject={() => {}}
-                              preview
-                              request={previewRequestCard}
-                            />
-                          </View>
+                          {isProofScenario ? (
+                            <View style={{ gap: 8 }}>
+                              <PreviewNote>Preview</PreviewNote>
+                              <RequestRow
+                                isApproving={false}
+                                isRejecting={false}
+                                onApprove={() => {}}
+                                onReject={() => {}}
+                                preview
+                                request={previewRequestCard}
+                              />
+                            </View>
+                          ) : null}
                         </View>
                       ) : (
                         sharingState.pendingRequests.map((request) => (
@@ -1638,10 +1759,12 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                             body="Approved people stay here."
                             title="No viewers yet"
                           />
-                          <View style={{ gap: 8 }}>
-                            <PreviewNote>Preview</PreviewNote>
-                            <ViewerRow viewer={previewViewerCard} />
-                          </View>
+                          {isProofScenario ? (
+                            <View style={{ gap: 8 }}>
+                              <PreviewNote>Preview</PreviewNote>
+                              <ViewerRow viewer={previewViewerCard} />
+                            </View>
+                          ) : null}
                         </View>
                       ) : (
                         sharingState.viewers.map((viewer) => <ViewerRow key={viewer.membershipId} viewer={viewer} />)
@@ -1653,28 +1776,36 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
 
               {activeSheet === "boards" ? (
                 <View style={{ gap: 14 }}>
-                  {!isLoadingSharedBoards && !sharedBoardsError && sharedBoards.length === 0 ? (
+                  {!shouldHoldSharedBoardsEmptyState && !showSharedBoardsErrorCard && sharedBoards.length === 0 ? (
                     <EmptyMessage
                       body="Approved boards will appear here."
                       title="No shared boards yet"
                     />
                   ) : null}
 
-                  {isLoadingSharedBoards ? (
+                  {shouldHoldSharedBoardsEmptyState ? (
                     <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
                       <ActivityIndicator color={theme.colors.accentAmber} />
                       <BodyCopy>Loading shared boards…</BodyCopy>
                     </GlassCard>
                   ) : null}
 
-                  {!isLoadingSharedBoards && sharedBoardsError ? (
+                  {showSharedBoardsErrorCard ? (
                     <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
                       <BodyCopy tone="error">{formatFriendsError(sharedBoardsError, "We couldn't load the shared boards.")}</BodyCopy>
                     </GlassCard>
                   ) : null}
 
-                  {!isLoadingSharedBoards && !sharedBoardsError
-                    ? showcaseBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />)
+                  {showSharedBoardsErrorBanner ? (
+                    <GlassCard style={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+                      <BodyCopy tone="error">
+                        {formatFriendsError(sharedBoardsError, "We couldn't refresh every shared board right now.")}
+                      </BodyCopy>
+                    </GlassCard>
+                  ) : null}
+
+                  {!shouldHoldSharedBoardsEmptyState && sharedBoards.length > 0
+                    ? orderedBoards.map((board) => <SharedBoardCard key={board.id} board={board} width={boardCardWidth} />)
                     : null}
                 </View>
               ) : null}

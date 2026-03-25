@@ -30,8 +30,9 @@ Last updated: March 24, 2026
 - Stage order is adaptive. The active stage changed on March 18, 2026 because the user reprioritized finishing the beta UI surface before more infra-only proof work.
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
-- `T-001` is implemented and saved, but its final verification is blocked on second-device or second-account proof.
-- `T-008` remains the current active parent slice while that Friends proof dependency is unavailable.
+- `T-001` is now accepted on `codex/s3-friends-proof-and-fixes` after live two-account proof.
+- `T-008` remains open as the final visible onboarding or recovery polish slice.
+- `T-011` still needs its revision pass accepted if timezone remains in the active S3 queue.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
 - `T-019` is preserved as a historical planning artifact, not an active blocker.

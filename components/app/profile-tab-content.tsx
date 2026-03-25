@@ -18,6 +18,7 @@ import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-fram
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
+import { useIsMountedRef } from "@/hooks/use-is-mounted-ref";
 import { useSocialProfile } from "@/hooks/use-social-profile";
 import {
   triggerNavigationHaptic,
@@ -347,6 +348,7 @@ function AvatarPreview(props: {
 export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }: ProfileTabContentProps) {
   const params = useLocalSearchParams<{ from?: string | string[] }>();
   const router = useRouter();
+  const isMountedRef = useIsMountedRef();
   const { width } = useWindowDimensions();
   const { mode, signOut, userEmail } = useAuth();
   const { isComplete, isLoading, isSaving, profile, saveProfile } = useSocialProfile();
@@ -385,6 +387,10 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
 
   async function chooseFromLibrary() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!isMountedRef.current) {
+      return;
+    }
+
     setIsPhotoMenuVisible(false);
 
     if (!permission.granted) {
@@ -400,7 +406,11 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
       quality: 0.85,
     });
 
-    if (!result.canceled && result.assets[0]) {
+    if (!isMountedRef.current || result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    if (result.assets[0]) {
       setPendingAvatar({
         mimeType: result.assets[0].mimeType,
         uri: result.assets[0].uri,
@@ -413,6 +423,10 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!isMountedRef.current) {
+      return;
+    }
+
     setIsPhotoMenuVisible(false);
 
     if (!permission.granted) {
@@ -429,7 +443,11 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
       quality: 0.85,
     });
 
-    if (!result.canceled && result.assets[0]) {
+    if (!isMountedRef.current || result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    if (result.assets[0]) {
       setPendingAvatar({
         mimeType: result.assets[0].mimeType,
         uri: result.assets[0].uri,
@@ -507,6 +525,10 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
       });
 
       triggerPrimaryActionSuccessHaptic();
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setDraft(buildDraft(savedProfile));
       setPendingAvatar(null);
       setClearAvatar(false);
@@ -517,6 +539,10 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
       }
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setFormError(
         isProfileMigrationRequiredError(error)
           ? "The beta backend still needs the latest profile migration. Apply the newest Supabase migration, then try again."
