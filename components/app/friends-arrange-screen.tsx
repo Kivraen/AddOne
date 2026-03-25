@@ -51,6 +51,24 @@ function ManageRow(
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Pressable
+          disabled={isBusy}
+          hitSlop={10}
+          onPressIn={onDragStart}
+          onPressOut={onDragEnd}
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            width: 38,
+            height: 38,
+            borderRadius: theme.radius.full,
+            backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+            opacity: isBusy ? 0.6 : 1,
+          }}
+        >
+          <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
+        </Pressable>
+
         <View
           style={{
             alignItems: "center",
@@ -98,17 +116,42 @@ function ManageRow(
           </Text>
         </View>
 
-        <View style={{ alignItems: "flex-end", gap: 10 }}>
+        <View style={{ alignItems: "flex-end", gap: 12 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+            <Pressable
+              disabled={props.celebrationBusy}
+              hitSlop={10}
+              onPress={() =>
+                Alert.alert(
+                  "Friend board reveal",
+                  `When this is on, ${board.ownerName}'s board can briefly appear on your device after they complete today's check-in.`,
+                )
+              }
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 34,
+                height: 34,
+                borderRadius: theme.radius.full,
+                backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+                opacity: props.celebrationBusy ? 0.6 : 1,
+              }}
+            >
+              <Ionicons
+                color={board.celebrationEnabled ? theme.colors.accentAmber : theme.colors.textSecondary}
+                name={board.celebrationEnabled ? "eye-outline" : "eye-off-outline"}
+                size={18}
+              />
+            </Pressable>
             <Text
               style={{
                 color: theme.colors.textSecondary,
-                fontFamily: theme.typography.body.fontFamily,
+                fontFamily: theme.typography.label.fontFamily,
                 fontSize: 12,
                 lineHeight: 16,
               }}
             >
-              Show celebrations
+              Visible
             </Text>
             <Switch
               disabled={props.celebrationBusy}
@@ -122,45 +165,26 @@ function ManageRow(
             />
           </View>
 
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable
-              disabled={isBusy}
-              hitSlop={10}
-              onPress={() => props.onRemove(board)}
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                width: 38,
-                height: 38,
-                borderRadius: theme.radius.full,
-                backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
-                opacity: isBusy ? 0.6 : 1,
-              }}
-            >
-              {props.removeBusy ? (
-                <ActivityIndicator color={theme.colors.statusErrorMuted} />
-              ) : (
-                <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
-              )}
-            </Pressable>
-            <Pressable
-              disabled={isBusy}
-              hitSlop={10}
-              onPressIn={onDragStart}
-              onPressOut={onDragEnd}
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                width: 38,
-                height: 38,
-                borderRadius: theme.radius.full,
-                backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-                opacity: isBusy ? 0.6 : 1,
-              }}
-            >
-              <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
-            </Pressable>
-          </View>
+          <Pressable
+            disabled={isBusy}
+            hitSlop={10}
+            onPress={() => props.onRemove(board)}
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              width: 38,
+              height: 38,
+              borderRadius: theme.radius.full,
+              backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
+              opacity: isBusy ? 0.6 : 1,
+            }}
+          >
+            {props.removeBusy ? (
+              <ActivityIndicator color={theme.colors.statusErrorMuted} />
+            ) : (
+              <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
+            )}
+          </Pressable>
         </View>
       </View>
     </GlassCard>

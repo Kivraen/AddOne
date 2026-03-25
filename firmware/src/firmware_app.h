@@ -56,10 +56,10 @@ private:
   };
 
   struct FriendCelebrationSenderState {
+    String lastEmittedLocalDate{};
     String pendingLocalDate{};
     unsigned long emitExpiresAtMs = 0;
     unsigned long stableUntilMs = 0;
-    bool emittedForCurrentToday = false;
     bool pending = false;
   };
 
@@ -67,7 +67,6 @@ private:
     BoardFrame friendFrame{};
     BoardFrame ownerFrame{};
     BoardTransitionPlan transitionPlan{};
-    BoardTransitionStyle style = BoardTransitionStyle::RandomMix;
     unsigned long dissolveDurationMs = 0;
     unsigned long startedAtMs = 0;
     bool active = false;
@@ -168,7 +167,6 @@ private:
   bool wifiReconnectAttemptActive_ = false;
   bool wifiReconnectExhausted_ = false;
   bool recoveryVisualActive_ = false;
-  uint8_t friendCelebrationTransitionCursor_ = 0;
   uint8_t wifiReconnectAttemptCount_ = 0;
   RecoveryVisualStage recoveryVisualStage_ = RecoveryVisualStage::PortalReady;
   unsigned long recoveryVisualUntilMs_ = 0;

@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
@@ -23,7 +22,6 @@ import { withAlpha } from "@/lib/color";
 import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceResetHistoryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
-import { transitionPreviewStyles } from "@/lib/transition-preview";
 
 const OVERVIEW_SECTION_GAP = 12;
 
@@ -76,18 +74,13 @@ export default function DeviceSettingsOverviewRoute() {
   const router = useRouter();
   const {
     factoryResetAndRemove,
-    isPreviewingTransition,
     isRemovingDeviceFromApp,
     isResettingHistory,
-    previewTransition,
     removalPhase,
   } = useDeviceActions();
-  const [previewStyleIndex, setPreviewStyleIndex] = useState(0);
   const controlReady = isDeviceControlReady(device);
   const devicePendingRemoval = isDevicePendingRemoval(device);
   const removeActionDisabled = devicePendingRemoval || isRemovingDeviceFromApp;
-  const previewStyle = transitionPreviewStyles[previewStyleIndex % transitionPreviewStyles.length];
-  const previewDisabled = !controlReady || devicePendingRemoval || isPreviewingTransition;
 
   function handleResetHistory() {
     router.push(deviceResetHistoryPath(device.id));
@@ -126,23 +119,6 @@ export default function DeviceSettingsOverviewRoute() {
           },
         },
       ],
-    );
-  }
-
-  function handlePreviewTransition() {
-    void previewTransition({
-      deviceId: device.id,
-      styleIndex: previewStyle.id,
-    }).then(
-      () => {
-        setPreviewStyleIndex((current) => (current + 1) % transitionPreviewStyles.length);
-      },
-      (error: unknown) => {
-        Alert.alert(
-          "Preview failed",
-          error instanceof Error ? error.message : "The board could not start the transition preview.",
-        );
-      },
     );
   }
 
@@ -250,37 +226,6 @@ export default function DeviceSettingsOverviewRoute() {
                 title="History"
               />
             </SettingsListSurface>
-          </View>
-
-          <View style={{ gap: OVERVIEW_SECTION_GAP }}>
-            <SettingsSectionTitle>Transition Lab</SettingsSectionTitle>
-            <SettingsSurface>
-              <View style={{ gap: SETTINGS_HEADER_GAP }}>
-                <SettingsFieldLabel>Temporary transition preview</SettingsFieldLabel>
-                <SettingsNote>
-                  Tap after the board returns home to step through the test library. This sends a local preview only to this
-                  board.
-                </SettingsNote>
-              </View>
-              <View style={{ gap: SETTINGS_FIELD_GAP }}>
-                <DraftActionButton
-                  disabled={previewDisabled}
-                  emphasis="primary"
-                  label={isPreviewingTransition ? "Sending preview…" : `Preview ${previewStyle.label}`}
-                  onPress={handlePreviewTransition}
-                />
-                <Text
-                  style={{
-                    color: theme.colors.textTertiary,
-                    fontFamily: theme.typography.label.fontFamily,
-                    fontSize: theme.typography.label.fontSize,
-                    lineHeight: theme.typography.label.lineHeight,
-                  }}
-                >
-                  Library order: {transitionPreviewStyles.map((style) => style.label).join(" · ")}
-                </Text>
-              </View>
-            </SettingsSurface>
           </View>
 
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>

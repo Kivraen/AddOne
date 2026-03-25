@@ -8,7 +8,6 @@ import {
   enterWifiRecoveryFromApp,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
-  queueTransitionPreviewFromApp,
   removeDeviceFromAccountFromApp,
   resetDeviceHistoryFromApp,
   requestDeviceFactoryResetFromApp,
@@ -511,9 +510,6 @@ export function useDeviceActions() {
   const refreshRuntimeMutation = useMutation({
     mutationFn: requestRuntimeSnapshotFromApp,
   });
-  const previewTransitionMutation = useMutation({
-    mutationFn: queueTransitionPreviewFromApp,
-  });
 
   const setDayStateMutation = useMutation({
     mutationFn: setDayStateFromApp,
@@ -549,7 +545,6 @@ export function useDeviceActions() {
   const isBusy =
     claimMutation.isPending ||
     refreshRuntimeMutation.isPending ||
-    previewTransitionMutation.isPending ||
     setDayStateMutation.isPending ||
     historyDraftMutation.isPending ||
     applySettingsMutation.isPending ||
@@ -765,7 +760,6 @@ export function useDeviceActions() {
       commitHistoryDraft: async () => undefined,
       isApplyingToday: false,
       isBusy,
-      isPreviewingTransition: false,
       isRefreshingRuntimeSnapshot: false,
       isSavingHistoryDraft: false,
       isSavingSettings: false,
@@ -784,7 +778,6 @@ export function useDeviceActions() {
       }) => undefined,
       requestFactoryReset: async (_deviceId?: string) => undefined,
       requestWifiRecovery: async (_deviceId?: string) => undefined,
-      previewTransition: async (_params?: { deviceId?: string; styleIndex: number }) => undefined,
       refreshDevices: async () => ({
         markedConnectivityIssue: false,
         probeDevice: null as AddOneDevice | null,
@@ -842,7 +835,6 @@ export function useDeviceActions() {
     },
     isApplyingToday: setDayStateMutation.isPending,
     isBusy,
-    isPreviewingTransition: previewTransitionMutation.isPending,
     isRefreshingRuntimeSnapshot: refreshRuntimeMutation.isPending,
     isSavingHistoryDraft: historyDraftMutation.isPending,
     isSavingSettings: applySettingsMutation.isPending || saveHabitMetadataMutation.isPending || isAwaitingSettingsConfirmation,
@@ -951,15 +943,6 @@ export function useDeviceActions() {
         deviceId: targetDevice.id,
         requestId: makeClientEventId(),
       });
-    },
-    previewTransition: async (params?: { deviceId?: string; styleIndex: number }) => {
-      const targetDevice = await resolveFreshLiveDevice(params?.deviceId);
-      await previewTransitionMutation.mutateAsync({
-        device: targetDevice,
-        requestId: makeClientEventId(),
-        styleIndex: params?.styleIndex ?? 0,
-      });
-      clearConnectivityIssue(targetDevice.id);
     },
     refreshDevices,
     refreshRuntimeSnapshot,

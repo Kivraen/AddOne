@@ -1,6 +1,5 @@
 import { paletteById } from "@/constants/palettes";
 import { connectionGraceState } from "@/lib/device-connection";
-import { buildTransitionPreviewPayload } from "@/lib/transition-preview";
 import {
   AddOneDevice,
   DeviceAccountRemovalMode,
@@ -959,23 +958,6 @@ export async function requestRuntimeSnapshotFromApp(params: {
     data as { command_id: string; status: string },
     "Failed to request a fresh device snapshot.",
   );
-}
-
-export async function queueTransitionPreviewFromApp(params: {
-  device: AddOneDevice;
-  requestId: string;
-  styleIndex: number;
-}) {
-  const supabase = ensureSupabase();
-  const payload = buildTransitionPreviewPayload(params.device, params.styleIndex);
-  const { data, error } = await (supabase.rpc as any)("queue_device_command", {
-    p_device_id: params.device.id,
-    p_kind: "play_friend_celebration",
-    p_payload: payload,
-    p_request_key: `transition-preview:${params.device.id}:${params.requestId}`,
-  });
-
-  return assertData(error, data as { id: string; status: string }, "Failed to start the transition preview.");
 }
 
 export async function applyHistoryDraftFromApp(params: {
