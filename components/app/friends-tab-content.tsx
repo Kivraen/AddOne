@@ -125,8 +125,8 @@ function ActionButton(props: {
           style={{
             color: props.secondary ? theme.colors.textPrimary : theme.colors.textInverse,
             fontFamily: theme.typography.label.fontFamily,
-            fontSize: theme.typography.label.fontSize,
-            lineHeight: theme.typography.label.lineHeight,
+            fontSize: 18,
+            lineHeight: 22,
           }}
         >
           {props.label}

@@ -59,8 +59,8 @@ export function SetupActionButton({
         style={{
           color: secondary ? theme.colors.textPrimary : theme.colors.bgBase,
           fontFamily: theme.typography.label.fontFamily,
-          fontSize: theme.typography.label.fontSize,
-          lineHeight: theme.typography.label.lineHeight,
+          fontSize: 18,
+          lineHeight: 22,
         }}
       >
         {label}

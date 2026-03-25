@@ -75,8 +75,8 @@ function PrimaryButton({
         style={{
           color: theme.colors.accentAmber,
           fontFamily: theme.typography.label.fontFamily,
-          fontSize: theme.typography.label.fontSize,
-          lineHeight: theme.typography.label.lineHeight,
+          fontSize: 18,
+          lineHeight: 22,
         }}
       >
         {label}

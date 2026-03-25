@@ -351,8 +351,8 @@ export default function SignInScreen() {
                         style={{
                           color: theme.colors.textInverse,
                           fontFamily: theme.typography.label.fontFamily,
-                          fontSize: theme.typography.label.fontSize,
-                          lineHeight: theme.typography.label.lineHeight,
+                          fontSize: 18,
+                          lineHeight: 22,
                         }}
                       >
                         {isOtpStep ? "Verify code" : "Send email code"}
@@ -384,8 +384,8 @@ export default function SignInScreen() {
                           style={{
                             color: theme.colors.textPrimary,
                             fontFamily: theme.typography.label.fontFamily,
-                            fontSize: theme.typography.label.fontSize,
-                            lineHeight: theme.typography.label.lineHeight,
+                            fontSize: 18,
+                            lineHeight: 22,
                           }}
                         >
                           Change email
@@ -411,8 +411,8 @@ export default function SignInScreen() {
                           style={{
                             color: theme.colors.textPrimary,
                             fontFamily: theme.typography.label.fontFamily,
-                            fontSize: theme.typography.label.fontSize,
-                            lineHeight: theme.typography.label.lineHeight,
+                            fontSize: 18,
+                            lineHeight: 22,
                           }}
                         >
                           {isResendBlocked ? `Retry in ${resendCooldown}s` : "Resend code"}

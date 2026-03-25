@@ -87,11 +87,6 @@ function makeProfileSignature(profile: SocialProfile) {
   ].join(":");
 }
 
-function buildDisplayName(firstName: string, lastName: string, fallback: string) {
-  const value = `${firstName.trim()} ${lastName.trim()}`.trim();
-  return value || fallback;
-}
-
 function buildInitials(firstName: string, lastName: string, fallback: string) {
   const candidate = `${firstName} ${lastName}`.trim() || fallback;
 
@@ -175,6 +170,44 @@ function HelperCopy({ children, tone = "default" }: { children: ReactNode; tone?
   );
 }
 
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        color: theme.colors.textPrimary,
+        fontFamily: theme.typography.label.fontFamily,
+        fontSize: 18,
+        lineHeight: 22,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function InlineFeedback({ message, tone }: { message: string; tone: "error" | "success" }) {
+  return (
+    <View
+      style={{
+        borderRadius: theme.radius.sheet,
+        borderWidth: 1,
+        borderColor:
+          tone === "error"
+            ? withAlpha(theme.colors.statusErrorMuted, 0.18)
+            : withAlpha(theme.colors.accentAmber, 0.18),
+        backgroundColor:
+          tone === "error"
+            ? withAlpha(theme.colors.statusErrorMuted, 0.08)
+            : withAlpha(theme.colors.accentAmberSoft, 0.08),
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+      }}
+    >
+      <HelperCopy tone={tone}>{message}</HelperCopy>
+    </View>
+  );
+}
+
 function FormField(props: {
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   autoCorrect?: boolean;
@@ -195,16 +228,16 @@ function FormField(props: {
         placeholder={props.placeholder}
         placeholderTextColor={theme.colors.textMuted}
         style={{
-          borderRadius: theme.radius.sheet,
+          borderRadius: 12,
           borderWidth: 1,
           borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-          backgroundColor: withAlpha(theme.colors.bgBase, 0.88),
+          backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
           color: theme.colors.textPrimary,
           fontFamily: theme.typography.body.fontFamily,
           fontSize: theme.typography.body.fontSize,
           lineHeight: theme.typography.body.lineHeight,
           paddingHorizontal: 16,
-          paddingVertical: 15,
+          paddingVertical: 16,
         }}
         textContentType={props.textContentType}
         value={props.value}
@@ -250,8 +283,8 @@ function ActionButton(props: {
           style={{
             color: props.secondary ? theme.colors.textPrimary : theme.colors.textInverse,
             fontFamily: theme.typography.label.fontFamily,
-            fontSize: theme.typography.label.fontSize,
-            lineHeight: theme.typography.label.lineHeight,
+            fontSize: 18,
+            lineHeight: 22,
           }}
         >
           {props.label}
@@ -309,22 +342,25 @@ function AvatarPreview(props: {
   fallbackDisplayName: string;
   firstName: string;
   lastName: string;
+  size?: number;
   uri: string | null;
 }) {
   const initials = buildInitials(props.firstName, props.lastName, props.fallbackDisplayName);
+  const size = props.size ?? 86;
+  const radius = Math.round(size * 0.28);
 
   return (
     <View
       style={{
         alignItems: "center",
         justifyContent: "center",
-        width: 86,
-        height: 86,
-        borderRadius: 24,
+        width: size,
+        height: size,
+        borderRadius: radius,
         overflow: "hidden",
         borderWidth: 1,
-        borderColor: withAlpha(theme.colors.accentAmber, 0.18),
-        backgroundColor: withAlpha(theme.colors.accentAmber, 0.16),
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.textPrimary, 0.08),
       }}
     >
       {props.uri ? (
@@ -375,15 +411,26 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
     setIsPhotoMenuVisible(false);
   }, [profileSignature]);
 
-  const previewDisplayName = useMemo(
-    () => buildDisplayName(draft.firstName, draft.lastName, profile.displayName),
-    [draft.firstName, draft.lastName, profile.displayName],
-  );
   const previewUsername = useMemo(
     () => draft.username.trim().toLowerCase() || (profile.username ?? ""),
     [draft.username, profile.username],
   );
   const previewAvatarUri = pendingAvatar?.uri ?? (clearAvatar ? null : profile.avatarUrl);
+  const gateMode = fromFriends && !isComplete;
+  const introCopy = gateMode ? "Name and handle are required before Friends opens." : null;
+  const previewName = useMemo(() => {
+    const value = `${draft.firstName.trim()} ${draft.lastName.trim()}`.trim();
+    if (value) {
+      return value;
+    }
+
+    return isComplete ? profile.displayName : "Your name";
+  }, [draft.firstName, draft.lastName, isComplete, profile.displayName]);
+  const avatarFallbackDisplayName = isComplete ? profile.displayName : "AddOne";
+  const previewEmail = mode === "cloud" ? userEmail?.trim() || "you@example.com" : "you@example.com";
+  const isPreviewNamePlaceholder = previewName === "Your name";
+  const isPreviewUsernamePlaceholder = !previewUsername;
+  const isPreviewEmailPlaceholder = !userEmail?.trim();
 
   async function chooseFromLibrary() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -558,78 +605,26 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
   return (
     <ScreenScrollView bottomInset={bottomInset}>
       <ScreenSection style={{ gap: 16 }}>
-        {fromFriends && !isComplete ? (
-          <GlassCard
-            style={{
-              gap: 6,
-              paddingHorizontal: 18,
-              paddingVertical: 16,
-              borderColor: withAlpha(theme.colors.accentAmber, 0.18),
-              backgroundColor: withAlpha(theme.colors.accentAmberSoft, 0.12),
-            }}
-          >
-            <Text
-              style={{
-                color: theme.colors.accentAmber,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              Friends gate
-            </Text>
-            <HelperCopy>Finish your profile to open Friends.</HelperCopy>
-          </GlassCard>
-        ) : null}
+        <View style={{ gap: gateMode ? 4 : 0, paddingHorizontal: 4 }}>
+          <SectionTitle>Profile</SectionTitle>
+          {gateMode ? <HelperCopy>{introCopy}</HelperCopy> : null}
+        </View>
 
-        {formError ? (
-          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
-            <GlassCard
-              style={{
-                gap: 8,
-                paddingHorizontal: 18,
-                paddingVertical: 16,
-                borderColor: withAlpha(theme.colors.statusErrorMuted, 0.2),
-                backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.1),
-              }}
-            >
-              <HelperCopy tone="error">{formError}</HelperCopy>
-            </GlassCard>
-          </Animated.View>
-        ) : null}
-
-        {formMessage ? (
-          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
-            <GlassCard
-              style={{
-                gap: 8,
-                paddingHorizontal: 18,
-                paddingVertical: 16,
-                borderColor: withAlpha(theme.colors.accentAmber, 0.22),
-                backgroundColor: withAlpha(theme.colors.accentAmberSoft, 0.12),
-              }}
-            >
-              <HelperCopy tone="success">{formMessage}</HelperCopy>
-            </GlassCard>
-          </Animated.View>
-        ) : null}
-
-        <GlassCard style={{ gap: 16, paddingHorizontal: 20, paddingVertical: 20 }}>
+        <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
           <View
             style={{
-              alignItems: isNarrow ? "flex-start" : "center",
-              flexDirection: isNarrow ? "column" : "row",
-              gap: 16,
+              alignItems: "center",
+              flexDirection: "row",
+              gap: 14,
             }}
           >
-            <View style={{ alignSelf: isNarrow ? "center" : "flex-start" }}>
+            <View>
               <View style={{ position: "relative" }}>
                 <AvatarPreview
-                  fallbackDisplayName={profile.displayName}
+                  fallbackDisplayName={avatarFallbackDisplayName}
                   firstName={draft.firstName}
                   lastName={draft.lastName}
+                  size={72}
                   uri={previewAvatarUri}
                 />
                 <Pressable
@@ -657,18 +652,18 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
               <Text
                 selectable
                 style={{
-                  color: theme.colors.textPrimary,
+                  color: isPreviewNamePlaceholder ? theme.colors.textSecondary : theme.colors.textPrimary,
                   fontFamily: theme.typography.title.fontFamily,
-                  fontSize: theme.typography.title.fontSize,
-                  lineHeight: theme.typography.title.lineHeight,
+                  fontSize: 22,
+                  lineHeight: 26,
                 }}
               >
-                {previewDisplayName}
+                {previewName}
               </Text>
               <Text
                 selectable
                 style={{
-                  color: previewUsername ? theme.colors.accentAmber : theme.colors.textSecondary,
+                  color: isPreviewUsernamePlaceholder ? theme.colors.textSecondary : theme.colors.accentAmber,
                   fontFamily: theme.typography.label.fontFamily,
                   fontSize: theme.typography.label.fontSize,
                   lineHeight: theme.typography.label.lineHeight,
@@ -676,118 +671,55 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
               >
                 {previewUsername ? `@${previewUsername}` : "@username"}
               </Text>
+              <View style={{ paddingTop: 2 }}>
+                <Text
+                  selectable
+                  style={{
+                    color: isPreviewEmailPlaceholder ? theme.colors.textMuted : theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    flexShrink: 1,
+                  }}
+                >
+                  {previewEmail}
+                </Text>
+              </View>
             </View>
           </View>
 
           {isPhotoMenuVisible ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <PhotoActionPill icon="images-outline" label="Library" onPress={() => void chooseFromLibrary()} />
-              <PhotoActionPill icon="camera-outline" label="Camera" onPress={() => void takePhoto()} />
-              {previewAvatarUri ? (
-                <PhotoActionPill destructive icon="trash-outline" label="Remove" onPress={removePhoto} />
-              ) : null}
-            </View>
-          ) : null}
-
-          <View
-            style={{
-              gap: 10,
-              borderTopWidth: 1,
-              borderTopColor: withAlpha(theme.colors.textPrimary, 0.06),
-              paddingTop: 14,
-            }}
-          >
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              Account
-            </Text>
-            <View
-              style={{
-                alignItems: isNarrow ? "flex-start" : "center",
-                flexDirection: isNarrow ? "column" : "row",
-                gap: 12,
-                justifyContent: "space-between",
-              }}
-            >
-              <View style={{ gap: 4, flex: 1 }}>
-                <Text
-                  selectable
-                  style={{
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.label.fontFamily,
-                    fontSize: 16,
-                    lineHeight: 21,
-                  }}
-                >
-                  {mode === "cloud" ? userEmail ?? "Email unavailable" : "Demo preview"}
-                </Text>
-                <HelperCopy>{mode === "cloud" ? "Private sign-in only." : "No cloud email in demo mode."}</HelperCopy>
+            <>
+              <View style={{ height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.06) }} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <PhotoActionPill icon="images-outline" label="Library" onPress={() => void chooseFromLibrary()} />
+                <PhotoActionPill icon="camera-outline" label="Camera" onPress={() => void takePhoto()} />
+                {previewAvatarUri ? <PhotoActionPill destructive icon="trash-outline" label="Remove" onPress={removePhoto} /> : null}
               </View>
-
-              {mode === "cloud" ? (
-                <Pressable
-                  onPress={async () => {
-                    await signOut();
-                    router.replace("/sign-in");
-                  }}
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: 42,
-                    borderRadius: theme.radius.full,
-                    borderWidth: 1,
-                    borderColor: withAlpha(theme.colors.statusErrorMuted, 0.24),
-                    backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.1),
-                    paddingHorizontal: 14,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.label.fontFamily,
-                      fontSize: theme.typography.label.fontSize,
-                      lineHeight: theme.typography.label.lineHeight,
-                    }}
-                  >
-                    Sign out
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
+            </>
+          ) : null}
         </GlassCard>
 
-        <GlassCard style={{ gap: 16, paddingHorizontal: 20, paddingVertical: 20 }}>
-          <View>
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              Identity
-            </Text>
-          </View>
+        {formError ? (
+          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
+            <InlineFeedback message={formError} tone="error" />
+          </Animated.View>
+        ) : null}
 
-          {isLoading ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}>
-              <ActivityIndicator color={theme.colors.accentAmber} />
-              <HelperCopy>Loading profile…</HelperCopy>
-            </View>
-          ) : (
-            <>
+        {formMessage ? (
+          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
+            <InlineFeedback message={formMessage} tone="success" />
+          </Animated.View>
+        ) : null}
+
+        {isLoading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, paddingVertical: 4 }}>
+            <ActivityIndicator color={theme.colors.accentAmber} />
+            <HelperCopy>Loading profile…</HelperCopy>
+          </View>
+        ) : (
+          <>
+            <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
               <View style={{ flexDirection: isNarrow ? "column" : "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>
                   <FormField
@@ -799,7 +731,7 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                       setFormError(null);
                       setFormMessage(null);
                     }}
-                    placeholder="Required"
+                    placeholder="First name"
                     textContentType="givenName"
                     value={draft.firstName}
                   />
@@ -814,7 +746,7 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                       setFormError(null);
                       setFormMessage(null);
                     }}
-                    placeholder="Required"
+                    placeholder="Last name"
                     textContentType="familyName"
                     value={draft.lastName}
                   />
@@ -826,24 +758,30 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                 <View
                   style={{
                     alignItems: "center",
-                    backgroundColor: withAlpha(theme.colors.bgBase, 0.88),
-                    borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                    borderRadius: theme.radius.sheet,
-                    borderWidth: 1,
                     flexDirection: "row",
-                    paddingLeft: 16,
+                    gap: 10,
                   }}
                 >
-                  <Text
+                  <View
                     style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 18,
+                      minHeight: 56,
                     }}
                   >
-                    @
-                  </Text>
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        fontFamily: theme.typography.body.fontFamily,
+                        fontSize: 15,
+                        lineHeight: 18,
+                      }}
+                    >
+                      @
+                    </Text>
+                  </View>
+
                   <TextInput
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -856,16 +794,20 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                       setFormError(null);
                       setFormMessage(null);
                     }}
-                    placeholder="quietgrid"
+                    placeholder="username"
                     placeholderTextColor={theme.colors.textMuted}
                     style={{
+                      backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
+                      borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                      borderRadius: 12,
+                      borderWidth: 1,
                       color: theme.colors.textPrimary,
                       flex: 1,
                       fontFamily: theme.typography.body.fontFamily,
                       fontSize: theme.typography.body.fontSize,
                       lineHeight: theme.typography.body.lineHeight,
-                      paddingHorizontal: 8,
-                      paddingVertical: 15,
+                      paddingHorizontal: 16,
+                      paddingVertical: 16,
                     }}
                     textContentType="username"
                     value={draft.username}
@@ -873,25 +815,43 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                 </View>
 
                 {fieldErrors.username ? <HelperCopy tone="error">{fieldErrors.username}</HelperCopy> : null}
-                {!fieldErrors.username ? (
-                  <HelperCopy>3-20 lowercase letters, numbers, or underscores.</HelperCopy>
-                ) : null}
+                {!fieldErrors.username ? <HelperCopy>Lowercase only. Stable handle for Friends.</HelperCopy> : null}
               </View>
+            </GlassCard>
 
-              <View style={{ gap: 12, paddingTop: 4 }}>
-                <ActionButton
-                  label={isSaving ? "Saving…" : fromFriends ? "Save and open Friends" : "Save profile"}
-                  loading={isSaving}
-                  onPress={() => void handleSave()}
-                />
-                {fromFriends ? (
-                  <ActionButton label="Stay on Profile" onPress={() => router.replace("/profile")} secondary />
-                ) : null}
-              </View>
-            </>
-          )}
-        </GlassCard>
+            <View style={{ gap: 12, paddingTop: 2 }}>
+              <ActionButton
+                label={isSaving ? "Saving…" : fromFriends ? "Save and open Friends" : "Save profile"}
+                loading={isSaving}
+                onPress={() => void handleSave()}
+              />
 
+              {mode === "cloud" ? (
+                <Pressable
+                  onPress={async () => {
+                    await signOut();
+                    router.replace("/sign-in");
+                  }}
+                  style={{
+                    alignItems: "center",
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.statusErrorMuted,
+                      fontFamily: theme.typography.label.fontFamily,
+                      fontSize: 13,
+                      lineHeight: 18,
+                    }}
+                  >
+                    Sign out
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </>
+        )}
       </ScreenSection>
     </ScreenScrollView>
   );
