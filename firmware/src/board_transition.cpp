@@ -1,5 +1,7 @@
 #include "board_transition.h"
 
+#include <esp_system.h>
+
 namespace {
 constexpr uint16_t kTotalPixels = Config::kPanelRows * Config::kPanelCols;
 constexpr uint16_t kUnchangedPixelRank = 0xFFFF;
@@ -21,6 +23,10 @@ bool colorsMatch(const CRGB& left, const CRGB& right) {
 
 uint16_t abs16(int16_t value) {
   return static_cast<uint16_t>(value < 0 ? -value : value);
+}
+
+uint16_t random16() {
+  return static_cast<uint16_t>(esp_random() & 0xFFFFU);
 }
 
 uint8_t styleIndex(BoardTransitionStyle style) {
@@ -58,6 +64,8 @@ uint16_t primaryKeyForStyle(BoardTransitionStyle style, uint8_t row, uint8_t col
       const uint8_t colDistance = col < (kMaxColIndex - col) ? col : static_cast<uint8_t>(kMaxColIndex - col);
       return rowDistance < colDistance ? rowDistance : colDistance;
     }
+    case BoardTransitionStyle::RandomOverlap:
+      return 0;
     case BoardTransitionStyle::Count:
       return 0;
   }
@@ -102,6 +110,13 @@ void initializePlan(BoardTransitionPlan& outPlan) {
       }
     }
   }
+
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      outPlan.overlapIncomingRanks[row][col] = kUnchangedPixelRank;
+      outPlan.overlapOutgoingRanks[row][col] = kUnchangedPixelRank;
+    }
+  }
 }
 
 uint16_t transitionCountForElapsed(unsigned long elapsedMs, unsigned long durationMs, uint16_t totalCount) {
@@ -139,6 +154,31 @@ void assignRanksForStyle(BoardTransitionStyle style,
     outPlan.pixelRanks[index][entries[rank].row][entries[rank].col] = rank;
   }
 }
+
+void assignRandomOverlapRanks(const BoardFrame& fromFrame,
+                              const BoardFrame& toFrame,
+                              uint16_t outRanks[Config::kPanelRows][Config::kPanelCols]) {
+  TransitionPixelEntry entries[kTotalPixels]{};
+  uint16_t entryCount = 0;
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
+        continue;
+      }
+
+      entries[entryCount].row = row;
+      entries[entryCount].col = col;
+      entries[entryCount].primaryKey = random16();
+      entries[entryCount].secondaryKey = random16();
+      ++entryCount;
+    }
+  }
+
+  sortEntries(entries, entryCount);
+  for (uint16_t rank = 0; rank < entryCount; ++rank) {
+    outRanks[entries[rank].row][entries[rank].col] = rank;
+  }
+}
 } // namespace
 
 unsigned long BoardTransition::adaptiveDurationMs(const BoardTransitionPlan& plan,
@@ -166,6 +206,24 @@ void BoardTransition::applyTransition(const BoardFrame& fromFrame,
                                       BoardFrame& outFrame) {
   if (plan.changedPixelCount == 0 || durationMs == 0 || elapsedMs >= durationMs) {
     outFrame = toFrame;
+    return;
+  }
+
+  if (style == BoardTransitionStyle::RandomOverlap) {
+    outFrame = fromFrame;
+    const uint16_t outgoingCount = transitionCountForElapsed(elapsedMs, durationMs, plan.changedPixelCount);
+    const uint16_t incomingCount = transitionCountForElapsed(elapsedMs, durationMs, plan.changedPixelCount);
+    for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+      for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+        const bool shouldShowIncoming = plan.overlapIncomingRanks[row][col] < incomingCount;
+        const bool shouldClearOutgoing = plan.overlapOutgoingRanks[row][col] < outgoingCount;
+        if (shouldShowIncoming) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (shouldClearOutgoing) {
+          outFrame.pixels[row][col] = CRGB::Black;
+        }
+      }
+    }
     return;
   }
 
@@ -201,6 +259,8 @@ void BoardTransition::preparePlan(const BoardFrame& fromFrame, const BoardFrame&
   assignRanksForStyle(BoardTransitionStyle::DiagonalDown, fromFrame, toFrame, outPlan);
   assignRanksForStyle(BoardTransitionStyle::DiagonalUp, fromFrame, toFrame, outPlan);
   assignRanksForStyle(BoardTransitionStyle::EdgeCollapse, fromFrame, toFrame, outPlan);
+  assignRandomOverlapRanks(fromFrame, toFrame, outPlan.overlapOutgoingRanks);
+  assignRandomOverlapRanks(fromFrame, toFrame, outPlan.overlapIncomingRanks);
 }
 
 const char* BoardTransition::styleName(BoardTransitionStyle style) {
@@ -225,6 +285,8 @@ const char* BoardTransition::styleName(BoardTransitionStyle style) {
       return "diagonal-up";
     case BoardTransitionStyle::EdgeCollapse:
       return "edge-collapse";
+    case BoardTransitionStyle::RandomOverlap:
+      return "random-overlap";
     case BoardTransitionStyle::Count:
       return "unknown";
   }

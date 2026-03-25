@@ -36,6 +36,19 @@ BoardTransitionStyle configuredFriendCelebrationStyle(uint8_t transitionCursor) 
   return transitionStyleForIndex(transitionCursor % kBoardTransitionStyleCount);
 }
 
+unsigned long transitionDurationForStyle(const BoardTransitionPlan& plan, BoardTransitionStyle style) {
+  unsigned long durationMs = BoardTransition::adaptiveDurationMs(
+      plan,
+      Config::kFriendCelebrationMinDissolveMs,
+      Config::kFriendCelebrationMaxDissolveMs);
+
+  if (style == BoardTransitionStyle::RandomOverlap) {
+    durationMs *= 2UL;
+  }
+
+  return durationMs;
+}
+
 bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
   int year = 0;
   int month = 0;
@@ -1438,10 +1451,8 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
     BoardTransition::preparePlan(
         friendCelebrationPlayback_.ownerFrame, friendCelebrationPlayback_.friendFrame, friendCelebrationPlayback_.transitionPlan);
-    friendCelebrationPlayback_.dissolveDurationMs = BoardTransition::adaptiveDurationMs(
-        friendCelebrationPlayback_.transitionPlan,
-        Config::kFriendCelebrationMinDissolveMs,
-        Config::kFriendCelebrationMaxDissolveMs);
+    friendCelebrationPlayback_.dissolveDurationMs =
+        transitionDurationForStyle(friendCelebrationPlayback_.transitionPlan, friendCelebrationPlayback_.style);
     friendCelebrationPlayback_.startedAtMs = millis();
     enterState_(FirmwareState::FriendCelebration);
     Serial.printf(

@@ -2,6 +2,7 @@ import { boardPalettes } from "@/constants/palettes";
 import { AddOneDevice } from "@/types/addone";
 
 export const transitionPreviewStyles = [
+  { id: 10, label: "Random overlap" },
   { id: 0, label: "Random mix" },
   { id: 1, label: "Center bloom" },
   { id: 2, label: "Curtain open" },
@@ -15,9 +16,8 @@ export const transitionPreviewStyles = [
 ] as const;
 
 function normalizeStyleIndex(styleIndex: number) {
-  const count = transitionPreviewStyles.length;
   const normalized = Math.trunc(styleIndex);
-  return ((normalized % count) + count) % count;
+  return Math.max(0, Math.min(10, normalized));
 }
 
 function isoWithoutMilliseconds(value: Date) {

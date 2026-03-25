@@ -20,13 +20,16 @@ enum class BoardTransitionStyle : uint8_t {
   DiagonalDown = 7,
   DiagonalUp = 8,
   EdgeCollapse = 9,
-  Count = 10,
+  RandomOverlap = 10,
+  Count = 11,
 };
 
 constexpr uint8_t kBoardTransitionStyleCount = static_cast<uint8_t>(BoardTransitionStyle::Count);
 
 struct BoardTransitionPlan {
   uint16_t pixelRanks[kBoardTransitionStyleCount][Config::kPanelRows][Config::kPanelCols]{};
+  uint16_t overlapIncomingRanks[Config::kPanelRows][Config::kPanelCols]{};
+  uint16_t overlapOutgoingRanks[Config::kPanelRows][Config::kPanelCols]{};
   uint16_t changedPixelCount = 0;
 };
 
