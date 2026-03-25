@@ -169,6 +169,11 @@ Use it to capture:
   - if challenge ever reaches the device, it should not silently override the personal board
 - Do not build bespoke messaging infrastructure casually for beta.
 
+### Future reward ideas
+
+- Preserve a future `Rainbow` mode idea for appearance or reward work: each successful press should assign a random color so the board stays surprising and each completion can look different even with the same physical layout.
+- Treat `Rainbow` as later scope, not part of the current transition-plus-friend-celebration slice.
+
 ### Cross-cutting UI quality
 
 - Every UI pass should respect the existing AddOne shell:
