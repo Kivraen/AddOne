@@ -1,6 +1,6 @@
 # AddOne Beta UI Issue Log
 
-Last updated: March 22, 2026
+Last updated: March 25, 2026
 
 This is the live issue and decision log for `S3: Beta UI Completion And Social Shape`.
 Use it to capture:
@@ -151,8 +151,15 @@ Use it to capture:
   - comments
   - push notifications
 - Current known follow-up after the first Friends implementation:
-  - viewer revocation is still a later management pass
+  - viewer revocation now exists in the beta flow
   - broader realtime invalidation polish may still need a later pass if the self-heal interval feels too soft in practice
+- A reusable random-overlap board transition now exists and is hardware-validated for the first ambient social celebration:
+  - friend-triggered temporary board reveal
+  - per-friend celebration opt-in
+  - clean automatic return to the owner board
+- Current known follow-up after the celebration slice:
+  - receiver ack semantics should distinguish `played` from `ignored` more clearly during simultaneous-debug sessions
+  - app-side friend-board visibility still depends on realtime plus a `3s` self-heal fallback, so slight lag is still possible under poor realtime conditions
 - Future social should still be preserved in the direction:
   - app-level activity log across connected boards
   - reactions
@@ -172,7 +179,7 @@ Use it to capture:
 ### Future reward ideas
 
 - Preserve a future `Rainbow` mode idea for appearance or reward work: each successful press should assign a random color so the board stays surprising and each completion can look different even with the same physical layout.
-- Treat `Rainbow` as later scope, not part of the current transition-plus-friend-celebration slice.
+- Treat `Rainbow` as later scope, not part of the accepted transition-plus-friend-celebration slice.
 
 ### Cross-cutting UI quality
 
@@ -185,31 +192,23 @@ Use it to capture:
 
 ## Immediate Decisions To Lock
 
-- Accept the dedicated friends planning checkpoint as the source of truth for profile-gated unit sharing.
-- Create the profile identity / social-profile gate task before the real Friends implementation task.
-- Keep username search out of beta sharing.
-- Keep future feed / reactions / comments out of the first Friends implementation slice.
 - Decide the real shipped history-editing entry path.
-- Decide the beta timezone model:
-  - device timezone versus viewer timezone
-  - default behavior
-  - manual override behavior
-  - unsupported-zone behavior
-- Decide the first implementation batch order across:
-  - timezone model and universal flow audit
-  - main screen and settings polish
-  - onboarding and Wi-Fi recovery polish
-  - profile identity
-  - friends beta surface
+- Keep reward-display selection later than the accepted friend-celebration transition foundation.
+- Keep AI artwork generation behind the local artwork model.
+- Keep username search, feed, reactions, comments, and messaging out of beta sharing.
+- Decide whether the next S3 slice is:
+  - timezone revision
+  - final onboarding and Wi-Fi recovery polish
+  - or later reward-display configuration
+- Treat security review and update strategy as first-priority `S4` hardening work before wider device distribution.
 
 ## Next Split Candidates
 
-- `T-006` timezone model and universal flow audit
 - `T-011` beta timezone capability and picker baseline
-- `T-012` broader firmware timezone expansion if we want support beyond the initial beta zone list
-- `T-007` main screen and settings polish batch
-- `T-015` friends beta plan and model lock
-- `T-009` profile identity model and account surface batch
-- `T-001` friends beta surface and social floor batch
-- `T-013` challenge groups and shared board model
 - `T-008` onboarding and Wi-Fi recovery polish batch
+- `T-024` reward display modes after transition foundation
+- `T-025` custom reward artwork editor and presets
+- `T-026` AI reward artwork generation
+- `T-028` beta security and production readiness audit
+- `T-029` app and firmware update strategy
+- `T-013` challenge groups and shared board model

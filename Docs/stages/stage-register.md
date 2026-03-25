@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 24, 2026
+Last updated: March 25, 2026
 
 ## Current Stage Map
 
@@ -31,6 +31,9 @@ Last updated: March 24, 2026
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
 - `T-001` is now accepted on `codex/s3-friends-proof-and-fixes` after live two-account proof.
+- `T-027` is now accepted on `codex/s3-friends-celebration-transition` after hardware validation on two real boards.
+- `T-024` reward-display configuration is explicitly later than `T-027`.
+- `T-028` and `T-029` are now explicit first-priority `S4` backlog items for security hardening and update strategy.
 - `T-008` remains open as the final visible onboarding or recovery polish slice.
 - `T-011` still needs its revision pass accepted if timezone remains in the active S3 queue.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.

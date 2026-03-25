@@ -28,12 +28,15 @@ Harden AddOne for beta release and reconcile the durable docs so the repo reflec
 
 ## Evidence
 
-- Pending earlier stages.
+- Release-hardening priorities are now explicit even before `S4` activates:
+  - [T-028-beta-security-and-production-readiness-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-028-beta-security-and-production-readiness-audit.md)
+  - [T-029-app-and-firmware-update-strategy.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-029-app-and-firmware-update-strategy.md)
 
 ## Open Risks / Blockers
 
 - The final hardening scope will depend on the failures or surprises discovered in `S2` and `S3`.
+- Wider device distribution without an explicit security review and update policy would create avoidable operational risk.
 
 ## Recommendation
 
-Pending earlier stages.
+Keep `S4` pending until the active `S3` product-shape work is explicit enough to hand off, then treat security hardening and the app/firmware update strategy as the first two release-readiness tasks.

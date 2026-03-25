@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 24, 2026
+Last locked: March 25, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -87,9 +87,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current execution brief:
   `TBD after the next S3 slice is chosen`
 - Current execution task:
-  `No single active task is locked yet after the T-001 acceptance on codex/s3-friends-proof-and-fixes`
+  `No single active task is locked after the T-027 acceptance on codex/s3-friends-celebration-transition`
 - Git durability note:
-  `main` now points to the tested factory-station baseline at `453af7b`, `origin/main` matches it, and new implementation work should start from a fresh branch off `main` rather than continuing directly on `main`.
+  `main` now points to the accepted Friends checkpoint at `e80047b`, `origin/main` matches it, and the accepted T-027 celebration work currently lives on codex/s3-friends-celebration-transition at d41a400 until it is merged. New implementation work should start from a fresh branch off main rather than continuing directly on main.
 
 ## Where We Are Now
 
@@ -100,7 +100,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current scope drift:
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
-  - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards on `codex/s3-friends-proof-and-fixes`
+  - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards, merged into `main`
+  - a reusable board transition plus friend-triggered temporary board reveal is now accepted on `codex/s3-friends-celebration-transition`
+  - later reward-display choice is preserved as a separate follow-up, not part of the accepted celebration slice
   - the main surfaced history flow is now the inline board editor from device settings, while the dedicated `/history` route still exists in code
 
 ### Backend and cloud
@@ -120,7 +122,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - approved-manifest flashing
   - local Node plus browser operator flow
   - firmware manufacturing-QA serial commands for button, LED, ambient, RTC, and final ship-ready reset
-- Remaining firmware work is real-device validation, broker and beta config validation, and custom reward asset sync.
+- Remaining firmware work is real-device validation, broker and beta config validation, telemetry polish for celebration playback, and later custom reward asset sync.
 
 ## Main Plan
 1. Lock first-user beta scope.
@@ -140,9 +142,14 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - aggregated group boards
   - challenge communication
 - Pick one history-editing surface as the real shipped path and align docs and code around it.
-- keep onboarding and Wi-Fi recovery polish as the current visible UI polish slice now that Friends is accepted, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
+- add the next beta-visible social and reward foundation slice:
+  - reusable random dissolve board transition
+  - friend-triggered temporary board reveal on connected devices
+  - after that foundation, keep selectable `Clock` vs preset-backed `Artwork` reward display as a separate later slice
+  - keep AI generation behind the local artwork model
+- keep onboarding and Wi-Fi recovery polish as the later final visible UI polish slice now that Friends and the celebration foundation are accepted, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
 - lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
-- Keep rewards, reminders, and multi-device UX out of the normal beta surface unless we explicitly bring them in.
+- Rewards are now explicitly in beta scope; reminders and broader multi-device UX remain out unless we explicitly bring them in.
 
 2. Bring the hosted beta stack fully online.
 - Confirm beta app config, gateway env, broker credentials, and firmware beta headers.
@@ -163,6 +170,8 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - release build smoke tests
 - deployment recovery notes
 - final doc cleanup after validation findings
+- explicit security and production-readiness audit
+- explicit app and firmware update strategy
 
 ## Delegation Model
 

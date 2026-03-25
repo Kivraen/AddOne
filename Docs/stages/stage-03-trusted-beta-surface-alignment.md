@@ -52,6 +52,7 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - A durable UI issue log now exists in [ui-beta-issue-log.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/ui-beta-issue-log.md).
 - The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install from `d589cdc`.
 - The March 24 Friends audit and follow-up proof pass closed `T-001` on `codex/s3-friends-proof-and-fixes`, including owner approve, reject, revoke, viewer leave, truthful empty state, and live read-only board visibility.
+- The March 25 transition slice is implemented and hardware-validated on `codex/s3-friends-celebration-transition`: a reusable random-overlap board transition now powers friend-triggered temporary board reveal, per-friend celebration opt-in, and clean automatic return to the owner board.
 - The March 22 setup follow-up is implemented and hardware-validated: shared onboarding or recovery flow stabilization, wrong-password retry handling, and `Reset history` as `Start new habit` are checkpointed rather than chat-only work.
 - The March 22 destructive lifecycle slice is also implemented and live-validated: full `Factory reset and remove`, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on reclaim, and editable earlier habit-start correction.
 - The remaining Friends follow-up is now narrow realtime polish: development logs still show noisy Supabase channel churn and occasional binding mismatch errors, but the verified owner/viewer flows still complete successfully.
@@ -62,6 +63,8 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 - Real-device onboarding and recovery polish should still be validated on hardware after the UI pass.
 - Firmware currently supports only a limited set of timezone mappings, so the timezone UI must either constrain beta selection to supported zones or wait for explicit firmware expansion.
 - The current device offline or reconnect behavior is still unresolved and should be treated as a real validation problem after the remaining S3 product-shape work is done.
+- Receiver ack semantics for `play_friend_celebration` could still be tighter so telemetry distinguishes `played` from `ignored` during future simultaneous-debug sessions.
+- Friends realtime still has development-only subscription churn and a `3s` self-heal fallback, so app-side board visibility can still lag slightly under poor realtime conditions.
 
 ## Recommendation
 
@@ -69,6 +72,6 @@ Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/
 
 In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
 
-Next, treat the destructive lifecycle path and `T-001` Friends checkpoint as accepted, then shift the remaining S3 work to the `T-011` timezone revision path if it stays active and the final onboarding or Wi-Fi recovery polish slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
+Next, treat the destructive lifecycle path, `T-001`, and `T-027` as accepted, then choose between the `T-011` timezone revision path and the final onboarding or Wi-Fi recovery polish slice. Keep later reward-display expansion as a separate follow-up, not part of this accepted transition slice. Do not continue lifecycle debugging on top of the accepted reset or re-add branch unless a concrete regression appears.
 
-Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the friends checkpoint.
+Keep [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md) as the final visible UI polish slice after the accepted friends and celebration checkpoints.

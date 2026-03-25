@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 24, 2026
+Last updated: March 25, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -51,6 +51,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - A real TestFlight install from that baseline now works.
 - The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
 - The first Friends sharing flow is now implemented and live-verified on `codex/s3-friends-proof-and-fixes`, including owner approve, reject, revoke, viewer leave, and read-only shared-board browsing.
+- The friend-celebration slice is now implemented and hardware-validated on `codex/s3-friends-celebration-transition`, including the reusable board transition primitive, friend-triggered temporary board reveal, backend fanout, per-friend `celebration_enabled`, and final restored once-per-day dedupe.
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
@@ -63,13 +64,16 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
 - Next brief: `TBD after the next S3 slice is chosen`
-- Current execution task: `No single S3 task is locked after the T-001 acceptance on codex/s3-friends-proof-and-fixes`
+- Current execution task: `No single S3 task is locked after the T-027 acceptance on codex/s3-friends-celebration-transition`
 
 ## Current Blockers
 
-- `T-001` is accepted on `codex/s3-friends-proof-and-fixes`, but its branch state is not yet merged back to `main`.
-- The user has opened an approved parallel planning track for factory QA and ship-ready bring-up on `codex/s2-factory-qa-plan` because the next physical board build needs a repeatable flash-and-test workflow.
-- `T-008` remains the likely next visible UI polish slice now that Friends proof is complete.
+- `T-001` is accepted and merged into `main`.
+- `T-027` is accepted on `codex/s3-friends-celebration-transition`, but its branch state is not yet merged back to `main`.
+- `T-024` reward-display selection remains preserved but intentionally deferred until after the accepted transition foundation.
+- `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
+- `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
+- `T-008` remains the likely next visible UI polish slice now that Friends and the celebration foundation are complete.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.
 - Friends realtime subscriptions still show noisy `SUBSCRIBED` / `CLOSED` churn and occasional `CHANNEL_ERROR` binding mismatches in development logs, but the verified owner/viewer flows complete successfully, so that is follow-up polish rather than a `T-001` blocker.
