@@ -8,13 +8,18 @@ import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { useFriends } from "@/hooks/use-friends";
 import {
+  CELEBRATION_DWELL_OPTIONS,
+  CELEBRATION_TRANSITION_SPEED_OPTIONS,
   CELEBRATION_TRANSITION_OPTIONS,
+  DEFAULT_CELEBRATION_DWELL_SECONDS,
   DEFAULT_CELEBRATION_TRANSITION,
+  DEFAULT_CELEBRATION_TRANSITION_SPEED,
+  getCelebrationTransitionSpeedOption,
   getCelebrationTransitionOption,
 } from "@/lib/celebration-transitions";
 import { withAlpha } from "@/lib/color";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
-import { CelebrationTransitionStyle, SharedBoard } from "@/types/addone";
+import { CelebrationTransitionSpeed, CelebrationTransitionStyle, SharedBoard } from "@/types/addone";
 
 function BoardIdentityCard({ board }: { board: SharedBoard }) {
   return (
@@ -43,6 +48,56 @@ function BoardIdentityCard({ board }: { board: SharedBoard }) {
   );
 }
 
+function OptionChip(props: {
+  active?: boolean;
+  busy?: boolean;
+  detail?: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      disabled={props.busy}
+      onPress={props.onPress}
+      style={{
+        minWidth: 96,
+        gap: 3,
+        borderRadius: theme.radius.pill,
+        borderCurve: "continuous",
+        borderWidth: 1,
+        borderColor: props.active ? withAlpha(theme.colors.accentAmber, 0.32) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: props.active ? withAlpha(theme.colors.accentAmber, 0.14) : withAlpha(theme.colors.textPrimary, 0.04),
+        opacity: props.busy ? 0.6 : 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+      }}
+    >
+      <Text
+        style={{
+          color: props.active ? theme.colors.accentAmber : theme.colors.textPrimary,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: 15,
+          lineHeight: 20,
+        }}
+      >
+        {props.label}
+      </Text>
+      {props.detail ? (
+        <Text
+          style={{
+            color: props.active ? withAlpha(theme.colors.accentAmber, 0.88) : theme.colors.textTertiary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 12,
+            lineHeight: 16,
+          }}
+        >
+          {props.detail}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
 export function FriendsBoardSettingsScreen() {
   const { membershipId } = useLocalSearchParams<{ membershipId?: string }>();
   const { activeDevice } = useDevices();
@@ -55,6 +110,7 @@ export function FriendsBoardSettingsScreen() {
     sharedBoards,
   } = useFriends();
   const [activeTransitionId, setActiveTransitionId] = useState<CelebrationTransitionStyle | null>(null);
+  const [timingUpdateBusy, setTimingUpdateBusy] = useState(false);
   const board = useMemo(
     () => sharedBoards.find((item) => item.viewerMembershipId === membershipId) ?? null,
     [membershipId, sharedBoards],
@@ -63,15 +119,25 @@ export function FriendsBoardSettingsScreen() {
   const transitionSummary = board
     ? getCelebrationTransitionOption(board.celebrationTransition ?? DEFAULT_CELEBRATION_TRANSITION)
     : null;
+  const speedSummary = board
+    ? getCelebrationTransitionSpeedOption(board.celebrationTransitionSpeed ?? DEFAULT_CELEBRATION_TRANSITION_SPEED)
+    : null;
 
-  const previewBoard = async (targetBoard: SharedBoard, transitionStyle: CelebrationTransitionStyle) => {
+  const previewBoard = async (
+    targetBoard: SharedBoard,
+    transitionStyle: CelebrationTransitionStyle,
+    transitionSpeed: CelebrationTransitionSpeed = targetBoard.celebrationTransitionSpeed,
+    dwellSeconds: number = targetBoard.celebrationDwellSeconds,
+  ) => {
     setActiveTransitionId(transitionStyle);
     try {
       await previewCelebration({
         deviceId: activeDevice?.id,
         boardDays: targetBoard.days,
+        dwellSeconds,
         palettePreset: targetBoard.paletteId,
         sourceDeviceId: targetBoard.id,
+        transitionSpeed,
         transitionStyle,
         weeklyTarget: targetBoard.weeklyTarget,
       });
@@ -112,7 +178,7 @@ export function FriendsBoardSettingsScreen() {
         membershipId: targetBoard.viewerMembershipId,
         transition: transitionStyle,
       });
-      await previewBoard(targetBoard, transitionStyle);
+      await previewBoard(targetBoard, transitionStyle, targetBoard.celebrationTransitionSpeed, targetBoard.celebrationDwellSeconds);
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
       Alert.alert(
@@ -121,6 +187,38 @@ export function FriendsBoardSettingsScreen() {
       );
     } finally {
       setActiveTransitionId((current) => (current === transitionStyle ? null : current));
+    }
+  };
+
+  const updateTiming = async (
+    targetBoard: SharedBoard,
+    patch: {
+      dwellSeconds?: number;
+      transitionSpeed?: CelebrationTransitionSpeed;
+    },
+  ) => {
+    setTimingUpdateBusy(true);
+    try {
+      await setSharedBoardCelebrationEnabled({
+        deviceId: targetBoard.id,
+        dwellSeconds: patch.dwellSeconds,
+        membershipId: targetBoard.viewerMembershipId,
+        transitionSpeed: patch.transitionSpeed,
+      });
+      await previewBoard(
+        targetBoard,
+        targetBoard.celebrationTransition,
+        patch.transitionSpeed ?? targetBoard.celebrationTransitionSpeed,
+        patch.dwellSeconds ?? targetBoard.celebrationDwellSeconds,
+      );
+    } catch (error) {
+      triggerPrimaryActionFailureHaptic();
+      Alert.alert(
+        "Couldn't save timing",
+        error instanceof Error ? error.message : "Try again.",
+      );
+    } finally {
+      setTimingUpdateBusy(false);
     }
   };
 
@@ -258,8 +356,86 @@ export function FriendsBoardSettingsScreen() {
                   lineHeight: 18,
                 }}
               >
-                Current transition: {transitionSummary?.label ?? "Blade sweep"}
+                Current setup: {transitionSummary?.label ?? "Blade sweep"} · {speedSummary?.label ?? "Balanced"} ·{" "}
+                {board.celebrationDwellSeconds ?? DEFAULT_CELEBRATION_DWELL_SECONDS}s visible
               </Text>
+            </GlassCard>
+
+            <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
+              <View style={{ gap: 4 }}>
+                <Text
+                  style={{
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.typography.label.fontFamily,
+                    fontSize: 17,
+                    lineHeight: 22,
+                  }}
+                >
+                  Transition speed
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  This controls how quickly the reveal moves in and back out.
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {CELEBRATION_TRANSITION_SPEED_OPTIONS.map((option) => (
+                  <OptionChip
+                    key={option.id}
+                    active={board.celebrationTransitionSpeed === option.id}
+                    busy={timingUpdateBusy || isPreviewingCelebration || isUpdatingSharedBoardCelebration}
+                    detail={option.description}
+                    label={option.label}
+                    onPress={() => {
+                      void updateTiming(board, { transitionSpeed: option.id });
+                    }}
+                  />
+                ))}
+              </View>
+            </GlassCard>
+
+            <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
+              <View style={{ gap: 4 }}>
+                <Text
+                  style={{
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.typography.label.fontFamily,
+                    fontSize: 17,
+                    lineHeight: 22,
+                  }}
+                >
+                  Visible hold
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: theme.typography.body.fontSize,
+                    lineHeight: theme.typography.body.lineHeight,
+                  }}
+                >
+                  This controls how long your friend&apos;s board stays on-screen before returning.
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {CELEBRATION_DWELL_OPTIONS.map((option) => (
+                  <OptionChip
+                    key={option.seconds}
+                    active={board.celebrationDwellSeconds === option.seconds}
+                    busy={timingUpdateBusy || isPreviewingCelebration || isUpdatingSharedBoardCelebration}
+                    label={option.label}
+                    onPress={() => {
+                      void updateTiming(board, { dwellSeconds: option.seconds });
+                    }}
+                  />
+                ))}
+              </View>
             </GlassCard>
 
             <View style={{ gap: 10 }}>

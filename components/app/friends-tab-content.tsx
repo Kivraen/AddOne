@@ -20,7 +20,11 @@ import { FriendsDemoScenario, useFriends, formatFriendsError } from "@/hooks/use
 import { useIsMountedRef } from "@/hooks/use-is-mounted-ref";
 import { useSocialProfile } from "@/hooks/use-social-profile";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
-import { DEFAULT_CELEBRATION_TRANSITION } from "@/lib/celebration-transitions";
+import {
+  DEFAULT_CELEBRATION_DWELL_SECONDS,
+  DEFAULT_CELEBRATION_TRANSITION,
+  DEFAULT_CELEBRATION_TRANSITION_SPEED,
+} from "@/lib/celebration-transitions";
 import { withAlpha } from "@/lib/color";
 import { shouldHoldFriendsEmptyState } from "@/lib/friends-state";
 import {
@@ -312,7 +316,9 @@ function makePreviewBoard(
 ): SharedBoard {
   return {
     celebrationEnabled: true,
+    celebrationDwellSeconds: DEFAULT_CELEBRATION_DWELL_SECONDS,
     celebrationTransition: DEFAULT_CELEBRATION_TRANSITION,
+    celebrationTransitionSpeed: DEFAULT_CELEBRATION_TRANSITION_SPEED,
     id,
     viewerMembershipId: `${id}-viewer-membership`,
     ownerName,

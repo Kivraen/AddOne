@@ -24,7 +24,15 @@ import { buildRestoreHistoryDraft, buildRestoreSettingsPatch } from "@/lib/onboa
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, CelebrationTransitionStyle, DeviceSettingsPatch, HistoryDraftUpdate, OnboardingRestoreSource, SyncState } from "@/types/addone";
+import {
+  AddOneDevice,
+  CelebrationTransitionSpeed,
+  CelebrationTransitionStyle,
+  DeviceSettingsPatch,
+  HistoryDraftUpdate,
+  OnboardingRestoreSource,
+  SyncState,
+} from "@/types/addone";
 
 type DeviceRemovalProgressState = "idle" | "removing_offline" | "sending_reset" | "waiting_for_board";
 
@@ -141,10 +149,12 @@ function buildCelebrationPreviewBoard(device: AddOneDevice) {
 
 type CelebrationPreviewRequest = {
   boardDays?: boolean[][];
+  dwellSeconds?: number;
   deviceId?: string;
   paletteCustom?: Record<string, string>;
   palettePreset?: string;
   sourceDeviceId?: string;
+  transitionSpeed?: CelebrationTransitionSpeed;
   transitionStyle?: CelebrationTransitionStyle;
   weeklyTarget?: number;
 };
@@ -968,6 +978,7 @@ export function useDeviceActions() {
       const targetDevice = await resolveFreshLiveDevice(normalizedParams.deviceId);
       const result = await celebrationPreviewMutation.mutateAsync({
         boardDays: normalizedParams.boardDays ?? buildCelebrationPreviewBoard(targetDevice),
+        dwellSeconds: normalizedParams.dwellSeconds,
         deviceId: targetDevice.id,
         paletteCustom:
           normalizedParams.paletteCustom ??
@@ -975,6 +986,7 @@ export function useDeviceActions() {
         palettePreset: normalizedParams.palettePreset ?? targetDevice.paletteId,
         requestId: makeClientEventId(),
         sourceDeviceId: normalizedParams.sourceDeviceId,
+        transitionSpeed: normalizedParams.transitionSpeed,
         transitionStyle: normalizedParams.transitionStyle,
         weeklyTarget: normalizedParams.weeklyTarget ?? targetDevice.weeklyTarget,
       });

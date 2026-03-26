@@ -5,7 +5,11 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDevices } from "@/hooks/use-devices";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
-import { DEFAULT_CELEBRATION_TRANSITION } from "@/lib/celebration-transitions";
+import {
+  DEFAULT_CELEBRATION_DWELL_SECONDS,
+  DEFAULT_CELEBRATION_TRANSITION,
+  DEFAULT_CELEBRATION_TRANSITION_SPEED,
+} from "@/lib/celebration-transitions";
 import {
   reconcileViewerSharedBoards,
   removePendingRequestFromOwnerSharing,
@@ -69,7 +73,9 @@ function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] 
   return [
     {
       celebrationEnabled: true,
+      celebrationDwellSeconds: DEFAULT_CELEBRATION_DWELL_SECONDS,
       celebrationTransition: DEFAULT_CELEBRATION_TRANSITION,
+      celebrationTransitionSpeed: DEFAULT_CELEBRATION_TRANSITION_SPEED,
       id: "demo-shared-board",
       viewerMembershipId: "demo-viewer-membership",
       ownerName: "Morgan Lee",
@@ -492,14 +498,18 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
   const setSharedBoardCelebrationMutation = useMutation<
     {
       celebration_enabled: boolean;
+      celebration_dwell_seconds: number;
       celebration_transition: string;
+      celebration_transition_speed: string;
       id: string;
     },
     Error,
     {
       deviceId: string;
       enabled?: boolean;
+      dwellSeconds?: number;
       membershipId: string;
+      transitionSpeed?: SharedBoard["celebrationTransitionSpeed"];
       transition?: SharedBoard["celebrationTransition"];
     },
     { previousBoards: SharedBoard[] }
@@ -509,14 +519,18 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
       if (isProofScenario || mode === "demo") {
         return Promise.resolve({
           celebration_enabled: params.enabled ?? true,
+          celebration_dwell_seconds: params.dwellSeconds ?? DEFAULT_CELEBRATION_DWELL_SECONDS,
           celebration_transition: params.transition ?? DEFAULT_CELEBRATION_TRANSITION,
+          celebration_transition_speed: params.transitionSpeed ?? DEFAULT_CELEBRATION_TRANSITION_SPEED,
           id: params.membershipId,
         });
       }
 
       return setSharedBoardCelebrationPreferencesFromRepository(params).then((result) => ({
         celebration_enabled: result.celebration_enabled,
+        celebration_dwell_seconds: result.celebration_dwell_seconds,
         celebration_transition: result.celebration_transition,
+        celebration_transition_speed: result.celebration_transition_speed,
         id: result.id,
       }));
     },
@@ -529,8 +543,10 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
           board.viewerMembershipId === params.membershipId
             ? {
                 ...board,
+                celebrationDwellSeconds: params.dwellSeconds ?? board.celebrationDwellSeconds,
                 celebrationEnabled: params.enabled ?? board.celebrationEnabled,
                 celebrationTransition: params.transition ?? board.celebrationTransition,
+                celebrationTransitionSpeed: params.transitionSpeed ?? board.celebrationTransitionSpeed,
               }
             : board,
         ),

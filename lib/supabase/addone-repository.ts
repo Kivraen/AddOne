@@ -1,11 +1,16 @@
 import { paletteById } from "@/constants/palettes";
-import { DEFAULT_CELEBRATION_TRANSITION } from "@/lib/celebration-transitions";
+import {
+  DEFAULT_CELEBRATION_DWELL_SECONDS,
+  DEFAULT_CELEBRATION_TRANSITION,
+  DEFAULT_CELEBRATION_TRANSITION_SPEED,
+} from "@/lib/celebration-transitions";
 import { connectionGraceState } from "@/lib/device-connection";
 import {
   AddOneDevice,
   DeviceAccountRemovalMode,
   DeviceAccountRemovalState,
   BoardPalette,
+  CelebrationTransitionSpeed,
   CelebrationTransitionStyle,
   DeviceSettingsPatch,
   DeviceOnboardingSession,
@@ -351,13 +356,15 @@ function mapDeviceRowToAppDevice(input: {
 
 function mapDeviceRowToSharedBoard(input: {
   celebrationEnabled: boolean;
+  celebrationDwellSeconds: number;
+  celebrationTransitionSpeed: CelebrationTransitionSpeed;
   celebrationTransition: CelebrationTransitionStyle;
   device: DeviceRow;
   ownerName: string;
   snapshot?: RuntimeSnapshotRow | null;
   viewerMembershipId: string;
 }): SharedBoard {
-  const { celebrationEnabled, celebrationTransition, device, ownerName, snapshot, viewerMembershipId } = input;
+  const { celebrationEnabled, celebrationDwellSeconds, celebrationTransition, celebrationTransitionSpeed, device, ownerName, snapshot, viewerMembershipId } = input;
   const projection = buildRuntimeBoardProjection({
     resetTime: device.day_reset_time,
     snapshot: snapshot
@@ -373,6 +380,8 @@ function mapDeviceRowToSharedBoard(input: {
 
   return {
     celebrationEnabled,
+    celebrationDwellSeconds,
+    celebrationTransitionSpeed,
     celebrationTransition,
     id: device.id,
     viewerMembershipId,
@@ -678,7 +687,7 @@ export async function fetchSharedBoards(userId: string) {
   return withTransientNetworkRetry(async () => {
     const membershipsResponse = await supabase
       .from("device_memberships")
-      .select("id, device_id, celebration_enabled, celebration_transition, device:devices(*)")
+      .select("id, device_id, celebration_enabled, celebration_transition, celebration_transition_speed, celebration_dwell_seconds, device:devices(*)")
       .eq("user_id", userId)
       .eq("role", "viewer")
       .eq("status", "approved");
@@ -686,8 +695,10 @@ export async function fetchSharedBoards(userId: string) {
     const memberships = assertData(
       membershipsResponse.error,
       (membershipsResponse.data ?? []) as Array<{
+        celebration_dwell_seconds: number | null;
         celebration_enabled: boolean;
         celebration_transition: CelebrationTransitionStyle | null;
+        celebration_transition_speed: CelebrationTransitionSpeed | null;
         device: DeviceRow | null;
         device_id: string;
         id: string;
@@ -734,10 +745,16 @@ export async function fetchSharedBoards(userId: string) {
 
     return devices.map((device) =>
       mapDeviceRowToSharedBoard({
+        celebrationDwellSeconds:
+          memberships.find((membership) => membership.device_id === device.id)?.celebration_dwell_seconds ??
+          DEFAULT_CELEBRATION_DWELL_SECONDS,
         celebrationEnabled: memberships.find((membership) => membership.device_id === device.id)?.celebration_enabled ?? true,
         celebrationTransition:
           memberships.find((membership) => membership.device_id === device.id)?.celebration_transition ??
           DEFAULT_CELEBRATION_TRANSITION,
+        celebrationTransitionSpeed:
+          memberships.find((membership) => membership.device_id === device.id)?.celebration_transition_speed ??
+          DEFAULT_CELEBRATION_TRANSITION_SPEED,
         device,
         ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
         viewerMembershipId: memberships.find((membership) => membership.device_id === device.id)?.id ?? device.id,
@@ -1201,11 +1218,13 @@ export async function fetchDeviceCommandStatus(commandId: string) {
 
 export async function queueFriendCelebrationPreviewFromApp(params: {
   boardDays: boolean[][];
+  dwellSeconds?: number;
   deviceId: string;
   paletteCustom?: Record<string, string>;
   palettePreset: string;
   requestId: string;
   sourceDeviceId?: string;
+  transitionSpeed?: CelebrationTransitionSpeed;
   transitionStyle?: CelebrationTransitionStyle;
   weeklyTarget: number;
 }) {
@@ -1216,10 +1235,12 @@ export async function queueFriendCelebrationPreviewFromApp(params: {
     p_kind: "play_friend_celebration",
     p_payload: {
       board_days: params.boardDays,
+      dwell_seconds: params.dwellSeconds ?? DEFAULT_CELEBRATION_DWELL_SECONDS,
       expires_at: expiresAt,
       palette_custom: params.paletteCustom ?? {},
       palette_preset: params.palettePreset,
       source_device_id: params.sourceDeviceId ?? "preview",
+      transition_speed: params.transitionSpeed ?? DEFAULT_CELEBRATION_TRANSITION_SPEED,
       transition_style: params.transitionStyle ?? DEFAULT_CELEBRATION_TRANSITION,
       weekly_target: params.weeklyTarget,
     },
@@ -1454,16 +1475,20 @@ export async function leaveSharedBoard(params: { deviceId: string; membershipId:
 }
 
 export async function setSharedBoardCelebrationPreferences(params: {
+  dwellSeconds?: number;
   deviceId: string;
   enabled?: boolean;
   membershipId: string;
+  transitionSpeed?: CelebrationTransitionSpeed;
   transition?: CelebrationTransitionStyle;
 }) {
   const supabase = ensureSupabase();
   const { data, error } = await (supabase.rpc as any)("set_shared_board_celebration_preferences", {
+    p_dwell_seconds: params.dwellSeconds ?? null,
     p_device_id: params.deviceId,
     p_enabled: params.enabled ?? null,
     p_membership_id: params.membershipId,
+    p_transition_speed: params.transitionSpeed ?? null,
     p_transition: params.transition ?? null,
   });
 

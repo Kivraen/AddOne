@@ -307,9 +307,11 @@ export type Database = {
       device_memberships: {
         Row: {
           approved_at: string | null
+          celebration_dwell_seconds: number
           approved_by_user_id: string | null
           celebration_enabled: boolean
           celebration_transition: string
+          celebration_transition_speed: string
           created_at: string
           device_id: string
           id: string
@@ -322,9 +324,11 @@ export type Database = {
         }
         Insert: {
           approved_at?: string | null
+          celebration_dwell_seconds?: number
           approved_by_user_id?: string | null
           celebration_enabled?: boolean
           celebration_transition?: string
+          celebration_transition_speed?: string
           created_at?: string
           device_id: string
           id?: string
@@ -337,9 +341,11 @@ export type Database = {
         }
         Update: {
           approved_at?: string | null
+          celebration_dwell_seconds?: number
           approved_by_user_id?: string | null
           celebration_enabled?: boolean
           celebration_transition?: string
+          celebration_transition_speed?: string
           created_at?: string
           device_id?: string
           id?: string
@@ -1487,7 +1493,10 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by_user_id: string | null
+          celebration_dwell_seconds: number
           celebration_enabled: boolean
+          celebration_transition: string
+          celebration_transition_speed: string
           created_at: string
           device_id: string
           id: string
@@ -1507,16 +1516,20 @@ export type Database = {
       }
       set_shared_board_celebration_preferences: {
         Args: {
+          p_dwell_seconds?: number | null
           p_device_id: string
           p_enabled?: boolean | null
           p_membership_id: string
+          p_transition_speed?: string | null
           p_transition?: string | null
         }
         Returns: {
           approved_at: string | null
           approved_by_user_id: string | null
+          celebration_dwell_seconds: number
           celebration_enabled: boolean
           celebration_transition: string
+          celebration_transition_speed: string
           created_at: string
           device_id: string
           id: string

@@ -68,6 +68,7 @@ private:
     BoardFrame ownerFrame{};
     BoardTransitionPlan transitionPlan{};
     BoardTransitionStyle transitionStyle = BoardTransitionStyle::ColumnWipe;
+    unsigned long dwellDurationMs = 0;
     unsigned long dissolveDurationMs = 0;
     unsigned long startedAtMs = 0;
     bool active = false;

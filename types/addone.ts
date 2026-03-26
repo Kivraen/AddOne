@@ -161,9 +161,12 @@ export type CelebrationTransitionStyle =
   | "top_drop"
   | "diagonal_wave"
   | "constellation";
+export type CelebrationTransitionSpeed = "fast" | "balanced" | "slow";
 
 export interface SharedBoard {
   celebrationEnabled: boolean;
+  celebrationDwellSeconds: number;
+  celebrationTransitionSpeed: CelebrationTransitionSpeed;
   celebrationTransition: CelebrationTransitionStyle;
   id: string;
   viewerMembershipId: string;
