@@ -52,6 +52,36 @@ export const CELEBRATION_TRANSITION_OPTIONS: CelebrationTransitionOption[] = [
     label: "Constellation fade",
     description: "A softer scattered reveal for a less rigid handoff.",
   },
+  {
+    id: "bottom_rise",
+    label: "Ground rise",
+    description: "The next board climbs up from the floor.",
+  },
+  {
+    id: "edge_close",
+    label: "Curtain close",
+    description: "Both outer edges sweep inward to land on the new board.",
+  },
+  {
+    id: "reverse_diagonal",
+    label: "Backslash",
+    description: "A corner sweep on the opposite diagonal.",
+  },
+  {
+    id: "matrix_rain",
+    label: "Matrix rain",
+    description: "Columns descend with a staggered digital-rain cadence.",
+  },
+  {
+    id: "venetian",
+    label: "Venetian",
+    description: "Alternating columns reveal in slatted shutters.",
+  },
+  {
+    id: "pulse_ring",
+    label: "Pulse ring",
+    description: "The board radiates from the center like a pulse.",
+  },
 ];
 
 export const CELEBRATION_TRANSITION_SPEED_OPTIONS: CelebrationTransitionSpeedOption[] = [

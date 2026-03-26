@@ -21,6 +21,8 @@ import { withAlpha } from "@/lib/color";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
 import { CelebrationTransitionSpeed, CelebrationTransitionStyle, SharedBoard } from "@/types/addone";
 
+type ExpandedSection = "dwell" | "speed" | "transition" | null;
+
 function BoardIdentityCard({ board }: { board: SharedBoard }) {
   return (
     <GlassCard style={{ gap: 6, paddingHorizontal: 18, paddingVertical: 18 }}>
@@ -48,10 +50,56 @@ function BoardIdentityCard({ board }: { board: SharedBoard }) {
   );
 }
 
+function SelectorRow(props: {
+  expanded: boolean;
+  onPress: () => void;
+  summary: string;
+  title: string;
+}) {
+  return (
+    <Pressable
+      onPress={props.onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: 16,
+            lineHeight: 20,
+          }}
+        >
+          {props.title}
+        </Text>
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 14,
+            lineHeight: 18,
+          }}
+        >
+          {props.summary}
+        </Text>
+      </View>
+      <Ionicons
+        color={theme.colors.textSecondary}
+        name={props.expanded ? "chevron-up-outline" : "chevron-down-outline"}
+        size={18}
+      />
+    </Pressable>
+  );
+}
+
 function OptionChip(props: {
   active?: boolean;
   busy?: boolean;
-  detail?: string;
   label: string;
   onPress: () => void;
 }) {
@@ -60,12 +108,11 @@ function OptionChip(props: {
       disabled={props.busy}
       onPress={props.onPress}
       style={{
-        minWidth: 96,
-        gap: 3,
+        minWidth: 88,
         borderRadius: theme.radius.pill,
         borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: props.active ? withAlpha(theme.colors.accentAmber, 0.32) : withAlpha(theme.colors.textPrimary, 0.08),
+        borderColor: props.active ? withAlpha(theme.colors.accentAmber, 0.36) : withAlpha(theme.colors.textPrimary, 0.08),
         backgroundColor: props.active ? withAlpha(theme.colors.accentAmber, 0.14) : withAlpha(theme.colors.textPrimary, 0.04),
         opacity: props.busy ? 0.6 : 1,
         paddingHorizontal: 14,
@@ -76,24 +123,13 @@ function OptionChip(props: {
         style={{
           color: props.active ? theme.colors.accentAmber : theme.colors.textPrimary,
           fontFamily: theme.typography.label.fontFamily,
-          fontSize: 15,
-          lineHeight: 20,
+          fontSize: 14,
+          lineHeight: 18,
+          textAlign: "center",
         }}
       >
         {props.label}
       </Text>
-      {props.detail ? (
-        <Text
-          style={{
-            color: props.active ? withAlpha(theme.colors.accentAmber, 0.88) : theme.colors.textTertiary,
-            fontFamily: theme.typography.body.fontFamily,
-            fontSize: 12,
-            lineHeight: 16,
-          }}
-        >
-          {props.detail}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -110,7 +146,9 @@ export function FriendsBoardSettingsScreen() {
     sharedBoards,
   } = useFriends();
   const [activeTransitionId, setActiveTransitionId] = useState<CelebrationTransitionStyle | null>(null);
+  const [expandedSection, setExpandedSection] = useState<ExpandedSection>(null);
   const [timingUpdateBusy, setTimingUpdateBusy] = useState(false);
+
   const board = useMemo(
     () => sharedBoards.find((item) => item.viewerMembershipId === membershipId) ?? null,
     [membershipId, sharedBoards],
@@ -122,10 +160,11 @@ export function FriendsBoardSettingsScreen() {
   const speedSummary = board
     ? getCelebrationTransitionSpeedOption(board.celebrationTransitionSpeed ?? DEFAULT_CELEBRATION_TRANSITION_SPEED)
     : null;
+  const timingBusy = timingUpdateBusy || isUpdatingSharedBoardCelebration || isPreviewingCelebration;
 
   const previewBoard = async (
     targetBoard: SharedBoard,
-    transitionStyle: CelebrationTransitionStyle,
+    transitionStyle: CelebrationTransitionStyle = targetBoard.celebrationTransition,
     transitionSpeed: CelebrationTransitionSpeed = targetBoard.celebrationTransitionSpeed,
     dwellSeconds: number = targetBoard.celebrationDwellSeconds,
   ) => {
@@ -153,13 +192,28 @@ export function FriendsBoardSettingsScreen() {
     }
   };
 
+  const savePreferences = async (
+    targetBoard: SharedBoard,
+    patch: {
+      dwellSeconds?: number;
+      enabled?: boolean;
+      transition?: CelebrationTransitionStyle;
+      transitionSpeed?: CelebrationTransitionSpeed;
+    },
+  ) => {
+    await setSharedBoardCelebrationEnabled({
+      deviceId: targetBoard.id,
+      dwellSeconds: patch.dwellSeconds,
+      enabled: patch.enabled,
+      membershipId: targetBoard.viewerMembershipId,
+      transition: patch.transition,
+      transitionSpeed: patch.transitionSpeed,
+    });
+  };
+
   const updateCelebrationEnabled = async (targetBoard: SharedBoard, enabled: boolean) => {
     try {
-      await setSharedBoardCelebrationEnabled({
-        deviceId: targetBoard.id,
-        enabled,
-        membershipId: targetBoard.viewerMembershipId,
-      });
+      await savePreferences(targetBoard, { enabled });
       triggerPrimaryActionSuccessHaptic();
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
@@ -171,13 +225,8 @@ export function FriendsBoardSettingsScreen() {
   };
 
   const updateTransition = async (targetBoard: SharedBoard, transitionStyle: CelebrationTransitionStyle) => {
-    setActiveTransitionId(transitionStyle);
     try {
-      await setSharedBoardCelebrationEnabled({
-        deviceId: targetBoard.id,
-        membershipId: targetBoard.viewerMembershipId,
-        transition: transitionStyle,
-      });
+      await savePreferences(targetBoard, { transition: transitionStyle });
       await previewBoard(targetBoard, transitionStyle, targetBoard.celebrationTransitionSpeed, targetBoard.celebrationDwellSeconds);
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
@@ -185,8 +234,6 @@ export function FriendsBoardSettingsScreen() {
         "Couldn't save transition",
         error instanceof Error ? error.message : "Try again.",
       );
-    } finally {
-      setActiveTransitionId((current) => (current === transitionStyle ? null : current));
     }
   };
 
@@ -199,18 +246,8 @@ export function FriendsBoardSettingsScreen() {
   ) => {
     setTimingUpdateBusy(true);
     try {
-      await setSharedBoardCelebrationEnabled({
-        deviceId: targetBoard.id,
-        dwellSeconds: patch.dwellSeconds,
-        membershipId: targetBoard.viewerMembershipId,
-        transitionSpeed: patch.transitionSpeed,
-      });
-      await previewBoard(
-        targetBoard,
-        targetBoard.celebrationTransition,
-        patch.transitionSpeed ?? targetBoard.celebrationTransitionSpeed,
-        patch.dwellSeconds ?? targetBoard.celebrationDwellSeconds,
-      );
+      await savePreferences(targetBoard, patch);
+      triggerPrimaryActionSuccessHaptic();
     } catch (error) {
       triggerPrimaryActionFailureHaptic();
       Alert.alert(
@@ -332,7 +369,7 @@ export function FriendsBoardSettingsScreen() {
                       lineHeight: theme.typography.body.lineHeight,
                     }}
                   >
-                    If this is on, your board briefly plays {board.ownerName}&apos;s check-in when they finish today.
+                    If this is on, your board can briefly show {board.ownerName}&apos;s check-in when they finish today.
                   </Text>
                 </View>
                 <Switch
@@ -348,158 +385,111 @@ export function FriendsBoardSettingsScreen() {
                   value={board.celebrationEnabled}
                 />
               </View>
-              <Text
-                style={{
-                  color: theme.colors.textTertiary,
-                  fontFamily: theme.typography.body.fontFamily,
-                  fontSize: 13,
-                  lineHeight: 18,
-                }}
-              >
-                Current setup: {transitionSummary?.label ?? "Blade sweep"} · {speedSummary?.label ?? "Balanced"} ·{" "}
-                {board.celebrationDwellSeconds ?? DEFAULT_CELEBRATION_DWELL_SECONDS}s visible
-              </Text>
             </GlassCard>
 
             <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
-              <View style={{ gap: 4 }}>
-                <Text
-                  style={{
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.label.fontFamily,
-                    fontSize: 17,
-                    lineHeight: 22,
-                  }}
-                >
-                  Transition speed
-                </Text>
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  This controls how quickly the reveal moves in and back out.
-                </Text>
-              </View>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                {CELEBRATION_TRANSITION_SPEED_OPTIONS.map((option) => (
-                  <OptionChip
-                    key={option.id}
-                    active={board.celebrationTransitionSpeed === option.id}
-                    busy={timingUpdateBusy || isPreviewingCelebration || isUpdatingSharedBoardCelebration}
-                    detail={option.description}
-                    label={option.label}
-                    onPress={() => {
-                      void updateTiming(board, { transitionSpeed: option.id });
-                    }}
-                  />
-                ))}
-              </View>
+              <SelectorRow
+                expanded={expandedSection === "transition"}
+                onPress={() => setExpandedSection((current) => (current === "transition" ? null : "transition"))}
+                summary={transitionSummary?.label ?? "Blade sweep"}
+                title="Transition"
+              />
+              {expandedSection === "transition" ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {CELEBRATION_TRANSITION_OPTIONS.map((option) => (
+                    <OptionChip
+                      key={option.id}
+                      active={board.celebrationTransition === option.id}
+                      busy={timingBusy}
+                      label={option.label}
+                      onPress={() => {
+                        void updateTransition(board, option.id);
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
             </GlassCard>
 
             <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
-              <View style={{ gap: 4 }}>
-                <Text
-                  style={{
-                    color: theme.colors.textPrimary,
-                    fontFamily: theme.typography.label.fontFamily,
-                    fontSize: 17,
-                    lineHeight: 22,
-                  }}
-                >
-                  Visible hold
-                </Text>
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontFamily: theme.typography.body.fontFamily,
-                    fontSize: theme.typography.body.fontSize,
-                    lineHeight: theme.typography.body.lineHeight,
-                  }}
-                >
-                  This controls how long your friend&apos;s board stays on-screen before returning.
-                </Text>
-              </View>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                {CELEBRATION_DWELL_OPTIONS.map((option) => (
-                  <OptionChip
-                    key={option.seconds}
-                    active={board.celebrationDwellSeconds === option.seconds}
-                    busy={timingUpdateBusy || isPreviewingCelebration || isUpdatingSharedBoardCelebration}
-                    label={option.label}
-                    onPress={() => {
-                      void updateTiming(board, { dwellSeconds: option.seconds });
-                    }}
-                  />
-                ))}
-              </View>
+              <SelectorRow
+                expanded={expandedSection === "speed"}
+                onPress={() => setExpandedSection((current) => (current === "speed" ? null : "speed"))}
+                summary={speedSummary?.label ?? "Balanced"}
+                title="Speed"
+              />
+              {expandedSection === "speed" ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {CELEBRATION_TRANSITION_SPEED_OPTIONS.map((option) => (
+                    <OptionChip
+                      key={option.id}
+                      active={board.celebrationTransitionSpeed === option.id}
+                      busy={timingBusy}
+                      label={option.label}
+                      onPress={() => {
+                        void updateTiming(board, { transitionSpeed: option.id });
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
             </GlassCard>
 
-            <View style={{ gap: 10 }}>
-              {CELEBRATION_TRANSITION_OPTIONS.map((option) => {
-                const isSelected = board.celebrationTransition === option.id;
-                const isBusy = activeTransitionId === option.id && (isPreviewingCelebration || isUpdatingSharedBoardCelebration);
-                return (
-                  <Pressable
-                    key={option.id}
-                    disabled={isUpdatingSharedBoardCelebration || isPreviewingCelebration}
-                    onPress={() => {
-                      void updateTransition(board, option.id);
-                    }}
-                    style={{
-                      opacity: isUpdatingSharedBoardCelebration || isPreviewingCelebration ? 0.7 : 1,
-                    }}
-                  >
-                    <GlassCard style={{ gap: 10, paddingHorizontal: 18, paddingVertical: 18 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <Ionicons
-                          color={isSelected ? theme.colors.accentAmber : theme.colors.textSecondary}
-                          name={isSelected ? "radio-button-on" : "radio-button-off"}
-                          size={22}
-                        />
-                        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                          <Text
-                            style={{
-                              color: theme.colors.textPrimary,
-                              fontFamily: theme.typography.label.fontFamily,
-                              fontSize: 17,
-                              lineHeight: 22,
-                            }}
-                          >
-                            {option.label}
-                          </Text>
-                          <Text
-                            style={{
-                              color: theme.colors.textSecondary,
-                              fontFamily: theme.typography.body.fontFamily,
-                              fontSize: theme.typography.body.fontSize,
-                              lineHeight: theme.typography.body.lineHeight,
-                            }}
-                          >
-                            {option.description}
-                          </Text>
-                        </View>
-                        {isBusy ? <ActivityIndicator color={theme.colors.accentAmber} /> : null}
-                      </View>
-                    </GlassCard>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <GlassCard style={{ gap: 14, paddingHorizontal: 18, paddingVertical: 18 }}>
+              <SelectorRow
+                expanded={expandedSection === "dwell"}
+                onPress={() => setExpandedSection((current) => (current === "dwell" ? null : "dwell"))}
+                summary={`${board.celebrationDwellSeconds ?? DEFAULT_CELEBRATION_DWELL_SECONDS}s`}
+                title="Visible hold"
+              />
+              {expandedSection === "dwell" ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {CELEBRATION_DWELL_OPTIONS.map((option) => (
+                    <OptionChip
+                      key={option.seconds}
+                      active={board.celebrationDwellSeconds === option.seconds}
+                      busy={timingBusy}
+                      label={option.label}
+                      onPress={() => {
+                        void updateTiming(board, { dwellSeconds: option.seconds });
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </GlassCard>
 
-            <Text
+            <Pressable
+              disabled={isPreviewingCelebration}
+              onPress={() => {
+                void previewBoard(board);
+              }}
               style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.body.fontFamily,
-                fontSize: 13,
-                lineHeight: 18,
+                minHeight: 50,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: theme.radius.sheet,
+                borderCurve: "continuous",
+                backgroundColor: isPreviewingCelebration ? withAlpha(theme.colors.textPrimary, 0.12) : theme.colors.textPrimary,
+                opacity: isPreviewingCelebration ? 0.72 : 1,
+                paddingHorizontal: 18,
               }}
             >
-              Tapping a transition saves it for this board and plays a preview on your current device if that device is online.
-            </Text>
+              {isPreviewingCelebration ? (
+                <ActivityIndicator color={theme.colors.textInverse} />
+              ) : (
+                <Text
+                  style={{
+                    color: theme.colors.textInverse,
+                    fontFamily: theme.typography.label.fontFamily,
+                    fontSize: 18,
+                    lineHeight: 22,
+                  }}
+                >
+                  Preview current reveal
+                </Text>
+              )}
+            </Pressable>
           </>
         ) : null}
       </ScrollView>

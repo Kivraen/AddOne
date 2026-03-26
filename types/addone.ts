@@ -160,7 +160,13 @@ export type CelebrationTransitionStyle =
   | "center_split"
   | "top_drop"
   | "diagonal_wave"
-  | "constellation";
+  | "constellation"
+  | "bottom_rise"
+  | "edge_close"
+  | "reverse_diagonal"
+  | "matrix_rain"
+  | "venetian"
+  | "pulse_ring";
 export type CelebrationTransitionSpeed = "fast" | "balanced" | "slow";
 
 export interface SharedBoard {

@@ -89,6 +89,30 @@ BoardTransitionStyle parseFriendCelebrationTransitionStyle(const String& value) 
     return BoardTransitionStyle::Constellation;
   }
 
+  if (value == "bottom_rise") {
+    return BoardTransitionStyle::BottomRise;
+  }
+
+  if (value == "edge_close") {
+    return BoardTransitionStyle::EdgeClose;
+  }
+
+  if (value == "reverse_diagonal") {
+    return BoardTransitionStyle::ReverseDiagonal;
+  }
+
+  if (value == "matrix_rain") {
+    return BoardTransitionStyle::MatrixRain;
+  }
+
+  if (value == "venetian") {
+    return BoardTransitionStyle::Venetian;
+  }
+
+  if (value == "pulse_ring") {
+    return BoardTransitionStyle::PulseRing;
+  }
+
   return BoardTransitionStyle::ColumnWipe;
 }
 

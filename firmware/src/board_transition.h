@@ -22,6 +22,12 @@ enum class BoardTransitionStyle : uint8_t {
   TopDrop = 3,
   DiagonalWave = 4,
   Constellation = 5,
+  BottomRise = 6,
+  EdgeClose = 7,
+  ReverseDiagonal = 8,
+  MatrixRain = 9,
+  Venetian = 10,
+  PulseRing = 11,
 };
 
 enum class BoardTransitionDirection : uint8_t {

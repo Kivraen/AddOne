@@ -230,8 +230,12 @@ export default function DeviceSettingsOverviewRoute() {
                       controlReady
                         ? isPreviewingCelebration && activePreviewTransition === option.id
                           ? `Starting ${option.label.toLowerCase()}…`
-                          : `Temporary test control: ${option.description}`
-                        : "Celebration previews are only available while the board is online and ready."
+                          : index === 0
+                            ? "Temporary test controls for celebration transitions."
+                            : undefined
+                        : index === 0
+                          ? "Celebration previews are only available while the board is online and ready."
+                          : undefined
                     }
                     onPress={controlReady && !isPreviewingCelebration ? () => handlePreviewCelebration(option.id) : undefined}
                     title={option.label}
