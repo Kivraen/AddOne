@@ -63,22 +63,22 @@ uint16_t transitionCountForElapsed(unsigned long elapsedMs, unsigned long durati
   return static_cast<uint16_t>((static_cast<uint64_t>(elapsedMs) * totalCount) / durationMs);
 }
 
-int16_t wipeEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs, BoardTransitionDirection direction) {
-  if (durationMs == 0 || elapsedMs >= durationMs) {
-    return direction == BoardTransitionDirection::LeftToRight
-        ? static_cast<int16_t>(Config::kPanelCols)
-        : static_cast<int16_t>(-1);
+uint16_t countChangedPixels(const BoardFrame& fromFrame, const BoardFrame& toFrame) {
+  uint16_t changedCount = 0;
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (!colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
+        ++changedCount;
+      }
+    }
   }
 
-  const unsigned long totalSteps = Config::kPanelCols + 1;
-  const unsigned long progressedSteps =
-      (static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs;
+  return changedCount;
+}
 
-  if (direction == BoardTransitionDirection::LeftToRight) {
-    return static_cast<int16_t>(progressedSteps);
-  }
-
-  return static_cast<int16_t>(Config::kPanelCols - 1) - static_cast<int16_t>(progressedSteps);
+void prepareSimplePlan(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
+  initializePlan(outPlan);
+  outPlan.changedPixelCount = countChangedPixels(fromFrame, toFrame);
 }
 
 void assignRandomRanks(const BoardFrame& fromFrame,
@@ -105,6 +105,165 @@ void assignRandomRanks(const BoardFrame& fromFrame,
     outRanks[entries[rank].row][entries[rank].col] = rank;
   }
 }
+
+int16_t wipeEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs, BoardTransitionDirection direction) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    return direction == BoardTransitionDirection::LeftToRight
+        ? static_cast<int16_t>(Config::kPanelCols)
+        : static_cast<int16_t>(-1);
+  }
+
+  const unsigned long totalSteps = Config::kPanelCols + 1;
+  const unsigned long progressedSteps =
+      (static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs;
+
+  if (direction == BoardTransitionDirection::LeftToRight) {
+    return static_cast<int16_t>(progressedSteps);
+  }
+
+  return static_cast<int16_t>(Config::kPanelCols - 1) - static_cast<int16_t>(progressedSteps);
+}
+
+int16_t rowEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs, bool topDown) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    return topDown ? static_cast<int16_t>(Config::kPanelRows) : static_cast<int16_t>(-1);
+  }
+
+  const unsigned long totalSteps = Config::kPanelRows + 1;
+  const unsigned long progressedSteps =
+      (static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs;
+
+  if (topDown) {
+    return static_cast<int16_t>(progressedSteps);
+  }
+
+  return static_cast<int16_t>(Config::kPanelRows - 1) - static_cast<int16_t>(progressedSteps);
+}
+
+uint8_t maxCenterDistance() {
+  const int16_t centerLeft = static_cast<int16_t>(Config::kPanelCols - 1) / 2;
+  const int16_t centerRight = static_cast<int16_t>(Config::kPanelCols) / 2;
+  const uint16_t leftDistance = abs16(0 - centerRight);
+  const uint16_t rightDistance = abs16(static_cast<int16_t>(Config::kPanelCols - 1) - centerLeft);
+  return static_cast<uint8_t>(leftDistance > rightDistance ? leftDistance : rightDistance);
+}
+
+uint8_t centerDistanceForColumn(uint8_t col) {
+  const int16_t centerLeft = static_cast<int16_t>(Config::kPanelCols - 1) / 2;
+  const int16_t centerRight = static_cast<int16_t>(Config::kPanelCols) / 2;
+  const uint16_t distanceLeft = abs16(static_cast<int16_t>(col) - centerLeft);
+  const uint16_t distanceRight = abs16(static_cast<int16_t>(col) - centerRight);
+  return static_cast<uint8_t>(distanceLeft < distanceRight ? distanceLeft : distanceRight);
+}
+
+uint8_t centerEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    return static_cast<uint8_t>(maxCenterDistance() + 1);
+  }
+
+  const unsigned long totalSteps = static_cast<unsigned long>(maxCenterDistance()) + 2;
+  return static_cast<uint8_t>((static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs);
+}
+
+uint8_t diagonalEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs) {
+  const uint8_t maxDiagonal = Config::kPanelRows + Config::kPanelCols - 2;
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    return static_cast<uint8_t>(maxDiagonal + 1);
+  }
+
+  const unsigned long totalSteps = static_cast<unsigned long>(maxDiagonal) + 2;
+  return static_cast<uint8_t>((static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs);
+}
+
+void applyCenterSplit(const BoardFrame& fromFrame,
+                      const BoardFrame& toFrame,
+                      unsigned long elapsedMs,
+                      unsigned long durationMs,
+                      BoardTransitionPhase phase,
+                      BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  const uint8_t edge = centerEdgeForElapsed(elapsedMs, durationMs);
+  const uint8_t maxDistance = maxCenterDistance();
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      const uint8_t centerDistance = centerDistanceForColumn(col);
+      const uint8_t comparisonDistance = phase == BoardTransitionPhase::Forward
+          ? centerDistance
+          : static_cast<uint8_t>(maxDistance - centerDistance);
+      if (comparisonDistance < edge) {
+        outFrame.pixels[row][col] = toFrame.pixels[row][col];
+      } else if (comparisonDistance == edge) {
+        outFrame.pixels[row][col] = CRGB::Black;
+      }
+    }
+  }
+}
+
+void applyRowWipe(const BoardFrame& fromFrame,
+                  const BoardFrame& toFrame,
+                  unsigned long elapsedMs,
+                  unsigned long durationMs,
+                  bool topDown,
+                  BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  const int16_t wipeEdge = rowEdgeForElapsed(elapsedMs, durationMs, topDown);
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (topDown) {
+        if (static_cast<int16_t>(row) < wipeEdge) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (static_cast<int16_t>(row) == wipeEdge) {
+          outFrame.pixels[row][col] = CRGB::Black;
+        }
+      } else {
+        if (static_cast<int16_t>(row) > wipeEdge) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (static_cast<int16_t>(row) == wipeEdge) {
+          outFrame.pixels[row][col] = CRGB::Black;
+        }
+      }
+    }
+  }
+}
+
+void applyDiagonalWave(const BoardFrame& fromFrame,
+                       const BoardFrame& toFrame,
+                       unsigned long elapsedMs,
+                       unsigned long durationMs,
+                       BoardTransitionPhase phase,
+                       BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  const uint8_t edge = diagonalEdgeForElapsed(elapsedMs, durationMs);
+  const uint8_t maxDiagonal = Config::kPanelRows + Config::kPanelCols - 2;
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      const uint8_t diagonal = row + col;
+      const uint8_t comparisonDiagonal = phase == BoardTransitionPhase::Forward
+          ? diagonal
+          : static_cast<uint8_t>(maxDiagonal - diagonal);
+      if (comparisonDiagonal < edge) {
+        outFrame.pixels[row][col] = toFrame.pixels[row][col];
+      } else if (comparisonDiagonal == edge) {
+        outFrame.pixels[row][col] = CRGB::Black;
+      }
+    }
+  }
+}
 } // namespace
 
 unsigned long BoardTransition::adaptiveDurationMs(const BoardTransitionPlan& plan,
@@ -121,6 +280,48 @@ unsigned long BoardTransition::adaptiveDurationMs(const BoardTransitionPlan& pla
   const unsigned long durationRangeMs = maxDurationMs - minDurationMs;
   return minDurationMs +
          static_cast<unsigned long>((static_cast<uint64_t>(durationRangeMs) * plan.changedPixelCount) / kTotalPixels);
+}
+
+void BoardTransition::apply(BoardTransitionStyle style,
+                            const BoardFrame& fromFrame,
+                            const BoardFrame& toFrame,
+                            const BoardTransitionPlan& plan,
+                            unsigned long elapsedMs,
+                            unsigned long durationMs,
+                            BoardTransitionPhase phase,
+                            BoardFrame& outFrame) {
+  switch (style) {
+    case BoardTransitionStyle::ColumnWipe:
+      applyColumnWipe(
+          fromFrame,
+          toFrame,
+          elapsedMs,
+          durationMs,
+          phase == BoardTransitionPhase::Forward ? BoardTransitionDirection::LeftToRight : BoardTransitionDirection::RightToLeft,
+          outFrame);
+      return;
+    case BoardTransitionStyle::ReverseWipe:
+      applyColumnWipe(
+          fromFrame,
+          toFrame,
+          elapsedMs,
+          durationMs,
+          phase == BoardTransitionPhase::Forward ? BoardTransitionDirection::RightToLeft : BoardTransitionDirection::LeftToRight,
+          outFrame);
+      return;
+    case BoardTransitionStyle::CenterSplit:
+      applyCenterSplit(fromFrame, toFrame, elapsedMs, durationMs, phase, outFrame);
+      return;
+    case BoardTransitionStyle::TopDrop:
+      applyRowWipe(fromFrame, toFrame, elapsedMs, durationMs, phase == BoardTransitionPhase::Forward, outFrame);
+      return;
+    case BoardTransitionStyle::DiagonalWave:
+      applyDiagonalWave(fromFrame, toFrame, elapsedMs, durationMs, phase, outFrame);
+      return;
+    case BoardTransitionStyle::Constellation:
+      applyRandomOverlap(fromFrame, toFrame, plan, elapsedMs, durationMs, outFrame);
+      return;
+  }
 }
 
 void BoardTransition::applyColumnWipe(const BoardFrame& fromFrame,
@@ -182,27 +383,50 @@ void BoardTransition::applyRandomOverlap(const BoardFrame& fromFrame,
   }
 }
 
-void BoardTransition::prepareColumnWipe(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
-  initializePlan(outPlan);
-  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
-    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
-      if (!colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
-        ++outPlan.changedPixelCount;
-      }
-    }
+const char* BoardTransition::label(BoardTransitionStyle style) {
+  switch (style) {
+    case BoardTransitionStyle::ColumnWipe:
+      return "blade-sweep";
+    case BoardTransitionStyle::ReverseWipe:
+      return "counter-sweep";
+    case BoardTransitionStyle::CenterSplit:
+      return "center-bloom";
+    case BoardTransitionStyle::TopDrop:
+      return "skyfall";
+    case BoardTransitionStyle::DiagonalWave:
+      return "diagonal-rush";
+    case BoardTransitionStyle::Constellation:
+      return "constellation";
   }
+
+  return "blade-sweep";
+}
+
+void BoardTransition::prepare(BoardTransitionStyle style,
+                              const BoardFrame& fromFrame,
+                              const BoardFrame& toFrame,
+                              BoardTransitionPlan& outPlan) {
+  switch (style) {
+    case BoardTransitionStyle::Constellation:
+      prepareRandomOverlap(fromFrame, toFrame, outPlan);
+      return;
+    case BoardTransitionStyle::ColumnWipe:
+    case BoardTransitionStyle::ReverseWipe:
+    case BoardTransitionStyle::CenterSplit:
+    case BoardTransitionStyle::TopDrop:
+    case BoardTransitionStyle::DiagonalWave:
+      prepareColumnWipe(fromFrame, toFrame, outPlan);
+      return;
+  }
+}
+
+void BoardTransition::prepareColumnWipe(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
+  prepareSimplePlan(fromFrame, toFrame, outPlan);
 }
 
 void BoardTransition::prepareRandomOverlap(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
   initializePlan(outPlan);
-  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
-    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
-      if (!colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
-        ++outPlan.changedPixelCount;
-      }
-    }
-  }
-
+  outPlan.changedPixelCount = countChangedPixels(fromFrame, toFrame);
   assignRandomRanks(fromFrame, toFrame, outPlan.overlapOutgoingRanks);
   assignRandomRanks(fromFrame, toFrame, outPlan.overlapIncomingRanks);
 }

@@ -27,6 +27,30 @@ unsigned long friendCelebrationTransitionDuration(const BoardTransitionPlan& pla
       Config::kFriendCelebrationMaxDissolveMs);
 }
 
+BoardTransitionStyle parseFriendCelebrationTransitionStyle(const String& value) {
+  if (value == "reverse_wipe") {
+    return BoardTransitionStyle::ReverseWipe;
+  }
+
+  if (value == "center_split") {
+    return BoardTransitionStyle::CenterSplit;
+  }
+
+  if (value == "top_drop") {
+    return BoardTransitionStyle::TopDrop;
+  }
+
+  if (value == "diagonal_wave") {
+    return BoardTransitionStyle::DiagonalWave;
+  }
+
+  if (value == "constellation") {
+    return BoardTransitionStyle::Constellation;
+  }
+
+  return BoardTransitionStyle::ColumnWipe;
+}
+
 bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
   int year = 0;
   int month = 0;
@@ -1383,6 +1407,8 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
 
     const int weeklyTarget = doc["weekly_target"] | 0;
     const char* palettePreset = doc["palette_preset"] | "classic";
+    const BoardTransitionStyle transitionStyle =
+        parseFriendCelebrationTransitionStyle(doc["transition_style"] | "column_wipe");
     JsonVariantConst boardDaysVariant = doc["board_days"];
     if (!boardDaysVariant.is<JsonArrayConst>() || weeklyTarget < 1 || weeklyTarget > Config::kDaysPerWeek) {
       failureReason = "Friend celebration payload is missing board_days or weekly_target.";
@@ -1417,15 +1443,20 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
       return false;
     }
 
-    BoardTransition::prepareColumnWipe(
-        friendCelebrationPlayback_.ownerFrame, friendCelebrationPlayback_.friendFrame, friendCelebrationPlayback_.transitionPlan);
+    friendCelebrationPlayback_.transitionStyle = transitionStyle;
+    BoardTransition::prepare(
+        friendCelebrationPlayback_.transitionStyle,
+        friendCelebrationPlayback_.ownerFrame,
+        friendCelebrationPlayback_.friendFrame,
+        friendCelebrationPlayback_.transitionPlan);
     friendCelebrationPlayback_.dissolveDurationMs =
         friendCelebrationTransitionDuration(friendCelebrationPlayback_.transitionPlan);
     friendCelebrationPlayback_.startedAtMs = millis();
     enterState_(FirmwareState::FriendCelebration);
     Serial.printf(
-        "Playing friend celebration from %s with column-wipe (%u changed pixels, %lu ms)\n",
+        "Playing friend celebration from %s with %s (%u changed pixels, %lu ms)\n",
         (doc["source_device_id"] | "friend"),
+        BoardTransition::label(friendCelebrationPlayback_.transitionStyle),
         friendCelebrationPlayback_.transitionPlan.changedPixelCount,
         friendCelebrationPlayback_.dissolveDurationMs);
     return true;
@@ -1878,12 +1909,14 @@ void FirmwareApp::tickFriendCelebration_() {
 
   if (elapsedMs < dissolveDurationMs) {
     BoardFrame transitionFrame{};
-    BoardTransition::applyColumnWipe(
+    BoardTransition::apply(
+        friendCelebrationPlayback_.transitionStyle,
         friendCelebrationPlayback_.ownerFrame,
         friendCelebrationPlayback_.friendFrame,
+        friendCelebrationPlayback_.transitionPlan,
         elapsedMs,
         dissolveDurationMs,
-        BoardTransitionDirection::LeftToRight,
+        BoardTransitionPhase::Forward,
         transitionFrame);
     boardRenderer_.renderFrame(transitionFrame, brightness);
     return;
@@ -1895,12 +1928,14 @@ void FirmwareApp::tickFriendCelebration_() {
   }
 
   BoardFrame transitionFrame{};
-  BoardTransition::applyColumnWipe(
+  BoardTransition::apply(
+      friendCelebrationPlayback_.transitionStyle,
       friendCelebrationPlayback_.friendFrame,
       friendCelebrationPlayback_.ownerFrame,
+      friendCelebrationPlayback_.transitionPlan,
       elapsedMs - dissolveDurationMs - Config::kFriendCelebrationDwellMs,
       dissolveDurationMs,
-      BoardTransitionDirection::RightToLeft,
+      BoardTransitionPhase::Reverse,
       transitionFrame);
   boardRenderer_.renderFrame(transitionFrame, brightness);
 }

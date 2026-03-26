@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
@@ -18,10 +19,12 @@ import {
 } from "@/components/settings/device-settings-scaffold";
 import { theme } from "@/constants/theme";
 import { useDeviceActions } from "@/hooks/use-devices";
+import { CELEBRATION_TRANSITION_OPTIONS } from "@/lib/celebration-transitions";
 import { withAlpha } from "@/lib/color";
 import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceResetHistoryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
+import { CelebrationTransitionStyle } from "@/types/addone";
 
 const OVERVIEW_SECTION_GAP = 12;
 
@@ -72,6 +75,7 @@ function DraftActionButton({
 export default function DeviceSettingsOverviewRoute() {
   const device = useRoutedDevice();
   const router = useRouter();
+  const [activePreviewTransition, setActivePreviewTransition] = useState<CelebrationTransitionStyle | null>(null);
   const {
     factoryResetAndRemove,
     isRemovingDeviceFromApp,
@@ -88,12 +92,18 @@ export default function DeviceSettingsOverviewRoute() {
     router.push(deviceResetHistoryPath(device.id));
   }
 
-  function handlePreviewCelebration() {
-    void previewCelebration(device.id).catch((error: unknown) => {
+  function handlePreviewCelebration(transitionStyle: CelebrationTransitionStyle) {
+    setActivePreviewTransition(transitionStyle);
+    void previewCelebration({
+      deviceId: device.id,
+      transitionStyle,
+    }).catch((error: unknown) => {
       Alert.alert(
         "Preview failed",
         error instanceof Error ? error.message : "The celebration preview could not be started.",
       );
+    }).finally(() => {
+      setActivePreviewTransition((current) => (current === transitionStyle ? null : current));
     });
   }
 
@@ -213,17 +223,22 @@ export default function DeviceSettingsOverviewRoute() {
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>
             <SettingsSectionTitle>Tools</SettingsSectionTitle>
             <SettingsListSurface>
-              <SettingsRow
-                detail={
-                  controlReady
-                    ? isPreviewingCelebration
-                      ? "Starting the temporary celebration preview…"
-                      : "Temporary test control: plays the celebration transition on this board right now."
-                    : "Celebration preview is only available while the board is online and ready."
-                }
-                onPress={controlReady && !isPreviewingCelebration ? handlePreviewCelebration : undefined}
-                title="Preview celebration"
-              />
+              {CELEBRATION_TRANSITION_OPTIONS.map((option, index) => (
+                <View key={option.id}>
+                  <SettingsRow
+                    detail={
+                      controlReady
+                        ? isPreviewingCelebration && activePreviewTransition === option.id
+                          ? `Starting ${option.label.toLowerCase()}…`
+                          : `Temporary test control: ${option.description}`
+                        : "Celebration previews are only available while the board is online and ready."
+                    }
+                    onPress={controlReady && !isPreviewingCelebration ? () => handlePreviewCelebration(option.id) : undefined}
+                    title={option.label}
+                  />
+                  {index < CELEBRATION_TRANSITION_OPTIONS.length - 1 ? <SettingsDivider /> : null}
+                </View>
+              ))}
               <SettingsDivider />
               <SettingsRow
                 detail={

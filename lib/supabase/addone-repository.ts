@@ -1,10 +1,12 @@
 import { paletteById } from "@/constants/palettes";
+import { DEFAULT_CELEBRATION_TRANSITION } from "@/lib/celebration-transitions";
 import { connectionGraceState } from "@/lib/device-connection";
 import {
   AddOneDevice,
   DeviceAccountRemovalMode,
   DeviceAccountRemovalState,
   BoardPalette,
+  CelebrationTransitionStyle,
   DeviceSettingsPatch,
   DeviceOnboardingSession,
   DeviceRecoveryState,
@@ -349,12 +351,13 @@ function mapDeviceRowToAppDevice(input: {
 
 function mapDeviceRowToSharedBoard(input: {
   celebrationEnabled: boolean;
+  celebrationTransition: CelebrationTransitionStyle;
   device: DeviceRow;
   ownerName: string;
   snapshot?: RuntimeSnapshotRow | null;
   viewerMembershipId: string;
 }): SharedBoard {
-  const { celebrationEnabled, device, ownerName, snapshot, viewerMembershipId } = input;
+  const { celebrationEnabled, celebrationTransition, device, ownerName, snapshot, viewerMembershipId } = input;
   const projection = buildRuntimeBoardProjection({
     resetTime: device.day_reset_time,
     snapshot: snapshot
@@ -370,6 +373,7 @@ function mapDeviceRowToSharedBoard(input: {
 
   return {
     celebrationEnabled,
+    celebrationTransition,
     id: device.id,
     viewerMembershipId,
     ownerName,
@@ -674,7 +678,7 @@ export async function fetchSharedBoards(userId: string) {
   return withTransientNetworkRetry(async () => {
     const membershipsResponse = await supabase
       .from("device_memberships")
-      .select("id, device_id, celebration_enabled, device:devices(*)")
+      .select("id, device_id, celebration_enabled, celebration_transition, device:devices(*)")
       .eq("user_id", userId)
       .eq("role", "viewer")
       .eq("status", "approved");
@@ -683,6 +687,7 @@ export async function fetchSharedBoards(userId: string) {
       membershipsResponse.error,
       (membershipsResponse.data ?? []) as Array<{
         celebration_enabled: boolean;
+        celebration_transition: CelebrationTransitionStyle | null;
         device: DeviceRow | null;
         device_id: string;
         id: string;
@@ -730,6 +735,9 @@ export async function fetchSharedBoards(userId: string) {
     return devices.map((device) =>
       mapDeviceRowToSharedBoard({
         celebrationEnabled: memberships.find((membership) => membership.device_id === device.id)?.celebration_enabled ?? true,
+        celebrationTransition:
+          memberships.find((membership) => membership.device_id === device.id)?.celebration_transition ??
+          DEFAULT_CELEBRATION_TRANSITION,
         device,
         ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
         viewerMembershipId: memberships.find((membership) => membership.device_id === device.id)?.id ?? device.id,
@@ -1197,6 +1205,8 @@ export async function queueFriendCelebrationPreviewFromApp(params: {
   paletteCustom?: Record<string, string>;
   palettePreset: string;
   requestId: string;
+  sourceDeviceId?: string;
+  transitionStyle?: CelebrationTransitionStyle;
   weeklyTarget: number;
 }) {
   const supabase = ensureSupabase();
@@ -1209,7 +1219,8 @@ export async function queueFriendCelebrationPreviewFromApp(params: {
       expires_at: expiresAt,
       palette_custom: params.paletteCustom ?? {},
       palette_preset: params.palettePreset,
-      source_device_id: "preview",
+      source_device_id: params.sourceDeviceId ?? "preview",
+      transition_style: params.transitionStyle ?? DEFAULT_CELEBRATION_TRANSITION,
       weekly_target: params.weeklyTarget,
     },
     p_request_key: params.requestId,
@@ -1442,16 +1453,18 @@ export async function leaveSharedBoard(params: { deviceId: string; membershipId:
   return membership;
 }
 
-export async function setSharedBoardCelebrationEnabled(params: {
+export async function setSharedBoardCelebrationPreferences(params: {
   deviceId: string;
-  enabled: boolean;
+  enabled?: boolean;
   membershipId: string;
+  transition?: CelebrationTransitionStyle;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("set_shared_board_celebration_enabled", {
+  const { data, error } = await (supabase.rpc as any)("set_shared_board_celebration_preferences", {
     p_device_id: params.deviceId,
-    p_enabled: params.enabled,
+    p_enabled: params.enabled ?? null,
     p_membership_id: params.membershipId,
+    p_transition: params.transition ?? null,
   });
 
   return assertData(error, data as MembershipRow, "Failed to update celebration preference.");

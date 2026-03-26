@@ -154,9 +154,17 @@ export interface OnboardingRestoreSource {
 
 export type RestoreChoice = "restore" | "fresh";
 export type ResetFlowState = "idle" | "confirming" | "queued";
+export type CelebrationTransitionStyle =
+  | "column_wipe"
+  | "reverse_wipe"
+  | "center_split"
+  | "top_drop"
+  | "diagonal_wave"
+  | "constellation";
 
 export interface SharedBoard {
   celebrationEnabled: boolean;
+  celebrationTransition: CelebrationTransitionStyle;
   id: string;
   viewerMembershipId: string;
   ownerName: string;

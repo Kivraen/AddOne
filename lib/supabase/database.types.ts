@@ -309,6 +309,7 @@ export type Database = {
           approved_at: string | null
           approved_by_user_id: string | null
           celebration_enabled: boolean
+          celebration_transition: string
           created_at: string
           device_id: string
           id: string
@@ -323,6 +324,7 @@ export type Database = {
           approved_at?: string | null
           approved_by_user_id?: string | null
           celebration_enabled?: boolean
+          celebration_transition?: string
           created_at?: string
           device_id: string
           id?: string
@@ -337,6 +339,7 @@ export type Database = {
           approved_at?: string | null
           approved_by_user_id?: string | null
           celebration_enabled?: boolean
+          celebration_transition?: string
           created_at?: string
           device_id?: string
           id?: string
@@ -1485,6 +1488,35 @@ export type Database = {
           approved_at: string | null
           approved_by_user_id: string | null
           celebration_enabled: boolean
+          created_at: string
+          device_id: string
+          id: string
+          reminder_enabled: boolean
+          reminder_time: string | null
+          role: Database["public"]["Enums"]["device_membership_role"]
+          status: Database["public"]["Enums"]["device_membership_status"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_memberships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_shared_board_celebration_preferences: {
+        Args: {
+          p_device_id: string
+          p_enabled?: boolean | null
+          p_membership_id: string
+          p_transition?: string | null
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by_user_id: string | null
+          celebration_enabled: boolean
+          celebration_transition: string
           created_at: string
           device_id: string
           id: string

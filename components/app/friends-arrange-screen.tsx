@@ -11,6 +11,7 @@ import { theme } from "@/constants/theme";
 import { useFriends } from "@/hooks/use-friends";
 import { useFriendsBoardOrder } from "@/hooks/use-friends-board-order";
 import { useIsMountedRef } from "@/hooks/use-is-mounted-ref";
+import { getCelebrationTransitionOption } from "@/lib/celebration-transitions";
 import { withAlpha } from "@/lib/color";
 import { shouldHoldFriendsEmptyState } from "@/lib/friends-state";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
@@ -26,13 +27,14 @@ function moveBoard<T>(items: T[], fromIndex: number, toIndex: number) {
 function ManageRow(
   props: DragListRenderItemInfo<SharedBoard> & {
     celebrationBusy: boolean;
-    onCelebrationEnabledChange: (board: SharedBoard, enabled: boolean) => void;
+    onOpenSettings: (board: SharedBoard) => void;
     onRemove: (board: SharedBoard) => void;
     removeBusy: boolean;
   },
 ) {
   const { item: board, isActive, onDragEnd, onDragStart } = props;
   const isBusy = props.celebrationBusy || props.removeBusy;
+  const transition = getCelebrationTransitionOption(board.celebrationTransition);
   const initials =
     board.ownerName
       .split(/\s+/)
@@ -92,28 +94,45 @@ function ManageRow(
         </View>
 
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.label.fontFamily,
-              fontSize: 16,
-              lineHeight: 20,
-            }}
+          <Pressable
+            disabled={isBusy}
+            onPress={() => props.onOpenSettings(board)}
+            style={{ gap: 2 }}
           >
-            {board.ownerName}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.typography.label.fontFamily,
-              fontSize: 13,
-              lineHeight: 18,
-            }}
-          >
-            {board.habitName}
-          </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: 16,
+                lineHeight: 20,
+              }}
+            >
+              {board.ownerName}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.typography.label.fontFamily,
+                fontSize: 13,
+                lineHeight: 18,
+              }}
+            >
+              {board.habitName}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: board.celebrationEnabled ? theme.colors.accentAmber : theme.colors.textTertiary,
+                fontFamily: theme.typography.body.fontFamily,
+                fontSize: 12,
+                lineHeight: 17,
+              }}
+            >
+              {board.celebrationEnabled ? transition.label : "Board reveal off"}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -132,22 +151,20 @@ function ManageRow(
             <Pressable
               disabled={props.celebrationBusy}
               hitSlop={10}
-              onPress={() => props.onCelebrationEnabledChange(board, !board.celebrationEnabled)}
+              onPress={() => props.onOpenSettings(board)}
               style={{
                 alignItems: "center",
                 justifyContent: "center",
                 width: 38,
                 height: 38,
                 borderRadius: theme.radius.full,
-                backgroundColor: board.celebrationEnabled
-                  ? withAlpha(theme.colors.accentAmber, 0.16)
-                  : withAlpha(theme.colors.textPrimary, 0.04),
+                backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
                 opacity: props.celebrationBusy ? 0.6 : 1,
               }}
             >
               <Ionicons
-                color={board.celebrationEnabled ? theme.colors.accentAmber : theme.colors.textSecondary}
-                name={board.celebrationEnabled ? "eye-outline" : "eye-off-outline"}
+                color={theme.colors.textSecondary}
+                name="options-outline"
                 size={18}
               />
             </Pressable>
@@ -187,15 +204,12 @@ export function FriendsArrangeScreen() {
     isFetchingViewerBoards,
     isLeavingSharedBoard,
     isLoadingViewerBoards,
-    isUpdatingSharedBoardCelebration,
     leaveSharedBoard,
     refreshViewerBoards,
-    setSharedBoardCelebrationEnabled,
     sharedBoards,
     sharedBoardsError,
   } = useFriends();
   const { orderedBoards, saveBoardOrder } = useFriendsBoardOrder(sharedBoards);
-  const [activeCelebrationMembershipId, setActiveCelebrationMembershipId] = useState<string | null>(null);
   const [activeRemoveMembershipId, setActiveRemoveMembershipId] = useState<string | null>(null);
   const data = useMemo(() => orderedBoards, [orderedBoards]);
   const enabledCelebrationCount = useMemo(
@@ -258,7 +272,7 @@ export function FriendsArrangeScreen() {
           onPress={() =>
             Alert.alert(
               "Board reveals",
-              "A friend's board can briefly appear on your device after they complete today's check-in. Tap the eye on any row to allow or hide that reveal. Drag to sort boards. Use the trash icon to remove one.",
+              "A friend's board can briefly appear on your device after they complete today's check-in. Open any board to turn reveals on or off, pick a transition, and preview it. Drag to sort boards. Use the trash icon to remove one.",
             )
           }
           style={{
@@ -336,32 +350,11 @@ export function FriendsArrangeScreen() {
     [isMountedRef, leaveSharedBoard],
   );
 
-  const handleCelebrationEnabledChange = useCallback(
-    (board: SharedBoard, enabled: boolean) => {
-      void (async () => {
-        setActiveCelebrationMembershipId(board.viewerMembershipId);
-
-        try {
-          await setSharedBoardCelebrationEnabled({
-            deviceId: board.id,
-            enabled,
-            membershipId: board.viewerMembershipId,
-          });
-          triggerPrimaryActionSuccessHaptic();
-        } catch (error) {
-          triggerPrimaryActionFailureHaptic();
-          Alert.alert(
-            "Couldn't update celebration setting",
-            error instanceof Error ? error.message : "Try again.",
-          );
-        } finally {
-          if (isMountedRef.current) {
-            setActiveCelebrationMembershipId(null);
-          }
-        }
-      })();
+  const openBoardSettings = useCallback(
+    (board: SharedBoard) => {
+      router.push(`/friends-board/${board.viewerMembershipId}`);
     },
-    [isMountedRef, setSharedBoardCelebrationEnabled],
+    [router],
   );
 
   return (
@@ -453,11 +446,8 @@ export function FriendsArrangeScreen() {
               renderItem={(info) => (
                 <ManageRow
                   {...info}
-                  celebrationBusy={
-                    isUpdatingSharedBoardCelebration &&
-                    activeCelebrationMembershipId === info.item.viewerMembershipId
-                  }
-                  onCelebrationEnabledChange={handleCelebrationEnabledChange}
+                  celebrationBusy={false}
+                  onOpenSettings={openBoardSettings}
                   onRemove={confirmRemove}
                   removeBusy={isLeavingSharedBoard && activeRemoveMembershipId === info.item.viewerMembershipId}
                 />

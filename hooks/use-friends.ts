@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDevices } from "@/hooks/use-devices";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
+import { DEFAULT_CELEBRATION_TRANSITION } from "@/lib/celebration-transitions";
 import {
   reconcileViewerSharedBoards,
   removePendingRequestFromOwnerSharing,
@@ -19,7 +20,7 @@ import {
   leaveSharedBoard as leaveSharedBoardFromRepository,
   rejectDeviceViewRequest,
   requestDeviceViewAccess,
-  setSharedBoardCelebrationEnabled as setSharedBoardCelebrationEnabledFromRepository,
+  setSharedBoardCelebrationPreferences as setSharedBoardCelebrationPreferencesFromRepository,
   revokeDeviceViewerMembership,
   rotateDeviceShareCode,
 } from "@/lib/supabase/addone-repository";
@@ -68,6 +69,7 @@ function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] 
   return [
     {
       celebrationEnabled: true,
+      celebrationTransition: DEFAULT_CELEBRATION_TRANSITION,
       id: "demo-shared-board",
       viewerMembershipId: "demo-viewer-membership",
       ownerName: "Morgan Lee",
@@ -487,17 +489,36 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
     },
   });
 
-  const setSharedBoardCelebrationMutation = useMutation({
-    mutationFn: (params: { deviceId: string; enabled: boolean; membershipId: string }) => {
+  const setSharedBoardCelebrationMutation = useMutation<
+    {
+      celebration_enabled: boolean;
+      celebration_transition: string;
+      id: string;
+    },
+    Error,
+    {
+      deviceId: string;
+      enabled?: boolean;
+      membershipId: string;
+      transition?: SharedBoard["celebrationTransition"];
+    },
+    { previousBoards: SharedBoard[] }
+  >({
+    mutationFn: (params) => {
       friendsDebugLog("mutation:set-shared-board-celebration:start", params);
       if (isProofScenario || mode === "demo") {
         return Promise.resolve({
-          celebration_enabled: params.enabled,
+          celebration_enabled: params.enabled ?? true,
+          celebration_transition: params.transition ?? DEFAULT_CELEBRATION_TRANSITION,
           id: params.membershipId,
         });
       }
 
-      return setSharedBoardCelebrationEnabledFromRepository(params);
+      return setSharedBoardCelebrationPreferencesFromRepository(params).then((result) => ({
+        celebration_enabled: result.celebration_enabled,
+        celebration_transition: result.celebration_transition,
+        id: result.id,
+      }));
     },
     onMutate: async (params) => {
       await queryClient.cancelQueries({ queryKey: viewerBoardsKey });
@@ -508,7 +529,8 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
           board.viewerMembershipId === params.membershipId
             ? {
                 ...board,
-                celebrationEnabled: params.enabled,
+                celebrationEnabled: params.enabled ?? board.celebrationEnabled,
+                celebrationTransition: params.transition ?? board.celebrationTransition,
               }
             : board,
         ),

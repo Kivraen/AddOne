@@ -24,7 +24,7 @@ import { buildRestoreHistoryDraft, buildRestoreSettingsPatch } from "@/lib/onboa
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice, DeviceSettingsPatch, HistoryDraftUpdate, OnboardingRestoreSource, SyncState } from "@/types/addone";
+import { AddOneDevice, CelebrationTransitionStyle, DeviceSettingsPatch, HistoryDraftUpdate, OnboardingRestoreSource, SyncState } from "@/types/addone";
 
 type DeviceRemovalProgressState = "idle" | "removing_offline" | "sending_reset" | "waiting_for_board";
 
@@ -138,6 +138,16 @@ function buildCelebrationPreviewBoard(device: AddOneDevice) {
     }),
   );
 }
+
+type CelebrationPreviewRequest = {
+  boardDays?: boolean[][];
+  deviceId?: string;
+  paletteCustom?: Record<string, string>;
+  palettePreset?: string;
+  sourceDeviceId?: string;
+  transitionStyle?: CelebrationTransitionStyle;
+  weeklyTarget?: number;
+};
 
 export function useDevices() {
   const { isAuthenticated, mode, status, user, userEmail } = useAuth();
@@ -826,7 +836,7 @@ export function useDeviceActions() {
       removalDeadlineAt: null as string | null,
       removalPhase: "idle" as DeviceRemovalProgressState,
       factoryResetAndRemove: async (_deviceId?: string) => undefined,
-      previewCelebration: async (_deviceId?: string) => undefined,
+      previewCelebration: async (_params?: CelebrationPreviewRequest | string) => undefined,
       resetHistory: async (_params?: {
         dailyMinimum: string;
         deviceId?: string;
@@ -952,15 +962,21 @@ export function useDeviceActions() {
         });
       }
     },
-    previewCelebration: async (deviceId?: string) => {
-      const targetDevice = await resolveFreshLiveDevice(deviceId);
+    previewCelebration: async (params?: CelebrationPreviewRequest | string) => {
+      const normalizedParams =
+        typeof params === "string" || params === undefined ? { deviceId: params } : params;
+      const targetDevice = await resolveFreshLiveDevice(normalizedParams.deviceId);
       const result = await celebrationPreviewMutation.mutateAsync({
-        boardDays: buildCelebrationPreviewBoard(targetDevice),
+        boardDays: normalizedParams.boardDays ?? buildCelebrationPreviewBoard(targetDevice),
         deviceId: targetDevice.id,
-        paletteCustom: sanitizeCustomPalette(targetDevice.customPalette) as Record<string, string>,
-        palettePreset: targetDevice.paletteId,
+        paletteCustom:
+          normalizedParams.paletteCustom ??
+          (sanitizeCustomPalette(targetDevice.customPalette) as Record<string, string>),
+        palettePreset: normalizedParams.palettePreset ?? targetDevice.paletteId,
         requestId: makeClientEventId(),
-        weeklyTarget: targetDevice.weeklyTarget,
+        sourceDeviceId: normalizedParams.sourceDeviceId,
+        transitionStyle: normalizedParams.transitionStyle,
+        weeklyTarget: normalizedParams.weeklyTarget ?? targetDevice.weeklyTarget,
       });
 
       await waitForCommandApplied(result.id, {
