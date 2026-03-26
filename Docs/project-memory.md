@@ -51,7 +51,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - A real TestFlight install from that baseline now works.
 - The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
 - The first Friends sharing flow is now implemented and live-verified on `codex/s3-friends-proof-and-fixes`, including owner approve, reject, revoke, viewer leave, and read-only shared-board browsing.
-- The friend-celebration slice is now implemented and hardware-validated on `codex/s3-friends-celebration-transition`, including the reusable board transition primitive, friend-triggered temporary board reveal, backend fanout, per-friend `celebration_enabled`, and final restored once-per-day dedupe.
+- The friend-celebration slice is now merged into `main`, including the reusable board transition primitive, friend-triggered temporary board reveal, backend fanout, per-friend `celebration_enabled`, the expanded transition library, per-board timing controls, and final restored once-per-day dedupe.
 - Hosted beta infrastructure is alive and the app is using real backend data, but the device reconnect/offline problem is still a real hardware or Wi-Fi behavior issue.
 - The backend profile model now includes `display_name`, `username`, `first_name`, `last_name`, and avatar-backed storage for the beta social profile.
 - The accepted timezone audit confirms that the device timezone is the canonical scheduling/reset setting across app, backend, runtime projection, and firmware, while unsupported timezones still fall back to Los Angeles rules on-device because firmware only maps a small supported subset today.
@@ -63,19 +63,19 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S3: Beta UI Completion And Social Shape`
 - Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: decide whether to keep or discard the accepted `T-033` Profile experiment before opening the next `S3` slice
-- Current execution task: no active implementation task is open inside `S3` until the `T-033` keep-or-discard decision is made
+- Next brief: `T-008` onboarding and Wi-Fi recovery polish is the next primary `S3` execution slice
+- Current execution task: execute `T-008`, then explicitly resolve whether `T-011` needs one more revision pass before closing or narrowing `S3`
 
 ## Current Blockers
 
 - `T-001` is accepted and merged into `main`.
 - `T-027` is accepted and merged into `main`.
 - `T-032` is complete as a read-only audit and recommends cleaning up Profile before the Friends UI experiment.
-- `T-033` is now accepted on `codex/s3-profile-ui-experiment` as a reversible checkpoint: tighten Profile hierarchy, simplify the Friends gate path, reduce administrative density, and improve shared CTA typography without changing the accepted identity or auth model.
+- `T-033` is now accepted and merged into `main`: tighter Profile hierarchy, simpler Friends gate flow, reduced administrative density, and improved shared CTA typography without changing the accepted identity or auth model.
 - `T-024` reward-display selection remains preserved but intentionally deferred until after the accepted transition foundation.
 - `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
-- `T-008` remains the likely next visible UI polish slice now that Friends and the celebration foundation are complete.
+- `T-008` is now the next visible UI polish slice now that Friends, Profile, and the celebration foundation are merged.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.
 - Friends realtime subscriptions still show noisy `SUBSCRIBED` / `CLOSED` churn and occasional `CHANNEL_ERROR` binding mismatches in development logs, but the verified owner/viewer flows complete successfully, so that is follow-up polish rather than a `T-001` blocker.

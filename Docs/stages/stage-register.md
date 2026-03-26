@@ -14,7 +14,7 @@ Last updated: March 25, 2026
 
 - `S3: Beta UI Completion And Social Shape`
 - Goal: finish the remaining first-beta product surface decisions and implementation slices for profile identity, Friends, timezone fit, and final onboarding or recovery polish on top of the recovered latest UI baseline that is now promoted to `main`.
-- Next brief: decide whether to keep or discard the accepted `T-033` Profile experiment before opening the next `S3` slice
+- Next brief: `T-008` onboarding and Wi-Fi recovery polish is the next primary `S3` execution slice; after that, either close or explicitly defer the remaining `T-011` timezone revision path
 
 ## Stage Notes
 
@@ -31,12 +31,12 @@ Last updated: March 25, 2026
 - `T-005` is now accepted as the stage-entry audit and scope-lock checkpoint.
 - `T-009` is now accepted.
 - `T-001` is now accepted on `codex/s3-friends-proof-and-fixes` after live two-account proof.
-- `T-027` is now accepted on `codex/s3-friends-celebration-transition` after hardware validation on two real boards.
+- `T-027` is now accepted and merged into `main` after hardware validation on two real boards, including the expanded transition library and timing controls.
 - `T-032` is now accepted as a read-only audit and recommends cleaning up Profile before the Friends experiment.
-- `T-033` is now accepted on `codex/s3-profile-ui-experiment` as a reversible Profile experiment checkpoint.
+- `T-033` is now accepted and merged into `main`.
 - `T-024` reward-display configuration is explicitly later than `T-027`.
 - `T-028` and `T-029` are now explicit first-priority `S4` backlog items for security hardening and update strategy.
-- `T-008` remains open as the final visible onboarding or recovery polish slice.
+- `T-008` remains open and is now the next primary visible onboarding or recovery polish slice.
 - `T-011` still needs its revision pass accepted if timezone remains in the active S3 queue.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

@@ -85,11 +85,11 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
 - Current execution brief:
-  decide whether to keep or discard the accepted `T-033` Profile experiment before opening the next `S3` slice
+  `T-008` onboarding and Wi-Fi recovery polish is the next primary `S3` slice
 - Current execution task:
-  `T-033` is accepted on `codex/s3-profile-ui-experiment`; the next step is a coordinator keep-or-discard decision, not another in-progress implementation task
+  execute `T-008` on top of the now-merged Profile and Friends baselines, then decide whether `T-011` needs one more revision pass before `S3` can close or be explicitly narrowed
 - Git durability note:
-  `main` now includes the accepted T-027 celebration slice at `1fd48b7`, `origin/main` matches it, the Profile audit is durably captured under `T-032`, and the accepted reversible Profile experiment is isolated on `codex/s3-profile-ui-experiment` until we decide whether to merge it.
+  `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and the next `S3` work should start from this merged baseline rather than from older experiment branches.
 
 ## Where We Are Now
 
@@ -101,9 +101,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - the home pager still exposes `Friends` and `Profile` tabs
   - `Profile` now has the friend-facing social identity model and the Friends entry gate
   - the March 25 Profile audit concluded that Profile should be cleaned up before the Friends UI experiment because the current gate target is too dense and admin-first
-  - the March 25 Profile experiment is now accepted on `codex/s3-profile-ui-experiment` as a reversible checkpoint: cleaner hierarchy, simpler `from=friends` CTA flow, quieter account treatment, and stronger CTA typography across the shared button family
+  - the March 25 Profile experiment is now merged into `main`: cleaner hierarchy, simpler `from=friends` CTA flow, quieter account treatment, and stronger CTA typography across the shared button family
   - `Friends` now has the profile gate and an accepted beta implementation of code-sharing and live read-only shared boards, merged into `main`
-  - a reusable board transition plus friend-triggered temporary board reveal is now accepted on `codex/s3-friends-celebration-transition`
+  - a reusable board transition plus friend-triggered temporary board reveal is now merged into `main`, including the transition library, per-board settings, preview controls, and extended dwell options
   - later reward-display choice is preserved as a separate follow-up, not part of the accepted celebration slice
   - the main surfaced history flow is now the inline board editor from device settings, while the dedicated `/history` route still exists in code
 
@@ -149,8 +149,8 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - friend-triggered temporary board reveal on connected devices
   - after that foundation, keep selectable `Clock` vs preset-backed `Artwork` reward display as a separate later slice
   - keep AI generation behind the local artwork model
-- keep onboarding and Wi-Fi recovery polish as the later final visible UI polish slice now that Friends and the celebration foundation are accepted, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
-- lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior
+- keep onboarding and Wi-Fi recovery polish as the next primary visible UI polish slice now that Friends, Profile, and the celebration foundation are merged, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
+- lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior; either accept the `T-011` revision path or explicitly defer it before leaving `S3`
 - Rewards are now explicitly in beta scope; reminders and broader multi-device UX remain out unless we explicitly bring them in.
 
 2. Bring the hosted beta stack fully online.
