@@ -379,8 +379,11 @@ bool FirmwareApp::mountAmbientBrightnessFs_() {
   }
 
   if (!LittleFS.begin(false)) {
-    ambientBrightnessLog_.lastError = "LittleFS mount failed.";
-    return false;
+    Serial.println("Ambient log LittleFS mount failed, attempting format.");
+    if (!LittleFS.begin(true)) {
+      ambientBrightnessLog_.lastError = "LittleFS mount failed.";
+      return false;
+    }
   }
 
   ambientBrightnessLog_.fsReady = true;

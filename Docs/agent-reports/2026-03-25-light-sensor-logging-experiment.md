@@ -72,6 +72,7 @@ Storage and performance notes
 - A 24-hour run produces `8,640` rows.
 - Max per-day file size: `1MB`
 - Free-space reserve: `128KB`
+- On first use, if `LittleFS` is uninitialized or corrupted, the logger attempts a one-time format and then remounts.
 - If the daily file reaches its cap, logging disables itself.
 - If LittleFS free space falls below the reserve threshold, logging disables itself.
 - The logger appends one line per sample; overhead is low and suitable for multi-hour or multi-day capture.
