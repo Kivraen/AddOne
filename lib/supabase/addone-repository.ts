@@ -1191,6 +1191,37 @@ export async function fetchDeviceCommandStatus(commandId: string) {
   );
 }
 
+export async function queueFriendCelebrationPreviewFromApp(params: {
+  boardDays: boolean[][];
+  deviceId: string;
+  paletteCustom?: Record<string, string>;
+  palettePreset: string;
+  requestId: string;
+  weeklyTarget: number;
+}) {
+  const supabase = ensureSupabase();
+  const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+  const { data, error } = await (supabase.rpc as any)("queue_device_command", {
+    p_device_id: params.deviceId,
+    p_kind: "play_friend_celebration",
+    p_payload: {
+      board_days: params.boardDays,
+      expires_at: expiresAt,
+      palette_custom: params.paletteCustom ?? {},
+      palette_preset: params.palettePreset,
+      source_device_id: "preview",
+      weekly_target: params.weeklyTarget,
+    },
+    p_request_key: params.requestId,
+  });
+
+  return assertData(
+    error,
+    data as { id: string; status: string },
+    "Failed to queue the celebration preview.",
+  );
+}
+
 export async function updateMembershipReminder(params: {
   patch: TablesUpdate<"device_memberships">;
   userId: string;

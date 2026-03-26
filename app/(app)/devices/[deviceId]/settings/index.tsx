@@ -75,7 +75,9 @@ export default function DeviceSettingsOverviewRoute() {
   const {
     factoryResetAndRemove,
     isRemovingDeviceFromApp,
+    isPreviewingCelebration,
     isResettingHistory,
+    previewCelebration,
     removalPhase,
   } = useDeviceActions();
   const controlReady = isDeviceControlReady(device);
@@ -84,6 +86,15 @@ export default function DeviceSettingsOverviewRoute() {
 
   function handleResetHistory() {
     router.push(deviceResetHistoryPath(device.id));
+  }
+
+  function handlePreviewCelebration() {
+    void previewCelebration(device.id).catch((error: unknown) => {
+      Alert.alert(
+        "Preview failed",
+        error instanceof Error ? error.message : "The celebration preview could not be started.",
+      );
+    });
   }
 
   function handleFactoryResetAndRemove() {
@@ -202,6 +213,18 @@ export default function DeviceSettingsOverviewRoute() {
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>
             <SettingsSectionTitle>Tools</SettingsSectionTitle>
             <SettingsListSurface>
+              <SettingsRow
+                detail={
+                  controlReady
+                    ? isPreviewingCelebration
+                      ? "Starting the temporary celebration preview…"
+                      : "Temporary test control: plays the celebration transition on this board right now."
+                    : "Celebration preview is only available while the board is online and ready."
+                }
+                onPress={controlReady && !isPreviewingCelebration ? handlePreviewCelebration : undefined}
+                title="Preview celebration"
+              />
+              <SettingsDivider />
               <SettingsRow
                 detail={
                   needsDeviceRecovery(device)

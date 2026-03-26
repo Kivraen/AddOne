@@ -8,6 +8,7 @@ import {
   enterWifiRecoveryFromApp,
   fetchDeviceCommandStatus,
   fetchOwnedDevices,
+  queueFriendCelebrationPreviewFromApp,
   removeDeviceFromAccountFromApp,
   resetDeviceHistoryFromApp,
   requestDeviceFactoryResetFromApp,
@@ -112,6 +113,30 @@ function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsP
 
 function isRuntimeRevisionConflictError(message: string) {
   return message.includes("Runtime revision conflict");
+}
+
+function buildCelebrationPreviewBoard(device: AddOneDevice) {
+  return Array.from({ length: 21 }, (_, weekIndex) =>
+    Array.from({ length: 7 }, (_, dayIndex) => {
+      if (weekIndex === 0) {
+        return dayIndex <= Math.min(device.today.dayIndex, 6);
+      }
+
+      if (weekIndex < 6) {
+        return dayIndex === (weekIndex % 7) || dayIndex === (6 - (weekIndex % 7));
+      }
+
+      if (weekIndex < 12) {
+        return dayIndex <= 2 || (weekIndex % 2 === 0 && dayIndex === 6);
+      }
+
+      if (weekIndex < 18) {
+        return dayIndex >= 4;
+      }
+
+      return (weekIndex + dayIndex) % 3 === 0;
+    }),
+  );
 }
 
 export function useDevices() {
@@ -541,6 +566,9 @@ export function useDeviceActions() {
   const removeFromAppMutation = useMutation({
     mutationFn: removeDeviceFromAccountFromApp,
   });
+  const celebrationPreviewMutation = useMutation({
+    mutationFn: queueFriendCelebrationPreviewFromApp,
+  });
 
   const isBusy =
     claimMutation.isPending ||
@@ -553,6 +581,7 @@ export function useDeviceActions() {
     factoryResetMutation.isPending ||
     resetHistoryMutation.isPending ||
     setHabitStartDateMutation.isPending ||
+    celebrationPreviewMutation.isPending ||
     removeFromAppMutation.isPending ||
     deviceRemovalState.phase !== "idle";
 
@@ -622,6 +651,32 @@ export function useDeviceActions() {
     }
 
     throw new Error(options.errorMessage ?? "The device is still attached to this account.");
+  };
+
+  const waitForCommandApplied = async (
+    commandId: string,
+    options?: {
+      errorMessage?: string;
+      timeoutMs?: number;
+    },
+  ) => {
+    const timeoutMs = options?.timeoutMs ?? 12_000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const command = await fetchDeviceCommandStatus(commandId);
+      if (command.status === "applied") {
+        return command;
+      }
+
+      if (command.status === "failed" || command.status === "cancelled") {
+        throw new Error(command.last_error ?? options?.errorMessage ?? "The device rejected the test celebration.");
+      }
+
+      await sleep(LIVE_WAIT_CACHE_POLL_MS);
+    }
+
+    throw new Error(options?.errorMessage ?? "The device did not start the test celebration in time.");
   };
 
   const applySettingsPatch = async (patch: DeviceSettingsPatch, deviceId?: string) => {
@@ -765,11 +820,13 @@ export function useDeviceActions() {
       isSavingSettings: false,
       isRemovingDeviceFromApp: false,
       isResettingHistory: false,
+      isPreviewingCelebration: false,
       isStartingFactoryReset: false,
       isStartingWifiRecovery: false,
       removalDeadlineAt: null as string | null,
       removalPhase: "idle" as DeviceRemovalProgressState,
       factoryResetAndRemove: async (_deviceId?: string) => undefined,
+      previewCelebration: async (_deviceId?: string) => undefined,
       resetHistory: async (_params?: {
         dailyMinimum: string;
         deviceId?: string;
@@ -841,6 +898,7 @@ export function useDeviceActions() {
     isUpdatingHabitStartDate: setHabitStartDateMutation.isPending,
     isRemovingDeviceFromApp: removeFromAppMutation.isPending || deviceRemovalState.phase !== "idle",
     isResettingHistory: resetHistoryMutation.isPending,
+    isPreviewingCelebration: celebrationPreviewMutation.isPending,
     isStartingFactoryReset: factoryResetMutation.isPending,
     isStartingWifiRecovery: wifiRecoveryMutation.isPending,
     removalDeadlineAt: deviceRemovalState.deadlineAt,
@@ -893,6 +951,21 @@ export function useDeviceActions() {
           phase: "idle",
         });
       }
+    },
+    previewCelebration: async (deviceId?: string) => {
+      const targetDevice = await resolveFreshLiveDevice(deviceId);
+      const result = await celebrationPreviewMutation.mutateAsync({
+        boardDays: buildCelebrationPreviewBoard(targetDevice),
+        deviceId: targetDevice.id,
+        paletteCustom: sanitizeCustomPalette(targetDevice.customPalette) as Record<string, string>,
+        palettePreset: targetDevice.paletteId,
+        requestId: makeClientEventId(),
+        weeklyTarget: targetDevice.weeklyTarget,
+      });
+
+      await waitForCommandApplied(result.id, {
+        errorMessage: "The device did not start the celebration preview in time.",
+      });
     },
     resetHistory: async (params?: {
       dailyMinimum: string;
