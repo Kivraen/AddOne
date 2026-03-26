@@ -61,10 +61,10 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 ## Current Active Stage
 
-- `S3: Beta UI Completion And Social Shape`
-- Stage note: [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md)
-- Next brief: `T-008` onboarding and Wi-Fi recovery polish is the next primary `S3` execution slice
-- Current execution task: execute `T-008`, then explicitly resolve whether `T-011` needs one more revision pass before closing or narrowing `S3`
+- `S4: Beta Hardening And Durable Release Memory`
+- Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
+- Next brief: `T-034` production deployment readiness plan
+- Current execution task: run `T-034` to audit deployment, security, and update readiness before more polish or feature work
 
 ## Current Blockers
 
@@ -75,7 +75,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-024` reward-display selection remains preserved but intentionally deferred until after the accepted transition foundation.
 - `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
-- `T-008` is now the next visible UI polish slice now that Friends, Profile, and the celebration foundation are merged.
+- `T-034` now packages the first publish-readiness planning pass across deployment, security, and update strategy.
+- `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.
 - Friends realtime subscriptions still show noisy `SUBSCRIBED` / `CLOSED` churn and occasional `CHANNEL_ERROR` binding mismatches in development logs, but the verified owner/viewer flows complete successfully, so that is follow-up polish rather than a `T-001` blocker.

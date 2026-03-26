@@ -2,7 +2,7 @@
 
 ## Status
 
-`pending`
+`active`
 
 ## Goal
 
@@ -31,6 +31,7 @@ Harden AddOne for beta release and reconcile the durable docs so the repo reflec
 - Release-hardening priorities are now explicit even before `S4` activates:
   - [T-028-beta-security-and-production-readiness-audit.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-028-beta-security-and-production-readiness-audit.md)
   - [T-029-app-and-firmware-update-strategy.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-029-app-and-firmware-update-strategy.md)
+  - [T-034-production-deployment-readiness-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-034-production-deployment-readiness-plan.md)
 
 ## Open Risks / Blockers
 
@@ -39,4 +40,4 @@ Harden AddOne for beta release and reconcile the durable docs so the repo reflec
 
 ## Recommendation
 
-Keep `S4` pending until the active `S3` product-shape work is explicit enough to hand off, then treat security hardening and the app/firmware update strategy as the first two release-readiness tasks.
+Start with [T-034-production-deployment-readiness-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-034-production-deployment-readiness-plan.md) so deployment, security, and update strategy are audited together before implementation. Treat `T-028` and `T-029` as the first two implementation tracks that will likely come out of that planning checkpoint.

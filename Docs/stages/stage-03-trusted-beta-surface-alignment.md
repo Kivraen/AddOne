@@ -2,7 +2,7 @@
 
 ## Status
 
-`active`
+`pending`
 
 ## Goal
 
@@ -72,6 +72,6 @@ Lock the visible beta app surface so the main screen, settings, onboarding, Wi-F
 
 Treat [T-005-beta-ui-audit-and-scope-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-005-beta-ui-audit-and-scope-lock.md) as accepted historical stage-entry work, treat the March 19 UI polish report as the recovered baseline context, treat [T-015-friends-beta-plan-and-model-lock.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-015-friends-beta-plan-and-model-lock.md) as accepted, and treat [T-009-profile-identity-model-and-account-surface.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-009-profile-identity-model-and-account-surface.md) as accepted.
 
-In parallel, keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) until its revision pass is accepted.
+Keep the timezone implementation loop bounded under [T-011-beta-timezone-capability-and-picker-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-011-beta-timezone-capability-and-picker-baseline.md) only if release-readiness planning later decides it is a publish blocker.
 
-Next, treat the destructive lifecycle path, `T-001`, `T-027`, and `T-033` as merged checkpoints and move to the final onboarding or Wi-Fi recovery polish pass under [T-008-onboarding-and-wifi-recovery-polish.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-008-onboarding-and-wifi-recovery-polish.md). Keep later reward-display expansion as a separate follow-up, not part of this accepted transition slice. Do not continue lifecycle debugging on top of the accepted reset or re-add path unless a concrete regression appears.
+Treat the destructive lifecycle path, `T-001`, `T-027`, and `T-033` as merged checkpoints. Remaining `S3` work is intentionally deferred while `S4` release-readiness planning and hardening take priority. Keep later reward-display expansion as a separate follow-up, not part of this accepted transition slice. Do not continue lifecycle debugging on top of the accepted reset or re-add path unless a concrete regression appears.

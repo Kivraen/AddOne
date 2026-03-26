@@ -59,14 +59,15 @@ Those files are duplicate worktree snapshots and should not be treated as the cu
 ## Current Phase
 - AddOne is in `post-architecture, pre-beta validation`.
 - The stage-coordinator system is now active.
-- The current active stage is `S3: Beta UI Completion And Social Shape`.
+- The current active stage is `S4: Beta Hardening And Durable Release Memory`.
 - The recovered latest UI baseline is now restored, promoted to `main`, and verified through a working TestFlight install.
 - The core app, backend, realtime gateway, and firmware v2 foundations are now real.
 - The remaining work is mostly:
-  - beta UI completion and social-shape lock
+  - production deployment readiness planning
+  - security hardening
+  - app and firmware update strategy
   - always-on beta environment bring-up
   - real-device and router validation
-  - release hardening
   - doc cleanup that reflects the current codebase
 
 ## Stage Map
@@ -74,22 +75,22 @@ Those files are duplicate worktree snapshots and should not be treated as the cu
 - `S0: Coordination Bootstrap` -> accepted
 - `S1: Validation Baseline Ready` -> pending
 - `S2: Trusted Real-Device Validation` -> pending
-- `S3: Beta UI Completion And Social Shape` -> active
-- `S4: Beta Hardening And Durable Release Memory` -> pending
+- `S3: Beta UI Completion And Social Shape` -> pending
+- `S4: Beta Hardening And Durable Release Memory` -> active
 
 See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-register.md) for the live stage map and [stage-03-trusted-beta-surface-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-03-trusted-beta-surface-alignment.md) for the current gate.
 
 ## Current Active Stage
 
-- `S3: Beta UI Completion And Social Shape`
+- `S4: Beta Hardening And Durable Release Memory`
 - Goal:
-  lock the visible beta app surface, the first-user profile model, the beta friends shape, and the beta timezone model before the work is split into narrow implementation tasks.
+  make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-008` onboarding and Wi-Fi recovery polish is the next primary `S3` slice
+  `T-034` production deployment readiness plan
 - Current execution task:
-  execute `T-008` on top of the now-merged Profile and Friends baselines, then decide whether `T-011` needs one more revision pass before `S3` can close or be explicitly narrowed
+  run `T-034` as the first `S4` planning checkpoint, then split the resulting publish-readiness work into concrete implementation slices
 - Git durability note:
-  `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and the next `S3` work should start from this merged baseline rather than from older experiment branches.
+  `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 
 ## Where We Are Now
 
@@ -149,8 +150,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - friend-triggered temporary board reveal on connected devices
   - after that foundation, keep selectable `Clock` vs preset-backed `Artwork` reward display as a separate later slice
   - keep AI generation behind the local artwork model
-- keep onboarding and Wi-Fi recovery polish as the next primary visible UI polish slice now that Friends, Profile, and the celebration foundation are merged, with destructive reset plus fresh re-add treated as accepted lifecycle groundwork rather than an open blocker
-- lock the beta timezone model so the device timezone remains canonical, any future viewer timezone stays separate, and the beta UI does not promise unsupported on-device timezone behavior; either accept the `T-011` revision path or explicitly defer it before leaving `S3`
+- defer remaining onboarding or Wi-Fi recovery polish and timezone revision until publish-readiness planning determines whether either is a real release blocker
 - Rewards are now explicitly in beta scope; reminders and broader multi-device UX remain out unless we explicitly bring them in.
 
 2. Bring the hosted beta stack fully online.
@@ -167,13 +167,14 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Offline to reconnect healing
 - Realtime and polling fallback behavior
 
-4. Harden for beta.
-- branded auth email and redirects as needed
-- release build smoke tests
-- deployment recovery notes
-- final doc cleanup after validation findings
+4. Harden for beta and production rollout.
+- explicit production deployment readiness plan
 - explicit security and production-readiness audit
 - explicit app and firmware update strategy
+- release build smoke tests
+- deployment recovery notes
+- branded auth email and redirects as needed
+- final doc cleanup after validation findings
 
 ## Delegation Model
 
