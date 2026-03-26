@@ -28,6 +28,10 @@ enum class BoardTransitionStyle : uint8_t {
   MatrixRain = 9,
   Venetian = 10,
   PulseRing = 11,
+  LaserScan = 12,
+  SpiralCollapse = 13,
+  GlitchOverwrite = 14,
+  CometOverwrite = 15,
 };
 
 enum class BoardTransitionDirection : uint8_t {
@@ -71,5 +75,6 @@ public:
                       const BoardFrame& toFrame,
                       BoardTransitionPlan& outPlan);
   static void prepareColumnWipe(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan);
+  static void prepareSpiralOverlap(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan);
   static void prepareRandomOverlap(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan);
 };

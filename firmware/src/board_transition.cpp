@@ -26,6 +26,32 @@ uint16_t random16() {
   return static_cast<uint16_t>(esp_random() & 0xFFFFU);
 }
 
+CRGB boostedScanColor(const CRGB& incoming) {
+  if (incoming.r == 0 && incoming.g == 0 && incoming.b == 0) {
+    return CRGB(140, 210, 255);
+  }
+
+  return CRGB(
+      static_cast<uint8_t>(min(255, static_cast<int>(incoming.r) + 96)),
+      static_cast<uint8_t>(min(255, static_cast<int>(incoming.g) + 132)),
+      static_cast<uint8_t>(min(255, static_cast<int>(incoming.b) + 156)));
+}
+
+CRGB shiftedPixelOrBlack(const BoardFrame& frame, uint8_t row, uint8_t col, int8_t shift) {
+  const int16_t sourceCol = static_cast<int16_t>(col) + static_cast<int16_t>(shift);
+  if (sourceCol < 0 || sourceCol >= Config::kPanelCols) {
+    return CRGB::Black;
+  }
+
+  return frame.pixels[row][sourceCol];
+}
+
+CRGB scaledColor(const CRGB& color, uint8_t scale) {
+  CRGB result = color;
+  result.nscale8_video(scale);
+  return result;
+}
+
 bool shouldShiftEntry(const TransitionPixelEntry& current, const TransitionPixelEntry& candidate) {
   if (current.primaryKey != candidate.primaryKey) {
     return current.primaryKey > candidate.primaryKey;
@@ -105,6 +131,77 @@ void assignRandomRanks(const BoardFrame& fromFrame,
   for (uint16_t rank = 0; rank < entryCount; ++rank) {
     outRanks[entries[rank].row][entries[rank].col] = rank;
   }
+}
+
+void assignSpiralRanks(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
+  initializePlan(outPlan);
+
+  TransitionPixelEntry entries[kTotalPixels]{};
+  uint16_t entryCount = 0;
+  int16_t top = 0;
+  int16_t bottom = Config::kPanelRows - 1;
+  int16_t left = 0;
+  int16_t right = Config::kPanelCols - 1;
+
+  while (left <= right && top <= bottom) {
+    for (int16_t col = left; col <= right; ++col) {
+      entries[entryCount].row = static_cast<uint8_t>(top);
+      entries[entryCount].col = static_cast<uint8_t>(col);
+      ++entryCount;
+    }
+    ++top;
+
+    for (int16_t row = top; row <= bottom; ++row) {
+      entries[entryCount].row = static_cast<uint8_t>(row);
+      entries[entryCount].col = static_cast<uint8_t>(right);
+      ++entryCount;
+    }
+    --right;
+
+    if (top <= bottom) {
+      for (int16_t col = right; col >= left; --col) {
+        entries[entryCount].row = static_cast<uint8_t>(bottom);
+        entries[entryCount].col = static_cast<uint8_t>(col);
+        ++entryCount;
+      }
+      --bottom;
+    }
+
+    if (left <= right) {
+      for (int16_t row = bottom; row >= top; --row) {
+        entries[entryCount].row = static_cast<uint8_t>(row);
+        entries[entryCount].col = static_cast<uint8_t>(left);
+        ++entryCount;
+      }
+      ++left;
+    }
+  }
+
+  uint16_t outgoingRank = 0;
+  for (uint16_t index = 0; index < entryCount; ++index) {
+    const uint8_t row = entries[index].row;
+    const uint8_t col = entries[index].col;
+    if (colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
+      continue;
+    }
+
+    outPlan.overlapOutgoingRanks[row][col] = outgoingRank;
+    ++outgoingRank;
+  }
+
+  uint16_t incomingRank = 0;
+  for (int16_t index = static_cast<int16_t>(entryCount) - 1; index >= 0; --index) {
+    const uint8_t row = entries[index].row;
+    const uint8_t col = entries[index].col;
+    if (colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
+      continue;
+    }
+
+    outPlan.overlapIncomingRanks[row][col] = incomingRank;
+    ++incomingRank;
+  }
+
+  outPlan.changedPixelCount = outgoingRank;
 }
 
 int16_t wipeEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs, BoardTransitionDirection direction) {
@@ -478,6 +575,143 @@ void applyPulseRing(const BoardFrame& fromFrame,
     }
   }
 }
+
+void applyLaserScan(const BoardFrame& fromFrame,
+                    const BoardFrame& toFrame,
+                    unsigned long elapsedMs,
+                    unsigned long durationMs,
+                    BoardTransitionPhase phase,
+                    BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  const BoardTransitionDirection direction =
+      phase == BoardTransitionPhase::Forward ? BoardTransitionDirection::LeftToRight : BoardTransitionDirection::RightToLeft;
+  const int16_t edge = wipeEdgeForElapsed(elapsedMs, durationMs, direction);
+
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (direction == BoardTransitionDirection::LeftToRight) {
+        if (static_cast<int16_t>(col) < edge) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (static_cast<int16_t>(col) == edge) {
+          outFrame.pixels[row][col] = boostedScanColor(toFrame.pixels[row][col]);
+        }
+      } else {
+        if (static_cast<int16_t>(col) > edge) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (static_cast<int16_t>(col) == edge) {
+          outFrame.pixels[row][col] = boostedScanColor(toFrame.pixels[row][col]);
+        }
+      }
+    }
+  }
+}
+
+void applyGlitchOverwrite(const BoardFrame& fromFrame,
+                          const BoardFrame& toFrame,
+                          unsigned long elapsedMs,
+                          unsigned long durationMs,
+                          BoardTransitionPhase phase,
+                          BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  const unsigned long activeDuration = max(1UL, (durationMs * 7UL) / 10UL);
+  const unsigned long staggerSpan = durationMs > activeDuration ? durationMs - activeDuration : durationMs / 3UL;
+  const uint8_t maxRowStep = Config::kPanelRows > 1 ? Config::kPanelRows - 1 : 1;
+
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    const uint8_t rowOrder = phase == BoardTransitionPhase::Forward ? row : static_cast<uint8_t>((Config::kPanelRows - 1) - row);
+    const unsigned long offset = (static_cast<uint64_t>(staggerSpan) * rowOrder) / maxRowStep;
+    if (elapsedMs <= offset) {
+      continue;
+    }
+
+    unsigned long localElapsed = elapsedMs - offset;
+    if (localElapsed > activeDuration) {
+      localElapsed = activeDuration;
+    }
+
+    const float progress = static_cast<float>(localElapsed) / static_cast<float>(activeDuration);
+    const int8_t heavyShift = static_cast<int8_t>((phase == BoardTransitionPhase::Forward ? 1 : -1) * (2 + (row % 3)));
+    const int8_t settleShift = static_cast<int8_t>(phase == BoardTransitionPhase::Forward ? -1 : 1);
+
+    if (progress > 0.92f) {
+      for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+        outFrame.pixels[row][col] = toFrame.pixels[row][col];
+      }
+      continue;
+    }
+
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (progress < 0.34f) {
+        const bool mask = ((col + row + static_cast<uint8_t>(elapsedMs / 70UL)) % 5U) == 0U;
+        outFrame.pixels[row][col] = mask ? CRGB::Black : shiftedPixelOrBlack(fromFrame, row, col, heavyShift);
+      } else if (progress < 0.68f) {
+        const bool flicker = ((col * 3U + row + static_cast<uint8_t>(elapsedMs / 50UL)) % 7U) < 3U;
+        outFrame.pixels[row][col] = flicker ? CRGB::Black : shiftedPixelOrBlack(toFrame, row, col, static_cast<int8_t>(heavyShift / 2));
+      } else {
+        const bool spark = ((col + rowOrder + static_cast<uint8_t>(elapsedMs / 90UL)) % 6U) == 0U;
+        const CRGB settled = shiftedPixelOrBlack(toFrame, row, col, settleShift);
+        outFrame.pixels[row][col] = spark ? boostedScanColor(settled) : settled;
+      }
+    }
+  }
+}
+
+void applyCometOverwrite(const BoardFrame& fromFrame,
+                         const BoardFrame& toFrame,
+                         unsigned long elapsedMs,
+                         unsigned long durationMs,
+                         BoardTransitionPhase phase,
+                         BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  constexpr int8_t kTailLength = 3;
+  const BoardTransitionDirection direction =
+      phase == BoardTransitionPhase::Forward ? BoardTransitionDirection::LeftToRight : BoardTransitionDirection::RightToLeft;
+  const unsigned long totalSteps = Config::kPanelCols + kTailLength + 1;
+  const int16_t headPosition = static_cast<int16_t>((static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs) - 1;
+
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      const int16_t axis = direction == BoardTransitionDirection::LeftToRight
+          ? static_cast<int16_t>(col)
+          : static_cast<int16_t>((Config::kPanelCols - 1) - col);
+
+      if (axis < headPosition - kTailLength) {
+        outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        continue;
+      }
+
+      if (axis > headPosition) {
+        continue;
+      }
+
+      const int16_t distanceToHead = headPosition - axis;
+      if (distanceToHead == 0) {
+        outFrame.pixels[row][col] = boostedScanColor(toFrame.pixels[row][col]);
+      } else if (distanceToHead == 1) {
+        outFrame.pixels[row][col] = scaledColor(boostedScanColor(toFrame.pixels[row][col]), 210);
+      } else if (distanceToHead == 2) {
+        outFrame.pixels[row][col] = scaledColor(toFrame.pixels[row][col], 170);
+      } else {
+        outFrame.pixels[row][col] = scaledColor(toFrame.pixels[row][col], 120);
+      }
+    }
+  }
+}
 } // namespace
 
 unsigned long BoardTransition::adaptiveDurationMs(const BoardTransitionPlan& plan,
@@ -552,6 +786,18 @@ void BoardTransition::apply(BoardTransitionStyle style,
       return;
     case BoardTransitionStyle::PulseRing:
       applyPulseRing(fromFrame, toFrame, elapsedMs, durationMs, phase, outFrame);
+      return;
+    case BoardTransitionStyle::LaserScan:
+      applyLaserScan(fromFrame, toFrame, elapsedMs, durationMs, phase, outFrame);
+      return;
+    case BoardTransitionStyle::SpiralCollapse:
+      applyRandomOverlap(fromFrame, toFrame, plan, elapsedMs, durationMs, outFrame);
+      return;
+    case BoardTransitionStyle::GlitchOverwrite:
+      applyGlitchOverwrite(fromFrame, toFrame, elapsedMs, durationMs, phase, outFrame);
+      return;
+    case BoardTransitionStyle::CometOverwrite:
+      applyCometOverwrite(fromFrame, toFrame, elapsedMs, durationMs, phase, outFrame);
       return;
   }
 }
@@ -641,6 +887,14 @@ const char* BoardTransition::label(BoardTransitionStyle style) {
       return "venetian";
     case BoardTransitionStyle::PulseRing:
       return "pulse-ring";
+    case BoardTransitionStyle::LaserScan:
+      return "laser-scan";
+    case BoardTransitionStyle::SpiralCollapse:
+      return "spiral-collapse";
+    case BoardTransitionStyle::GlitchOverwrite:
+      return "glitch-overwrite";
+    case BoardTransitionStyle::CometOverwrite:
+      return "comet-overwrite";
   }
 
   return "blade-sweep";
@@ -654,6 +908,9 @@ void BoardTransition::prepare(BoardTransitionStyle style,
     case BoardTransitionStyle::Constellation:
       prepareRandomOverlap(fromFrame, toFrame, outPlan);
       return;
+    case BoardTransitionStyle::SpiralCollapse:
+      prepareSpiralOverlap(fromFrame, toFrame, outPlan);
+      return;
     case BoardTransitionStyle::ColumnWipe:
     case BoardTransitionStyle::ReverseWipe:
     case BoardTransitionStyle::CenterSplit:
@@ -665,6 +922,9 @@ void BoardTransition::prepare(BoardTransitionStyle style,
     case BoardTransitionStyle::MatrixRain:
     case BoardTransitionStyle::Venetian:
     case BoardTransitionStyle::PulseRing:
+    case BoardTransitionStyle::LaserScan:
+    case BoardTransitionStyle::GlitchOverwrite:
+    case BoardTransitionStyle::CometOverwrite:
       prepareColumnWipe(fromFrame, toFrame, outPlan);
       return;
   }
@@ -672,6 +932,10 @@ void BoardTransition::prepare(BoardTransitionStyle style,
 
 void BoardTransition::prepareColumnWipe(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
   prepareSimplePlan(fromFrame, toFrame, outPlan);
+}
+
+void BoardTransition::prepareSpiralOverlap(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
+  assignSpiralRanks(fromFrame, toFrame, outPlan);
 }
 
 void BoardTransition::prepareRandomOverlap(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {

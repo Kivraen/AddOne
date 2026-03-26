@@ -21,9 +21,11 @@ constexpr uint8_t kWifiReconnectMaxAttempts = 3;
 constexpr size_t kFactoryQaCommandCapacity = 768;
 
 enum class FriendCelebrationSpeed : uint8_t {
-  Fast = 0,
-  Balanced = 1,
-  Slow = 2,
+  VeryFast = 0,
+  Fast = 1,
+  Balanced = 2,
+  Slow = 3,
+  EvenSlower = 4,
 };
 
 unsigned long friendCelebrationTransitionDuration(FriendCelebrationSpeed speed, const BoardTransitionPlan& plan) {
@@ -32,18 +34,26 @@ unsigned long friendCelebrationTransitionDuration(FriendCelebrationSpeed speed, 
   }
 
   switch (speed) {
+    case FriendCelebrationSpeed::VeryFast:
+      return 500;
     case FriendCelebrationSpeed::Fast:
-      return 900;
+      return 1000;
     case FriendCelebrationSpeed::Balanced:
-      return 1600;
+      return 2000;
     case FriendCelebrationSpeed::Slow:
-      return 2600;
+      return 4600;
+    case FriendCelebrationSpeed::EvenSlower:
+      return 12200;
   }
 
-  return 1600;
+  return 2000;
 }
 
 FriendCelebrationSpeed parseFriendCelebrationSpeed(const String& value) {
+  if (value == "very_fast") {
+    return FriendCelebrationSpeed::VeryFast;
+  }
+
   if (value == "fast") {
     return FriendCelebrationSpeed::Fast;
   }
@@ -52,17 +62,25 @@ FriendCelebrationSpeed parseFriendCelebrationSpeed(const String& value) {
     return FriendCelebrationSpeed::Slow;
   }
 
+  if (value == "even_slower") {
+    return FriendCelebrationSpeed::EvenSlower;
+  }
+
   return FriendCelebrationSpeed::Balanced;
 }
 
 const char* friendCelebrationSpeedLabel(FriendCelebrationSpeed speed) {
   switch (speed) {
+    case FriendCelebrationSpeed::VeryFast:
+      return "very_fast";
     case FriendCelebrationSpeed::Fast:
       return "fast";
     case FriendCelebrationSpeed::Balanced:
       return "balanced";
     case FriendCelebrationSpeed::Slow:
       return "slow";
+    case FriendCelebrationSpeed::EvenSlower:
+      return "even_slower";
   }
 
   return "balanced";
@@ -113,12 +131,28 @@ BoardTransitionStyle parseFriendCelebrationTransitionStyle(const String& value) 
     return BoardTransitionStyle::PulseRing;
   }
 
+  if (value == "laser_scan") {
+    return BoardTransitionStyle::LaserScan;
+  }
+
+  if (value == "spiral_collapse") {
+    return BoardTransitionStyle::SpiralCollapse;
+  }
+
+  if (value == "glitch_overwrite") {
+    return BoardTransitionStyle::GlitchOverwrite;
+  }
+
+  if (value == "comet_overwrite") {
+    return BoardTransitionStyle::CometOverwrite;
+  }
+
   return BoardTransitionStyle::ColumnWipe;
 }
 
 unsigned long parseFriendCelebrationDwellMs(JsonDocument& doc) {
   const int dwellSeconds = doc["dwell_seconds"] | static_cast<int>(Config::kFriendCelebrationDwellMs / 1000);
-  const int clampedSeconds = dwellSeconds < 1 ? 1 : (dwellSeconds > 30 ? 30 : dwellSeconds);
+  const int clampedSeconds = dwellSeconds < 1 ? 1 : (dwellSeconds > 60 ? 60 : dwellSeconds);
   return static_cast<unsigned long>(clampedSeconds) * 1000UL;
 }
 

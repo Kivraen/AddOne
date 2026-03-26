@@ -27,6 +27,7 @@ function moveBoard<T>(items: T[], fromIndex: number, toIndex: number) {
 function ManageRow(
   props: DragListRenderItemInfo<SharedBoard> & {
     celebrationBusy: boolean;
+    isArrangeMode: boolean;
     onOpenSettings: (board: SharedBoard) => void;
     onRemove: (board: SharedBoard) => void;
     removeBusy: boolean;
@@ -53,24 +54,6 @@ function ManageRow(
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable
-          disabled={isBusy}
-          hitSlop={10}
-          onPressIn={onDragStart}
-          onPressOut={onDragEnd}
-          style={{
-            alignItems: "center",
-            justifyContent: "center",
-            width: 38,
-            height: 38,
-            borderRadius: theme.radius.full,
-            backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-            opacity: isBusy ? 0.6 : 1,
-          }}
-        >
-          <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
-        </Pressable>
-
         <View
           style={{
             alignItems: "center",
@@ -95,8 +78,12 @@ function ManageRow(
 
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Pressable
-            disabled={isBusy}
-            onPress={() => props.onOpenSettings(board)}
+            disabled={isBusy || props.isArrangeMode}
+            onPress={() => {
+              if (!props.isArrangeMode) {
+                props.onOpenSettings(board);
+              }
+            }}
             style={{ gap: 2 }}
           >
             <Text
@@ -136,22 +123,12 @@ function ManageRow(
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {props.celebrationBusy ? (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                width: 38,
-                height: 38,
-              }}
-            >
-              <ActivityIndicator color={theme.colors.accentAmber} />
-            </View>
-          ) : (
+          {props.isArrangeMode ? (
             <Pressable
-              disabled={props.celebrationBusy}
+              disabled={isBusy}
               hitSlop={10}
-              onPress={() => props.onOpenSettings(board)}
+              onPressIn={onDragStart}
+              onPressOut={onDragEnd}
               style={{
                 alignItems: "center",
                 justifyContent: "center",
@@ -159,37 +136,64 @@ function ManageRow(
                 height: 38,
                 borderRadius: theme.radius.full,
                 backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
-                opacity: props.celebrationBusy ? 0.6 : 1,
+                opacity: isBusy ? 0.6 : 1,
               }}
             >
-              <Ionicons
-                color={theme.colors.textSecondary}
-                name="options-outline"
-                size={18}
-              />
+              <Ionicons color={theme.colors.textSecondary} name="reorder-three-outline" size={20} />
             </Pressable>
+          ) : (
+            <>
+              {props.celebrationBusy ? (
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 38,
+                    height: 38,
+                  }}
+                >
+                  <ActivityIndicator color={theme.colors.accentAmber} />
+                </View>
+              ) : (
+                <Pressable
+                  disabled={props.celebrationBusy}
+                  hitSlop={10}
+                  onPress={() => props.onOpenSettings(board)}
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 38,
+                    height: 38,
+                    borderRadius: theme.radius.full,
+                    backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+                    opacity: props.celebrationBusy ? 0.6 : 1,
+                  }}
+                >
+                  <Ionicons color={theme.colors.textSecondary} name="settings-outline" size={18} />
+                </Pressable>
+              )}
+              <Pressable
+                disabled={isBusy}
+                hitSlop={10}
+                onPress={() => props.onRemove(board)}
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 38,
+                  height: 38,
+                  borderRadius: theme.radius.full,
+                  backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
+                  opacity: isBusy ? 0.6 : 1,
+                }}
+              >
+                {props.removeBusy ? (
+                  <ActivityIndicator color={theme.colors.statusErrorMuted} />
+                ) : (
+                  <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
+                )}
+              </Pressable>
+            </>
           )}
-
-          <Pressable
-            disabled={isBusy}
-            hitSlop={10}
-            onPress={() => props.onRemove(board)}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 38,
-              height: 38,
-              borderRadius: theme.radius.full,
-              backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
-              opacity: isBusy ? 0.6 : 1,
-            }}
-          >
-            {props.removeBusy ? (
-              <ActivityIndicator color={theme.colors.statusErrorMuted} />
-            ) : (
-              <Ionicons color={theme.colors.statusErrorMuted} name="trash-outline" size={18} />
-            )}
-          </Pressable>
         </View>
       </View>
     </GlassCard>
@@ -211,6 +215,7 @@ export function FriendsArrangeScreen() {
   } = useFriends();
   const { orderedBoards, saveBoardOrder } = useFriendsBoardOrder(sharedBoards);
   const [activeRemoveMembershipId, setActiveRemoveMembershipId] = useState<string | null>(null);
+  const [isArrangeMode, setIsArrangeMode] = useState(false);
   const data = useMemo(() => orderedBoards, [orderedBoards]);
   const enabledCelebrationCount = useMemo(
     () => data.filter((board) => board.celebrationEnabled).length,
@@ -235,18 +240,26 @@ export function FriendsArrangeScreen() {
         }}
       >
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: 15,
-                lineHeight: 20,
-              }}
-            >
-              Board reveals
-            </Text>
-          </View>
+          <Pressable
+            hitSlop={8}
+            onPress={() =>
+              Alert.alert(
+                "Board reveals",
+                "A friend's board can briefly appear on your device after they complete today's check-in. Open any board to turn reveals on or off, pick a transition, and preview it.",
+                [{ text: "Close", style: "cancel" }],
+              )
+            }
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              width: 32,
+              height: 32,
+              borderRadius: theme.radius.full,
+              backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+            }}
+          >
+            <Ionicons color={theme.colors.textSecondary} name="information-circle-outline" size={18} />
+          </Pressable>
           <View
             style={{
               paddingHorizontal: 10,
@@ -269,22 +282,28 @@ export function FriendsArrangeScreen() {
         </View>
         <Pressable
           hitSlop={8}
-          onPress={() =>
-            Alert.alert(
-              "Board reveals",
-              "A friend's board can briefly appear on your device after they complete today's check-in. Open any board to turn reveals on or off, pick a transition, and preview it. Drag to sort boards. Use the trash icon to remove one.",
-            )
-          }
+          onPress={() => setIsArrangeMode((current) => !current)}
           style={{
+            minHeight: 34,
             alignItems: "center",
             justifyContent: "center",
-            width: 32,
-            height: 32,
             borderRadius: theme.radius.full,
-            backgroundColor: withAlpha(theme.colors.textPrimary, 0.04),
+            backgroundColor: isArrangeMode
+              ? withAlpha(theme.colors.accentAmber, 0.16)
+              : withAlpha(theme.colors.textPrimary, 0.05),
+            paddingHorizontal: 14,
           }}
         >
-          <Ionicons color={theme.colors.textSecondary} name="information-circle-outline" size={18} />
+          <Text
+            style={{
+              color: isArrangeMode ? theme.colors.accentAmber : theme.colors.textPrimary,
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: 14,
+              lineHeight: 18,
+            }}
+          >
+            {isArrangeMode ? "Done" : "Arrange"}
+          </Text>
         </Pressable>
       </View>
       {showErrorBanner ? (
@@ -364,6 +383,7 @@ export function FriendsArrangeScreen() {
           headerShown: true,
           title: "Manage boards",
           headerTitleAlign: "center",
+          headerRight: () => null,
           headerShadowVisible: false,
           headerStyle: { backgroundColor: theme.colors.bgBase },
           headerTintColor: theme.colors.textPrimary,
@@ -447,6 +467,7 @@ export function FriendsArrangeScreen() {
                 <ManageRow
                   {...info}
                   celebrationBusy={false}
+                  isArrangeMode={isArrangeMode}
                   onOpenSettings={openBoardSettings}
                   onRemove={confirmRemove}
                   removeBusy={isLeavingSharedBoard && activeRemoveMembershipId === info.item.viewerMembershipId}

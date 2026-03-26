@@ -166,8 +166,12 @@ export type CelebrationTransitionStyle =
   | "reverse_diagonal"
   | "matrix_rain"
   | "venetian"
-  | "pulse_ring";
-export type CelebrationTransitionSpeed = "fast" | "balanced" | "slow";
+  | "pulse_ring"
+  | "laser_scan"
+  | "spiral_collapse"
+  | "glitch_overwrite"
+  | "comet_overwrite";
+export type CelebrationTransitionSpeed = "very_fast" | "fast" | "balanced" | "slow" | "even_slower";
 
 export interface SharedBoard {
   celebrationEnabled: boolean;

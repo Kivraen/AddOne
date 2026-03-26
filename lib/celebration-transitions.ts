@@ -82,9 +82,34 @@ export const CELEBRATION_TRANSITION_OPTIONS: CelebrationTransitionOption[] = [
     label: "Pulse ring",
     description: "The board radiates from the center like a pulse.",
   },
+  {
+    id: "laser_scan",
+    label: "Laser scan",
+    description: "A bright scanline cuts across the board and burns in the next frame.",
+  },
+  {
+    id: "spiral_collapse",
+    label: "Spiral collapse",
+    description: "The current board folds inward while the next frame spirals back out.",
+  },
+  {
+    id: "glitch_overwrite",
+    label: "Glitch overwrite",
+    description: "Horizontal slices scramble, flicker, and snap into the new board.",
+  },
+  {
+    id: "comet_overwrite",
+    label: "Comet overwrite",
+    description: "A bright moving head with a short tail paints the next board into place.",
+  },
 ];
 
 export const CELEBRATION_TRANSITION_SPEED_OPTIONS: CelebrationTransitionSpeedOption[] = [
+  {
+    id: "very_fast",
+    label: "Even faster",
+    description: "The quickest pass with almost no dwell inside the motion itself.",
+  },
   {
     id: "fast",
     label: "Fast",
@@ -100,6 +125,11 @@ export const CELEBRATION_TRANSITION_SPEED_OPTIONS: CelebrationTransitionSpeedOpt
     label: "Slow",
     description: "A more deliberate reveal when you want it to breathe.",
   },
+  {
+    id: "even_slower",
+    label: "Even slower",
+    description: "A long dramatic handoff with a much heavier pause in the motion.",
+  },
 ];
 
 export const CELEBRATION_DWELL_OPTIONS: CelebrationDwellOption[] = [
@@ -108,6 +138,8 @@ export const CELEBRATION_DWELL_OPTIONS: CelebrationDwellOption[] = [
   { seconds: 8, label: "8s" },
   { seconds: 12, label: "12s" },
   { seconds: 15, label: "15s" },
+  { seconds: 30, label: "30s" },
+  { seconds: 60, label: "60s" },
 ];
 
 export function getCelebrationTransitionOption(transition: CelebrationTransitionStyle) {
@@ -122,4 +154,25 @@ export function getCelebrationTransitionSpeedOption(speed: CelebrationTransition
     CELEBRATION_TRANSITION_SPEED_OPTIONS.find((option) => option.id === speed) ??
     CELEBRATION_TRANSITION_SPEED_OPTIONS[1]
   );
+}
+
+export function getCelebrationTransitionDurationMs(speed: CelebrationTransitionSpeed) {
+  switch (speed) {
+    case "very_fast":
+      return 500;
+    case "fast":
+      return 1000;
+    case "even_slower":
+      return 12200;
+    case "slow":
+      return 4600;
+    case "balanced":
+    default:
+      return 2000;
+  }
+}
+
+export function getCelebrationPreviewPlaybackMs(speed: CelebrationTransitionSpeed, dwellSeconds: number) {
+  const transitionMs = getCelebrationTransitionDurationMs(speed);
+  return transitionMs + dwellSeconds * 1000 + transitionMs;
 }
