@@ -110,7 +110,6 @@ private:
   bool renderRecoveryVisualIfActive_(uint8_t brightness);
   void resetWifiReconnectPolicy_();
   void setRecoveryVisualStage_(RecoveryVisualStage stage);
-  bool shouldProcessTrackingShortPress_();
   void startRecoveryVisualCompletion_();
   void syncTask_();
   void tickFriendCelebration_();
@@ -160,7 +159,6 @@ private:
   bool factoryQaRequestedAtBoot_ = false;
   bool factoryResetRequestedAtBoot_ = false;
   bool recoveryRequestedAtRuntime_ = false;
-  bool deferredShortPressAfterFriendCelebration_ = false;
   bool pendingFactoryReset_ = false;
   volatile bool runtimeSnapshotDirty_ = true;
   bool lastWifiConnected_ = false;

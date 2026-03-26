@@ -63,6 +63,24 @@ uint16_t transitionCountForElapsed(unsigned long elapsedMs, unsigned long durati
   return static_cast<uint16_t>((static_cast<uint64_t>(elapsedMs) * totalCount) / durationMs);
 }
 
+int16_t wipeEdgeForElapsed(unsigned long elapsedMs, unsigned long durationMs, BoardTransitionDirection direction) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    return direction == BoardTransitionDirection::LeftToRight
+        ? static_cast<int16_t>(Config::kPanelCols)
+        : static_cast<int16_t>(-1);
+  }
+
+  const unsigned long totalSteps = Config::kPanelCols + 1;
+  const unsigned long progressedSteps =
+      (static_cast<uint64_t>(elapsedMs) * totalSteps) / durationMs;
+
+  if (direction == BoardTransitionDirection::LeftToRight) {
+    return static_cast<int16_t>(progressedSteps);
+  }
+
+  return static_cast<int16_t>(Config::kPanelCols - 1) - static_cast<int16_t>(progressedSteps);
+}
+
 void assignRandomRanks(const BoardFrame& fromFrame,
                        const BoardFrame& toFrame,
                        uint16_t outRanks[Config::kPanelRows][Config::kPanelCols]) {
@@ -105,6 +123,38 @@ unsigned long BoardTransition::adaptiveDurationMs(const BoardTransitionPlan& pla
          static_cast<unsigned long>((static_cast<uint64_t>(durationRangeMs) * plan.changedPixelCount) / kTotalPixels);
 }
 
+void BoardTransition::applyColumnWipe(const BoardFrame& fromFrame,
+                                      const BoardFrame& toFrame,
+                                      unsigned long elapsedMs,
+                                      unsigned long durationMs,
+                                      BoardTransitionDirection direction,
+                                      BoardFrame& outFrame) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    outFrame = toFrame;
+    return;
+  }
+
+  outFrame = fromFrame;
+  const int16_t wipeEdge = wipeEdgeForElapsed(elapsedMs, durationMs, direction);
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (direction == BoardTransitionDirection::LeftToRight) {
+        if (static_cast<int16_t>(col) < wipeEdge) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (static_cast<int16_t>(col) == wipeEdge) {
+          outFrame.pixels[row][col] = CRGB::Black;
+        }
+      } else {
+        if (static_cast<int16_t>(col) > wipeEdge) {
+          outFrame.pixels[row][col] = toFrame.pixels[row][col];
+        } else if (static_cast<int16_t>(col) == wipeEdge) {
+          outFrame.pixels[row][col] = CRGB::Black;
+        }
+      }
+    }
+  }
+}
+
 void BoardTransition::applyRandomOverlap(const BoardFrame& fromFrame,
                                          const BoardFrame& toFrame,
                                          const BoardTransitionPlan& plan,
@@ -127,6 +177,17 @@ void BoardTransition::applyRandomOverlap(const BoardFrame& fromFrame,
         outFrame.pixels[row][col] = toFrame.pixels[row][col];
       } else if (shouldClearOutgoing) {
         outFrame.pixels[row][col] = CRGB::Black;
+      }
+    }
+  }
+}
+
+void BoardTransition::prepareColumnWipe(const BoardFrame& fromFrame, const BoardFrame& toFrame, BoardTransitionPlan& outPlan) {
+  initializePlan(outPlan);
+  for (uint8_t row = 0; row < Config::kPanelRows; ++row) {
+    for (uint8_t col = 0; col < Config::kPanelCols; ++col) {
+      if (!colorsMatch(fromFrame.pixels[row][col], toFrame.pixels[row][col])) {
+        ++outPlan.changedPixelCount;
       }
     }
   }

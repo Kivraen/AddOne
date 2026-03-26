@@ -615,9 +615,6 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   } else {
     friendCelebrationPlayback_.active = false;
   }
-  if (nextState != FirmwareState::Tracking && nextState != FirmwareState::FriendCelebration) {
-    deferredShortPressAfterFriendCelebration_ = false;
-  }
   if (nextState != FirmwareState::Reward) {
     rewardEngine_.clear();
   }
@@ -704,15 +701,6 @@ bool FirmwareApp::renderRecoveryVisualIfActive_(uint8_t brightness) {
 
   boardRenderer_.renderRecoveryState(recoveryVisualStage_, brightness);
   return true;
-}
-
-bool FirmwareApp::shouldProcessTrackingShortPress_() {
-  if (deferredShortPressAfterFriendCelebration_) {
-    deferredShortPressAfterFriendCelebration_ = false;
-    return true;
-  }
-
-  return buttonInput_.consumeShortPress();
 }
 
 bool FirmwareApp::tryEmitFriendCelebration_() {
@@ -1429,14 +1417,14 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
       return false;
     }
 
-    BoardTransition::prepareRandomOverlap(
+    BoardTransition::prepareColumnWipe(
         friendCelebrationPlayback_.ownerFrame, friendCelebrationPlayback_.friendFrame, friendCelebrationPlayback_.transitionPlan);
     friendCelebrationPlayback_.dissolveDurationMs =
         friendCelebrationTransitionDuration(friendCelebrationPlayback_.transitionPlan);
     friendCelebrationPlayback_.startedAtMs = millis();
     enterState_(FirmwareState::FriendCelebration);
     Serial.printf(
-        "Playing friend celebration from %s with random-overlap (%u changed pixels, %lu ms)\n",
+        "Playing friend celebration from %s with column-wipe (%u changed pixels, %lu ms)\n",
         (doc["source_device_id"] | "friend"),
         friendCelebrationPlayback_.transitionPlan.changedPixelCount,
         friendCelebrationPlayback_.dissolveDurationMs);
@@ -1646,8 +1634,7 @@ void FirmwareApp::tickSetupRecovery_() {
     xSemaphoreGive(stateMutex_);
   }
 
-  if (buttonInput_.consumeLongHold()) {
-    recoveryRequestedAtRuntime_ = true;
+  while (buttonInput_.consumeLongHold()) {
   }
 
   const bool pendingClaimBeforeApLoop = provisioningStore_.hasPendingClaim();
@@ -1760,7 +1747,7 @@ void FirmwareApp::tickTracking_() {
         markRuntimeSnapshotDirty_();
       }
 
-      if (shouldProcessTrackingShortPress_()) {
+      if (buttonInput_.consumeShortPress()) {
         bool isDone = false;
         const int8_t weekSuccessBefore = habitTracker_.currentWeekSuccess();
         if (habitTracker_.queueLocalToggleToday(logicalNow, isDone)) {
@@ -1871,10 +1858,7 @@ void FirmwareApp::tickFriendCelebration_() {
     return;
   }
 
-  if (buttonInput_.consumeShortPress()) {
-    deferredShortPressAfterFriendCelebration_ = true;
-    enterState_(FirmwareState::Tracking);
-    return;
+  while (buttonInput_.consumeShortPress()) {
   }
 
   if (!friendCelebrationPlayback_.active) {
@@ -1894,12 +1878,12 @@ void FirmwareApp::tickFriendCelebration_() {
 
   if (elapsedMs < dissolveDurationMs) {
     BoardFrame transitionFrame{};
-    BoardTransition::applyRandomOverlap(
+    BoardTransition::applyColumnWipe(
         friendCelebrationPlayback_.ownerFrame,
         friendCelebrationPlayback_.friendFrame,
-        friendCelebrationPlayback_.transitionPlan,
         elapsedMs,
         dissolveDurationMs,
+        BoardTransitionDirection::LeftToRight,
         transitionFrame);
     boardRenderer_.renderFrame(transitionFrame, brightness);
     return;
@@ -1911,12 +1895,12 @@ void FirmwareApp::tickFriendCelebration_() {
   }
 
   BoardFrame transitionFrame{};
-  BoardTransition::applyRandomOverlap(
+  BoardTransition::applyColumnWipe(
       friendCelebrationPlayback_.friendFrame,
       friendCelebrationPlayback_.ownerFrame,
-      friendCelebrationPlayback_.transitionPlan,
       elapsedMs - dissolveDurationMs - Config::kFriendCelebrationDwellMs,
       dissolveDurationMs,
+      BoardTransitionDirection::RightToLeft,
       transitionFrame);
   boardRenderer_.renderFrame(transitionFrame, brightness);
 }
