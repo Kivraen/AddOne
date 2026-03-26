@@ -72,6 +72,46 @@ private:
     bool active = false;
   };
 
+  struct AmbientBrightnessLogState {
+    bool enabled = false;
+    bool fsReady = false;
+    unsigned long lastSampleAtMs = 0;
+    size_t lastFileSizeBytes = 0;
+    String activePath{};
+    String lastError{};
+  };
+
+  struct AmbientBrightnessLogStatus {
+    bool enabled = false;
+    bool fsReady = false;
+    unsigned long sampleIntervalMs = 0;
+    uint32_t maxFileBytes = 0;
+    uint32_t reserveBytes = 0;
+    bool timeValid = false;
+    FirmwareState state = FirmwareState::SetupRecovery;
+    bool ambientAuto = true;
+    uint8_t manualBrightnessSetting = 0;
+    uint16_t rawSensor = 0;
+    uint16_t smoothedSensor = 0;
+    float normalizedSensor = 0.0f;
+    uint8_t targetBrightness = 0;
+    uint8_t actualBrightness = 0;
+    String currentPath{};
+    uint32_t lastFileSizeBytes = 0;
+    String lastError{};
+    bool hasFsStats = false;
+    uint32_t fsTotalBytes = 0;
+    uint32_t fsUsedBytes = 0;
+  };
+
+  struct AmbientBrightnessLogCommand {
+    String id{};
+    String cmd{};
+    bool clearExisting = false;
+    String requestedDate{};
+    String requestedPath{};
+  };
+
   static constexpr size_t kPendingCommandAckQueueSize = 16;
   static constexpr size_t kIncomingCommandQueueSize = 16;
 
@@ -97,12 +137,20 @@ private:
   void enterState_(FirmwareState nextState);
   void emitFactoryQaButtonEvent_(const char* kind);
   void emitFactoryQaError_(const String& id, const char* cmd, const char* error);
+  AmbientBrightnessLogStatus captureAmbientBrightnessLogStatus_() const;
+  String formatAmbientLocalTimestamp_() const;
+  String formatAmbientLogPath_(const String& localDate) const;
   void flushPendingCommandAcks_();
   bool flushRuntimeSnapshot_();
   bool handleFactoryQa_();
+  bool handleAmbientBrightnessLogCommand_(const AmbientBrightnessLogCommand& command);
   bool hasAuthoritativeTime_() const;
   bool hasPendingAcks_();
+  bool clearAmbientBrightnessLogs_(String& errorOut);
+  void loadAmbientBrightnessLogPrefs_();
+  bool mountAmbientBrightnessFs_();
   void migrateReadyForTrackingFlag_();
+  void markRuntimeSnapshotDirty_();
   void pollCommands_();
   void processFactoryQaCommand_(const String& line);
   void processRealtimeCommands_();
@@ -113,7 +161,10 @@ private:
   bool shouldProcessTrackingShortPress_();
   void startRecoveryVisualCompletion_();
   void syncTask_();
+  bool setAmbientBrightnessLoggingEnabled_(bool enabled, String& errorOut);
+  bool streamAmbientBrightnessLog_(const String& requestedDate, const String& requestedPath, String& errorOut);
   void tickFriendCelebration_();
+  void tickAmbientBrightnessLogging_();
   void tickReward_();
   void tickSetupRecovery_();
   void tickTracking_();
@@ -123,7 +174,7 @@ private:
   bool tryReconnectForFactoryResetReport_(uint32_t nextResetEpoch);
   void updateFriendCelebrationSenderStateLocked_(const tm& logicalNow);
   unsigned long wifiReconnectBackoffMs_(uint8_t attemptNumber) const;
-  void markRuntimeSnapshotDirty_();
+  bool writeAmbientBrightnessLogRow_();
 
   BoardRenderer boardRenderer_{};
   ButtonInput buttonInput_{};
@@ -156,6 +207,7 @@ private:
   unsigned long wifiReconnectAttemptStartedAtMs_ = 0;
   FriendCelebrationSenderState friendCelebrationSender_{};
   FriendCelebrationPlaybackState friendCelebrationPlayback_{};
+  AmbientBrightnessLogState ambientBrightnessLog_{};
   bool recoveryRequestedAtBoot_ = false;
   bool factoryQaRequestedAtBoot_ = false;
   bool factoryResetRequestedAtBoot_ = false;

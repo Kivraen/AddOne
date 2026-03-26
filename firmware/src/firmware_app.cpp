@@ -1,6 +1,8 @@
 #include "firmware_app.h"
 
 #include <ArduinoJson.h>
+#include <LittleFS.h>
+#include <Preferences.h>
 #include <WiFi.h>
 
 #include "cloud_config.h"
@@ -8,6 +10,16 @@
 
 namespace {
 constexpr unsigned long kClaimRetryIntervalMs = 3000;
+constexpr const char* kAmbientLogCsvHeader =
+    "timestamp_local,timestamp_epoch,uptime_ms,firmware_state,ambient_auto,manual_brightness_setting,raw_sensor,smoothed_sensor,normalized_sensor,target_brightness,actual_brightness\n";
+constexpr const char* kAmbientLogDateFallback = "no-time";
+constexpr const char* kAmbientLogFilePrefix = "/ambient-brightness-";
+constexpr const char* kAmbientLogFileSuffix = ".csv";
+constexpr const char* kAmbientLogPrefsNamespace = "diag";
+constexpr const char* kAmbientLogEnabledKey = "ambLogEn";
+constexpr unsigned long kAmbientLogSampleMs = 10000;
+constexpr size_t kAmbientLogMaxFileBytes = 1024 * 1024;
+constexpr size_t kAmbientLogReserveBytes = 128 * 1024;
 constexpr unsigned long kFallbackCommandPollWhenNoRealtimeMs = 5000;
 constexpr unsigned long kRuntimeSnapshotSyncIntervalMs = 250;
 constexpr unsigned long kHeartbeatIntervalMs = 60000;
@@ -39,6 +51,10 @@ bool parseWeekDateString(const String& input, HabitTracker::WeekDate& outDate) {
   outDate.month = month;
   outDate.day = day;
   return true;
+}
+
+bool isAmbientLogPath(const String& path) {
+  return path.startsWith(kAmbientLogFilePrefix) && path.endsWith(kAmbientLogFileSuffix);
 }
 
 void populateSettingsSyncPayload(JsonObjectConst settingsObject, DeviceSettingsSyncPayload& payload) {
@@ -302,6 +318,7 @@ void FirmwareApp::begin() {
   cloudClient_.begin(identity_);
   timeService_.begin();
   timeService_.applySettings(deviceSettings_.current());
+  loadAmbientBrightnessLogPrefs_();
   if (factoryResetRequestedAtBoot_) {
     performFactoryReset_("Boot-time factory reset requested.", true);
     return;
@@ -344,6 +361,392 @@ void FirmwareApp::begin() {
   }
 }
 
+void FirmwareApp::loadAmbientBrightnessLogPrefs_() {
+  Preferences prefs;
+  if (!prefs.begin(kAmbientLogPrefsNamespace, true)) {
+    ambientBrightnessLog_.enabled = false;
+    ambientBrightnessLog_.lastError = "Ambient log preferences could not be opened.";
+    return;
+  }
+
+  ambientBrightnessLog_.enabled = prefs.getBool(kAmbientLogEnabledKey, false);
+  prefs.end();
+}
+
+bool FirmwareApp::mountAmbientBrightnessFs_() {
+  if (ambientBrightnessLog_.fsReady) {
+    return true;
+  }
+
+  if (!LittleFS.begin(false)) {
+    ambientBrightnessLog_.lastError = "LittleFS mount failed.";
+    return false;
+  }
+
+  ambientBrightnessLog_.fsReady = true;
+  return true;
+}
+
+String FirmwareApp::formatAmbientLocalTimestamp_() const {
+  tm localNow{};
+  if (!timeService_.nowLocal(localNow)) {
+    return String();
+  }
+
+  char buffer[20];
+  snprintf(buffer,
+           sizeof(buffer),
+           "%04d-%02d-%02dT%02d:%02d:%02d",
+           localNow.tm_year + 1900,
+           localNow.tm_mon + 1,
+           localNow.tm_mday,
+           localNow.tm_hour,
+           localNow.tm_min,
+           localNow.tm_sec);
+  return String(buffer);
+}
+
+String FirmwareApp::formatAmbientLogPath_(const String& localDate) const {
+  const String safeDate = localDate.isEmpty() ? String(kAmbientLogDateFallback) : localDate;
+  return String(kAmbientLogFilePrefix) + safeDate + kAmbientLogFileSuffix;
+}
+
+bool FirmwareApp::setAmbientBrightnessLoggingEnabled_(bool enabled, String& errorOut) {
+  if (enabled && !mountAmbientBrightnessFs_()) {
+    errorOut = ambientBrightnessLog_.lastError;
+    return false;
+  }
+
+  Preferences prefs;
+  if (!prefs.begin(kAmbientLogPrefsNamespace, false)) {
+    errorOut = "Ambient log preferences could not be updated.";
+    ambientBrightnessLog_.lastError = errorOut;
+    return false;
+  }
+
+  prefs.putBool(kAmbientLogEnabledKey, enabled);
+  prefs.end();
+
+  ambientBrightnessLog_.enabled = enabled;
+  ambientBrightnessLog_.lastSampleAtMs = 0;
+  if (!enabled) {
+    ambientBrightnessLog_.activePath = "";
+  }
+  return true;
+}
+
+FirmwareApp::AmbientBrightnessLogStatus FirmwareApp::captureAmbientBrightnessLogStatus_() const {
+  AmbientBrightnessLogStatus status{};
+  status.enabled = ambientBrightnessLog_.enabled;
+  status.fsReady = ambientBrightnessLog_.fsReady;
+  status.sampleIntervalMs = kAmbientLogSampleMs;
+  status.maxFileBytes = static_cast<uint32_t>(kAmbientLogMaxFileBytes);
+  status.reserveBytes = static_cast<uint32_t>(kAmbientLogReserveBytes);
+  status.timeValid = timeService_.hasValidTime();
+  status.state = state_;
+  status.ambientAuto = deviceSettings_.current().ambientAuto;
+  status.manualBrightnessSetting = deviceSettings_.current().brightness;
+  status.rawSensor = ambientLight_.raw();
+  status.smoothedSensor = ambientLight_.filteredRaw();
+  status.normalizedSensor = ambientLight_.normalized01();
+  status.targetBrightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  status.actualBrightness = boardRenderer_.lastAppliedBrightness();
+  status.currentPath =
+      ambientBrightnessLog_.activePath.isEmpty() ? formatAmbientLogPath_(timeService_.currentLocalDate()) : ambientBrightnessLog_.activePath;
+  status.lastFileSizeBytes = static_cast<uint32_t>(ambientBrightnessLog_.lastFileSizeBytes);
+  status.lastError = ambientBrightnessLog_.lastError;
+
+  if (ambientBrightnessLog_.fsReady) {
+    status.hasFsStats = true;
+    status.fsTotalBytes = static_cast<uint32_t>(LittleFS.totalBytes());
+    status.fsUsedBytes = static_cast<uint32_t>(LittleFS.usedBytes());
+  }
+
+  return status;
+}
+
+bool FirmwareApp::clearAmbientBrightnessLogs_(String& errorOut) {
+  if (ambientBrightnessLog_.enabled) {
+    errorOut = "Stop ambient logging before clearing files.";
+    return false;
+  }
+
+  if (!mountAmbientBrightnessFs_()) {
+    errorOut = ambientBrightnessLog_.lastError;
+    return false;
+  }
+
+  File root = LittleFS.open("/");
+  if (!root || !root.isDirectory()) {
+    errorOut = "Ambient log root directory could not be opened.";
+    return false;
+  }
+
+  File entry = root.openNextFile();
+  while (entry) {
+    const String path = entry.name();
+    const bool isDirectory = entry.isDirectory();
+    entry.close();
+    if (!isDirectory && isAmbientLogPath(path) && !LittleFS.remove(path.c_str())) {
+      errorOut = "Ambient log file could not be removed.";
+      root.close();
+      return false;
+    }
+    entry = root.openNextFile();
+  }
+
+  root.close();
+  ambientBrightnessLog_.activePath = "";
+  ambientBrightnessLog_.lastFileSizeBytes = 0;
+  ambientBrightnessLog_.lastError = "";
+  return true;
+}
+
+bool FirmwareApp::streamAmbientBrightnessLog_(const String& requestedDate, const String& requestedPath, String& errorOut) {
+  if (!mountAmbientBrightnessFs_()) {
+    errorOut = ambientBrightnessLog_.lastError;
+    return false;
+  }
+
+  String path = requestedPath;
+  if (path.isEmpty()) {
+    path = formatAmbientLogPath_(requestedDate.isEmpty() ? timeService_.currentLocalDate() : requestedDate);
+  }
+
+  if (!LittleFS.exists(path.c_str())) {
+    errorOut = "Ambient log file does not exist.";
+    return false;
+  }
+
+  File file = LittleFS.open(path.c_str(), FILE_READ);
+  if (!file) {
+    errorOut = "Ambient log file could not be opened.";
+    return false;
+  }
+
+  Serial.printf("LIGHT_LOG_CSV_BEGIN %s\n", path.c_str());
+  uint8_t buffer[256];
+  while (file.available()) {
+    const size_t bytesRead = file.read(buffer, sizeof(buffer));
+    if (bytesRead == 0) {
+      break;
+    }
+    Serial.write(buffer, bytesRead);
+  }
+  if (file.size() > 0) {
+    Serial.println();
+  }
+  Serial.printf("LIGHT_LOG_CSV_END %s\n", path.c_str());
+  file.close();
+  return true;
+}
+
+bool FirmwareApp::writeAmbientBrightnessLogRow_() {
+  if (!ambientBrightnessLog_.enabled) {
+    return false;
+  }
+
+  const unsigned long nowMs = millis();
+  if (nowMs - ambientBrightnessLog_.lastSampleAtMs < kAmbientLogSampleMs) {
+    return false;
+  }
+
+  ambientBrightnessLog_.lastSampleAtMs = nowMs;
+
+  if (!timeService_.hasValidTime()) {
+    ambientBrightnessLog_.lastError = "Waiting for valid time.";
+    return false;
+  }
+
+  if (!mountAmbientBrightnessFs_()) {
+    return false;
+  }
+
+  if (LittleFS.totalBytes() <= LittleFS.usedBytes() + kAmbientLogReserveBytes) {
+    String disableError;
+    setAmbientBrightnessLoggingEnabled_(false, disableError);
+    ambientBrightnessLog_.lastError = "Ambient log stopped to preserve LittleFS free space.";
+    return false;
+  }
+
+  const String localDate = timeService_.currentLocalDate();
+  const String localTimestamp = formatAmbientLocalTimestamp_();
+  const String path = formatAmbientLogPath_(localDate);
+  const bool fileExists = LittleFS.exists(path.c_str());
+  size_t existingSize = 0;
+  if (fileExists) {
+    File existing = LittleFS.open(path.c_str(), FILE_READ);
+    if (existing) {
+      existingSize = existing.size();
+      existing.close();
+    }
+  }
+
+  if (existingSize >= kAmbientLogMaxFileBytes) {
+    String disableError;
+    setAmbientBrightnessLoggingEnabled_(false, disableError);
+    ambientBrightnessLog_.lastError = "Ambient log stopped because the daily CSV reached its size limit.";
+    return false;
+  }
+
+  File file = LittleFS.open(path.c_str(), fileExists ? FILE_APPEND : FILE_WRITE);
+  if (!file) {
+    ambientBrightnessLog_.lastError = "Ambient log file could not be opened for append.";
+    return false;
+  }
+
+  size_t bytesWritten = 0;
+  if (!fileExists || file.size() == 0) {
+    bytesWritten += file.print(kAmbientLogCsvHeader);
+  }
+
+  const DeviceSettingsState settings = deviceSettings_.current();
+  const uint8_t targetBrightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
+  const uint8_t actualBrightness = boardRenderer_.lastAppliedBrightness();
+  char row[224];
+  const int rowLength = snprintf(row,
+                                 sizeof(row),
+                                 "%s,%lld,%lu,%s,%u,%u,%u,%u,%.4f,%u,%u\n",
+                                 localTimestamp.c_str(),
+                                 static_cast<long long>(timeService_.currentUtc()),
+                                 static_cast<unsigned long>(nowMs),
+                                 stateName(state_),
+                                 settings.ambientAuto ? 1 : 0,
+                                 settings.brightness,
+                                 static_cast<unsigned>(ambientLight_.raw()),
+                                 static_cast<unsigned>(ambientLight_.filteredRaw()),
+                                 static_cast<double>(ambientLight_.normalized01()),
+                                 static_cast<unsigned>(targetBrightness),
+                                 static_cast<unsigned>(actualBrightness));
+  if (rowLength <= 0) {
+    file.close();
+    ambientBrightnessLog_.lastError = "Ambient log row formatting failed.";
+    return false;
+  }
+
+  const size_t rowBytesWritten = file.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(rowLength));
+  bytesWritten += rowBytesWritten;
+  if (rowBytesWritten != static_cast<size_t>(rowLength)) {
+    file.close();
+    ambientBrightnessLog_.lastError = "Ambient log row write was incomplete.";
+    return false;
+  }
+  ambientBrightnessLog_.lastFileSizeBytes = existingSize + bytesWritten;
+  ambientBrightnessLog_.activePath = path;
+  ambientBrightnessLog_.lastError = "";
+  file.close();
+  return true;
+}
+
+void FirmwareApp::tickAmbientBrightnessLogging_() {
+  writeAmbientBrightnessLogRow_();
+}
+
+bool FirmwareApp::handleAmbientBrightnessLogCommand_(const AmbientBrightnessLogCommand& command) {
+  DynamicJsonDocument responseDoc(kFactoryQaCommandCapacity);
+  responseDoc["type"] = "qa_response";
+  responseDoc["id"] = command.id;
+  responseDoc["cmd"] = command.cmd;
+  responseDoc["ok"] = true;
+  JsonObject result = responseDoc.createNestedObject("result");
+
+  const auto appendStatus = [&]() {
+    const AmbientBrightnessLogStatus status = captureAmbientBrightnessLogStatus_();
+    result["enabled"] = status.enabled;
+    result["fs_ready"] = status.fsReady;
+    result["sample_interval_ms"] = status.sampleIntervalMs;
+    result["max_file_bytes"] = status.maxFileBytes;
+    result["reserve_bytes"] = status.reserveBytes;
+    result["time_valid"] = status.timeValid;
+    result["state"] = stateName(status.state);
+    result["ambient_auto"] = status.ambientAuto;
+    result["manual_brightness_setting"] = status.manualBrightnessSetting;
+    result["raw_sensor"] = status.rawSensor;
+    result["smoothed_sensor"] = status.smoothedSensor;
+    result["normalized_sensor"] = status.normalizedSensor;
+    result["target_brightness"] = status.targetBrightness;
+    result["actual_brightness"] = status.actualBrightness;
+    result["current_path"] = status.currentPath;
+    result["last_file_size_bytes"] = status.lastFileSizeBytes;
+    if (!status.lastError.isEmpty()) {
+      result["last_error"] = status.lastError;
+    }
+    if (status.hasFsStats) {
+      result["fs_total_bytes"] = status.fsTotalBytes;
+      result["fs_used_bytes"] = status.fsUsedBytes;
+    }
+  };
+
+  if (command.cmd == "light_log_status") {
+    mountAmbientBrightnessFs_();
+    appendStatus();
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+    return true;
+  }
+
+  if (command.cmd == "light_log_start") {
+    String error;
+    if (command.clearExisting && !clearAmbientBrightnessLogs_(error)) {
+      emitFactoryQaError_(command.id, command.cmd.c_str(), error.c_str());
+      return true;
+    }
+    if (!setAmbientBrightnessLoggingEnabled_(true, error)) {
+      emitFactoryQaError_(command.id, command.cmd.c_str(), error.c_str());
+      return true;
+    }
+    ambientBrightnessLog_.lastError = "";
+    appendStatus();
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+    return true;
+  }
+
+  if (command.cmd == "light_log_stop") {
+    String error;
+    if (!setAmbientBrightnessLoggingEnabled_(false, error)) {
+      emitFactoryQaError_(command.id, command.cmd.c_str(), error.c_str());
+      return true;
+    }
+    ambientBrightnessLog_.lastError = "";
+    appendStatus();
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+    return true;
+  }
+
+  if (command.cmd == "light_log_clear") {
+    String error;
+    if (!clearAmbientBrightnessLogs_(error)) {
+      emitFactoryQaError_(command.id, command.cmd.c_str(), error.c_str());
+      return true;
+    }
+    appendStatus();
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+    return true;
+  }
+
+  if (command.cmd == "light_log_dump") {
+    const String resolvedPath = command.requestedPath.isEmpty()
+        ? formatAmbientLogPath_(command.requestedDate.isEmpty() ? timeService_.currentLocalDate() : command.requestedDate)
+        : command.requestedPath;
+
+    result["path"] = resolvedPath;
+    result["streaming"] = true;
+    serializeJson(responseDoc, Serial);
+    Serial.println();
+
+    String error;
+    if (!streamAmbientBrightnessLog_(command.requestedDate, command.requestedPath, error)) {
+      emitFactoryQaError_(command.id, command.cmd.c_str(), error.c_str());
+    }
+    return true;
+  }
+
+  return false;
+}
+
 void FirmwareApp::loop() {
   if (handleFactoryQa_()) {
     return;
@@ -366,6 +769,8 @@ void FirmwareApp::loop() {
       tickFriendCelebration_();
       break;
   }
+
+  tickAmbientBrightnessLogging_();
 }
 
 void FirmwareApp::emitFactoryQaError_(const String& id, const char* cmd, const char* error) {
@@ -401,6 +806,17 @@ void FirmwareApp::processFactoryQaCommand_(const String& line) {
   const char* cmd = commandDoc["cmd"] | "";
   if (!cmd || cmd[0] == '\0') {
     emitFactoryQaError_(id, cmd, "QA command name is required.");
+    return;
+  }
+
+  AmbientBrightnessLogCommand ambientCommand{};
+  ambientCommand.id = id;
+  ambientCommand.cmd = cmd;
+  ambientCommand.clearExisting =
+      commandDoc["clear_existing"].isNull() ? false : commandDoc["clear_existing"].as<bool>();
+  ambientCommand.requestedDate = commandDoc["date"] | "";
+  ambientCommand.requestedPath = commandDoc["path"] | "";
+  if (handleAmbientBrightnessLogCommand_(ambientCommand)) {
     return;
   }
 

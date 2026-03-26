@@ -33,6 +33,7 @@ enum class QaLedPattern : uint8_t {
 class BoardRenderer {
 public:
   void begin();
+  uint8_t lastAppliedBrightness() const { return lastAppliedBrightness_; }
   bool buildSnapshotFrame(const String& boardDaysJson,
                           uint8_t weeklyTarget,
                           const char* palettePreset,
@@ -72,10 +73,12 @@ private:
   void drawExclamationGlyph_(const CRGB& color);
   void drawWifiGlyph_(const CRGB& color);
   uint16_t logicalToIndex_(uint8_t row, uint8_t col) const;
+  void applyBrightness_(uint8_t brightness);
   void clear_();
   void renderClockReward_(const Palette& palette, const tm& localNow);
   void renderPaintReward_(const Palette& palette, unsigned long elapsedMs);
   void setPixel_(uint8_t row, uint8_t col, const CRGB& color);
 
   CRGB leds_[kTotalLeds]{};
+  uint8_t lastAppliedBrightness_ = 0;
 };

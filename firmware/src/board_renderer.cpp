@@ -62,9 +62,14 @@ void BoardRenderer::begin() {
   FastLED.setDither(BINARY_DITHER);
   FastLED.setMaxPowerInVoltsAndMilliamps(static_cast<uint8_t>(Config::kLedVoltageMv / 1000),
                                          Config::kLedCurrentLimitMa);
-  FastLED.setBrightness(min<uint8_t>(Config::kDefaultBrightness, Config::kSafeMaxBrightness));
+  applyBrightness_(min<uint8_t>(Config::kDefaultBrightness, Config::kSafeMaxBrightness));
   clear_();
   FastLED.show();
+}
+
+void BoardRenderer::applyBrightness_(uint8_t brightness) {
+  lastAppliedBrightness_ = brightness;
+  FastLED.setBrightness(brightness);
 }
 
 void BoardRenderer::clear_() {
@@ -174,7 +179,7 @@ void BoardRenderer::renderResetHoldState(ResetHoldVisualStage stage, uint8_t bri
     setPixel_(centerRow, centerCol, pulseColor(kRecoveryCenterColor, 132, 255));
   }
 
-  FastLED.setBrightness(brightness);
+  applyBrightness_(brightness);
   FastLED.show();
 }
 
@@ -208,7 +213,7 @@ void BoardRenderer::renderQaPattern(QaLedPattern pattern, uint8_t brightness, un
       break;
   }
 
-  FastLED.setBrightness(brightness);
+  applyBrightness_(brightness);
   FastLED.show();
 }
 
@@ -293,7 +298,7 @@ void BoardRenderer::renderFrame(const BoardFrame& frame, uint8_t brightness) {
     }
   }
 
-  FastLED.setBrightness(brightness);
+  applyBrightness_(brightness);
   FastLED.show();
 }
 
@@ -370,7 +375,7 @@ void BoardRenderer::renderReward(const DeviceSettingsState& settings,
     renderPaintReward_(palette, elapsedMs);
   }
 
-  FastLED.setBrightness(brightness);
+  applyBrightness_(brightness);
   FastLED.show();
 }
 
@@ -416,7 +421,7 @@ void BoardRenderer::renderRecoveryState(RecoveryVisualStage stage, uint8_t brigh
     for (const RecoveryPixel& petal : petals) {
       setPixel_(petal.row, petal.col, pulseColor(kRecoverySuccessColor, 160, 255));
     }
-    FastLED.setBrightness(brightness);
+    applyBrightness_(brightness);
     FastLED.show();
     return;
   }
@@ -435,7 +440,7 @@ void BoardRenderer::renderRecoveryState(RecoveryVisualStage stage, uint8_t brigh
     }
   }
 
-  FastLED.setBrightness(brightness);
+  applyBrightness_(brightness);
   FastLED.show();
 }
 
@@ -457,7 +462,7 @@ void BoardRenderer::renderTimeErrorState(bool apRunning, bool wifiConnected, uin
     setPixel_(6, 4, kWifiReadyColor);
   }
 
-  FastLED.setBrightness(brightness);
+  applyBrightness_(brightness);
   FastLED.show();
 }
 
