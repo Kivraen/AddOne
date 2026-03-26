@@ -135,8 +135,6 @@ export const CELEBRATION_TRANSITION_SPEED_OPTIONS: CelebrationTransitionSpeedOpt
 export const CELEBRATION_DWELL_OPTIONS: CelebrationDwellOption[] = [
   { seconds: 3, label: "3s" },
   { seconds: 5, label: "5s" },
-  { seconds: 8, label: "8s" },
-  { seconds: 12, label: "12s" },
   { seconds: 15, label: "15s" },
   { seconds: 30, label: "30s" },
   { seconds: 60, label: "60s" },
