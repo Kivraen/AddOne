@@ -41,7 +41,8 @@ Local flashing:
 - copy from:
   - [cloud_config.local.example.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.local.example.h)
   - [cloud_config.beta.example.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.beta.example.h)
-- MQTT broker host/port/credentials live in those environment-specific headers when realtime delivery is enabled
+- Supabase and broker CA PEMs now live in those environment-specific headers when secure HTTPS and `mqtts` are enabled
+- device MQTT usernames and passwords are now fetched per-device over authenticated HTTPS and persisted locally; they are no longer the normal shipped value in the beta header
 - `cloud_config.local.h` is ignored from Git
 - `cloud_config.beta.h` is ignored from Git
 
@@ -50,6 +51,6 @@ PlatformIO environments:
 - `addone-esp32dev-beta`: hosted beta firmware profile
 
 Not implemented yet:
-- final beta/production cloud credentials on flashed hardware
+- final beta/production CA material on flashed hardware
 - custom reward artwork sync
 - full end-to-end validation on the real beta stack across router, reconnect, and recovery cases

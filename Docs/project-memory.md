@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 25, 2026
+Last updated: March 26, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -47,7 +47,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The app reads live runtime state from `device_runtime_snapshots` and Supabase realtime.
 - The firmware v2 foundation exists with AP provisioning, claim redemption, heartbeat, MQTT realtime subscribe, fallback poll, and runtime snapshot upload.
 - The realtime gateway exists and mirrors queued commands plus device-side runtime/presence events.
-- The recovered latest UI baseline is now restored and promoted to `main` at `d589cdc`.
+- The recovered latest UI baseline is now restored and promoted to `main`.
 - A real TestFlight install from that baseline now works.
 - The friend-facing profile model now exists in the app, including the Friends gate and email-private account surface.
 - The first Friends sharing flow is now implemented and live-verified on `codex/s3-friends-proof-and-fixes`, including owner approve, reject, revoke, viewer leave, and read-only shared-board browsing.
@@ -63,8 +63,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-035` transport trust and device identity hardening
-- Current execution task: implement the first launch-blocking hardening slice for validated HTTPS/MQTT, per-device broker credentials, ACLs, and removal of runtime self-reregistration assumptions
+- Next brief: `T-036` release operations cleanup and launch baseline
+- Current execution task: turn the accepted transport-hardening code into a repeatable hosted release baseline with explicit migration, secret, broker-password, and operator runbook steps before OTA implementation begins
 
 ## Current Blockers
 
@@ -77,7 +77,10 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
 - `T-034` now packages the first publish-readiness planning pass across deployment, security, and update strategy.
 - `T-034` is now accepted as planning-complete enough to start implementation slices.
-- `T-035` is now the first implementation slice coming out of launch planning.
+- `T-035` is now accepted on `codex/s4-transport-trust-and-device-identity` as the first implementation slice coming out of launch planning.
+- `T-035` fixed the shipped firmware trust path: no `setInsecure()` in firmware, no fleet-shared MQTT credential model, broker ACLs now exist, and runtime self-reregistration is removed from the field-device path.
+- `T-035` is still operationally incomplete until the hosted beta stack has the new migration applied, real CA PEM material in the ignored firmware headers, and a rendered or installed Mosquitto `passwords.txt` generated from the new credential source.
+- `T-036` is now the next active slice because release-readiness still needs a clean hosted baseline before OTA or broader rollout work is safe.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

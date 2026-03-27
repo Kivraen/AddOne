@@ -40,4 +40,4 @@ Harden AddOne for beta release and reconcile the durable docs so the repo reflec
 
 ## Recommendation
 
-`T-034` is now accepted as the planning checkpoint. Start with [T-035-transport-trust-and-device-identity-hardening.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-035-transport-trust-and-device-identity-hardening.md), then move to release-operations cleanup and OTA safety work from that hardened baseline.
+`T-034` is now accepted as the planning checkpoint, and `T-035` is now accepted as the first code-complete hardening baseline on `codex/s4-transport-trust-and-device-identity`. The next slice is [T-036-release-operations-cleanup-and-launch-baseline.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-036-release-operations-cleanup-and-launch-baseline.md): apply the hosted migration, install real CA material and broker password state, and prove the hardened stack is operational before OTA safety or rollout tooling proceeds.

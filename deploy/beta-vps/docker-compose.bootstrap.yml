@@ -21,6 +21,7 @@ services:
     ports:
       - "8883:8883"
     volumes:
+      - ./mosquitto/acl.txt:/mosquitto/config/acl.txt:ro
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./mosquitto/passwords.txt:/mosquitto/config/passwords.txt:ro
       - ./certs:/mosquitto/certs:ro

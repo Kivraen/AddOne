@@ -436,7 +436,7 @@ void FirmwareApp::begin() {
     return;
   }
   migrateReadyForTrackingFlag_();
-  realtimeClient_.begin(identity_);
+  realtimeClient_.begin(identity_, cloudClient_);
   rewardEngine_.clear();
 
   const bool trackerShiftedAtBoot = bootReadyForTracking_() && hasAuthoritativeTime_() && prepareTrackerForCurrentTime_();
@@ -992,6 +992,7 @@ void FirmwareApp::performFactoryReset_(const char* reason, bool allowReconnectFo
   provisioningStore_.incrementResetEpoch();
   provisioningStore_.clearAllUserState();
   cloudClient_.clearPersistedDeviceAuthToken();
+  cloudClient_.clearPersistedMqttTransportCredentials();
   pendingFactoryReset_ = false;
   recoveryRequestedAtRuntime_ = false;
   recoveryRequestedAtBoot_ = false;

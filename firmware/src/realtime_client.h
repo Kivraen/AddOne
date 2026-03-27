@@ -10,7 +10,7 @@
 
 class RealtimeClient {
 public:
-  void begin(const DeviceIdentity& identity);
+  void begin(const DeviceIdentity& identity, CloudClient& cloudClient);
   bool isConfigured() const;
   bool isConnected();
   void loop();
@@ -44,6 +44,7 @@ private:
   static constexpr size_t kCommandQueueSize = 16;
 
   const char* ackStatusName_(CloudClient::CommandAckStatus status) const;
+  bool configureSecureClient_();
   bool connect_();
   bool enqueueCommand_(const CloudClient::DeviceCommand& command);
   bool publishJson_(const String& topic, const String& payload);
@@ -58,6 +59,7 @@ private:
   String presenceTopic_() const;
   String runtimeSnapshotTopic_() const;
 
+  CloudClient* cloudClient_ = nullptr;
   const DeviceIdentity* identity_ = nullptr;
   WiFiClient wifiClient_{};
   WiFiClientSecure secureClient_{};

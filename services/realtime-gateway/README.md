@@ -84,6 +84,7 @@ docker run --env-file .env.beta -p 8787:8787 addone-realtime-gateway
 ## Notes
 
 - Use TLS-enabled broker URLs in any real deployment.
-- For production, prefer broker ACLs / per-device credentials over broad shared broker passwords.
+- Use a dedicated gateway broker account.
+- Device broker accounts should be rendered from `list_active_device_mqtt_credentials()` into the broker password file, with ACLs limiting device topics to that device namespace.
 - This service does not replace the cloud contract already in the repo; it accelerates it and forwards device-originated runtime messages back into that same contract.
 - It keeps a lightweight queued-command polling fallback active even if the Supabase realtime websocket is degraded.

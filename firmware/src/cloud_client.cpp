@@ -12,6 +12,8 @@
 namespace {
 constexpr const char* kCloudPrefsNamespace = "ao_cloud";
 constexpr const char* kDeviceAuthTokenKey = "deviceAuth";
+constexpr const char* kMqttPasswordKey = "mqttPass";
+constexpr const char* kMqttUsernameKey = "mqttUser";
 
 String escapeJson(const String& input) {
   String output;
@@ -86,9 +88,89 @@ void CloudClient::clearPersistedDeviceAuthToken() {
   prefs.end();
 }
 
+void CloudClient::clearPersistedMqttTransportCredentials() {
+  mqttBrokerUsername_ = "";
+  mqttBrokerPassword_ = "";
+
+  Preferences prefs;
+  prefs.begin(kCloudPrefsNamespace, false);
+  prefs.remove(kMqttUsernameKey);
+  prefs.remove(kMqttPasswordKey);
+  prefs.end();
+}
+
 const String& CloudClient::deviceAuthToken() {
   ensureDeviceAuthToken_();
   return deviceAuthToken_;
+}
+
+bool CloudClient::ensureMqttTransportCredentials() {
+  if (!mqttBrokerUsername_.isEmpty() && !mqttBrokerPassword_.isEmpty()) {
+    return true;
+  }
+
+  if (loadPersistedMqttTransportCredentials_()) {
+    return true;
+  }
+
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\"}";
+
+  String response;
+  if (!postRpc_("issue_device_mqtt_credentials", payload, response)) {
+    return false;
+  }
+
+  const size_t responseCapacity = response.length() * 2U + 1024U;
+  DynamicJsonDocument doc(responseCapacity < 4096U ? 4096U : responseCapacity);
+  DeserializationError error = deserializeJson(doc, response);
+  if (error) {
+    Serial.printf("Failed to parse MQTT credential payload: %s\n", error.c_str());
+    return false;
+  }
+
+  JsonObjectConst credential;
+  if (doc.is<JsonArrayConst>()) {
+    JsonArrayConst entries = doc.as<JsonArrayConst>();
+    if (entries.isNull() || entries.size() == 0) {
+      Serial.println("MQTT credential payload was empty.");
+      return false;
+    }
+    credential = entries[0].as<JsonObjectConst>();
+  } else {
+    credential = doc.as<JsonObjectConst>();
+  }
+
+  if (credential.isNull()) {
+    Serial.println("MQTT credential payload was not a JSON object.");
+    return false;
+  }
+
+  const String username = credential["mqtt_username"] | "";
+  const String password = credential["mqtt_password"] | "";
+  if (username.isEmpty() || password.isEmpty()) {
+    Serial.println("MQTT credential payload was missing username or password.");
+    return false;
+  }
+
+  Preferences prefs;
+  prefs.begin(kCloudPrefsNamespace, false);
+  prefs.putString(kMqttUsernameKey, username);
+  prefs.putString(kMqttPasswordKey, password);
+  prefs.end();
+
+  mqttBrokerUsername_ = username;
+  mqttBrokerPassword_ = password;
+  Serial.printf("Provisioned device MQTT credentials for %s\n", identity_->hardwareUid().c_str());
+  return true;
 }
 
 bool CloudClient::ackCommand(const String& commandId, CommandAckStatus status, const String& lastError) {
@@ -153,6 +235,14 @@ bool CloudClient::hasPersistedDeviceAuthToken() const {
   const bool hasToken = prefs.isKey(kDeviceAuthTokenKey);
   prefs.end();
   return hasToken;
+}
+
+const String& CloudClient::mqttTransportPassword() const {
+  return mqttBrokerPassword_;
+}
+
+const String& CloudClient::mqttTransportUsername() const {
+  return mqttBrokerUsername_;
 }
 
 bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount) {
@@ -384,6 +474,9 @@ bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& c
 
   if (ok) {
     Serial.printf("Cloud claim redeemed for session %s\n", claim.onboardingSessionId);
+    if (!ensureMqttTransportCredentials()) {
+      Serial.println("Claim succeeded, but MQTT transport credentials are still unavailable.");
+    }
   }
   return ok;
 }
@@ -469,24 +562,30 @@ bool CloudClient::ensureDeviceAuthToken_() {
   return !deviceAuthToken_.isEmpty();
 }
 
-bool CloudClient::registerDeviceAuthToken_() {
-  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+bool CloudClient::configureSecureHttpClient_(WiFiClientSecure& client) const {
+  if (strlen(CloudConfig::kSupabaseRootCaPem) == 0) {
+    Serial.println("Cloud TLS trust missing: set CloudConfig::kSupabaseRootCaPem before shipping firmware.");
     return false;
   }
 
-  String payload = "{";
-  payload += "\"p_hardware_uid\":\"";
-  payload += escapeJson(identity_->hardwareUid());
-  payload += "\",\"p_device_auth_token\":\"";
-  payload += escapeJson(deviceAuthToken_);
-  payload += "\",\"p_hardware_profile\":\"";
-  payload += escapeJson(Config::kHardwareProfile);
-  payload += "\",\"p_firmware_version\":\"";
-  payload += escapeJson(Config::kFirmwareVersion);
-  payload += "\"}";
+  client.setCACert(CloudConfig::kSupabaseRootCaPem);
+  return true;
+}
 
-  String response;
-  return postRpc_("register_factory_device", payload, response);
+bool CloudClient::loadPersistedMqttTransportCredentials_() {
+  Preferences prefs;
+  prefs.begin(kCloudPrefsNamespace, true);
+  const String username = prefs.getString(kMqttUsernameKey, "");
+  const String password = prefs.getString(kMqttPasswordKey, "");
+  prefs.end();
+
+  if (username.isEmpty() || password.isEmpty()) {
+    return false;
+  }
+
+  mqttBrokerUsername_ = username;
+  mqttBrokerPassword_ = password;
+  return true;
 }
 
 bool CloudClient::postRpc_(const char* rpcName, const String& payload, String& responseBody) {
@@ -495,7 +594,9 @@ bool CloudClient::postRpc_(const char* rpcName, const String& payload, String& r
   }
 
   WiFiClientSecure client;
-  client.setInsecure();
+  if (!configureSecureHttpClient_(client)) {
+    return false;
+  }
 
   HTTPClient http;
   if (!http.begin(client, buildRpcUrl(rpcName))) {
@@ -519,37 +620,10 @@ bool CloudClient::postRpc_(const char* rpcName, const String& payload, String& r
 
   const bool authFailed =
       code >= 400 &&
-      strcmp(rpcName, "register_factory_device") != 0 &&
       (responseBody.indexOf("Device authentication failed.") >= 0 ||
        responseBody.indexOf("Device auth token is not registered.") >= 0);
   if (authFailed) {
-    Serial.println("Cloud RPC auth failed; re-registering device token.");
-    if (registerDeviceAuthToken_()) {
-      WiFiClientSecure retryClient;
-      retryClient.setInsecure();
-
-      HTTPClient retryHttp;
-      if (!retryHttp.begin(retryClient, buildRpcUrl(rpcName))) {
-        Serial.printf("Cloud RPC retry begin failed: %s\n", rpcName);
-        return false;
-      }
-
-      retryHttp.setTimeout(8000);
-      retryHttp.addHeader("Content-Type", "application/json");
-      retryHttp.addHeader("apikey", CloudConfig::kSupabaseAnonKey);
-      retryHttp.addHeader("Authorization", String("Bearer ") + CloudConfig::kSupabaseAnonKey);
-
-      const int retryCode = retryHttp.POST(payload);
-      responseBody = retryHttp.getString();
-      retryHttp.end();
-
-      Serial.printf("Cloud RPC %s retry -> HTTP %d\n", rpcName, retryCode);
-      if (responseBody.length() > 0) {
-        Serial.printf("Cloud RPC %s retry response: %s\n", rpcName, responseBody.c_str());
-      }
-
-      return retryCode >= 200 && retryCode < 300;
-    }
+    Serial.println("Cloud RPC auth failed. Runtime self-reregistration is disabled; re-onboard or reprovision securely.");
   }
 
   return code >= 200 && code < 300;

@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 25, 2026
+Last locked: March 26, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -86,9 +86,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-034` production deployment readiness plan
+  `T-036` release operations cleanup and launch baseline
 - Current execution task:
-  run `T-034` as the first `S4` planning checkpoint, then split the resulting publish-readiness work into concrete implementation slices
+  treat `T-035` as the accepted first transport-hardening baseline, then make the hosted beta environment operational on that trust model before OTA implementation begins
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 
@@ -116,6 +116,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
   - `MQTT ack / presence / day-state / runtime snapshots -> Supabase RPCs`
 - The TestFlight path is now real and working for the recovered latest app baseline.
 - The beta backend now also has factory preregistration support plus `factory_device_runs` records for bench QA notes and ship-ready signoff.
+- The first `S4` hardening slice now exists on `codex/s4-transport-trust-and-device-identity`: firmware HTTPS/MQTT fail closed without CA material, devices fetch per-device MQTT credentials over authenticated HTTPS, broker ACLs isolate device topics, and runtime self-reregistration is removed from the field-device path.
 - Remaining backend work is mostly hosted-beta validation and hardening, not foundational schema design.
 
 ### Firmware
@@ -168,13 +169,14 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Realtime and polling fallback behavior
 
 4. Harden for beta and production rollout.
-- explicit production deployment readiness plan
-- explicit security and production-readiness audit
-- explicit app and firmware update strategy
-- release build smoke tests
-- deployment recovery notes
-- branded auth email and redirects as needed
-- final doc cleanup after validation findings
+- accept and checkpoint the transport trust and device identity baseline
+- clean release operations and the hosted launch baseline on top of that hardened transport path
+- lock the device-side OTA safety model
+- build the OTA control plane in Supabase
+- implement the firmware OTA client
+- add the minimum app update and status surfaces
+- build operator rollout and rollback tooling
+- run internal, then small-cohort, then broader launch validation
 
 ## Delegation Model
 

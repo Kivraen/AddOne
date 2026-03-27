@@ -44,7 +44,7 @@ This is the clean upgrade from the current validation-grade polling system becau
 - it keeps the backend data model already implemented
 - it improves latency for online devices without throwing away fallback safety
 - it scales to more command types later
-- it supports future broker ACL / per-device auth hardening
+- it now carries broker ACL enforcement and per-device transport auth without changing the topic model
 
 ## Command Flow
 
@@ -138,21 +138,15 @@ Current runtime direction:
 
 ## Security Model
 
-Current implementation target:
-- MQTT transport is enabled only when explicit broker config exists
-- Supabase remains authoritative for device authentication and command ack
+Current hardened model:
+- firmware only enables `mqtts` when a broker CA is configured in firmware
+- every device uses a unique broker username and password fetched over authenticated HTTPS and persisted locally
+- the device broker username is the device `hardware_uid`, so broker ACLs map directly onto the existing topic namespace
+- Supabase `device_auth_token` remains product auth for cloud RPCs and defense-in-depth message payload auth
+- the gateway uses its own dedicated broker account and remains the only actor allowed to publish cross-device command topics
+- unmatched broker topics are denied by ACL, so device credentials cannot read or write other devices' namespaces
 
-Staging-friendly model:
-- broker username/password may be shared by the deployed device fleet
-- device identity still lives in topic namespace plus Supabase-authenticated ack RPCs
-
-Production target:
-- broker over TLS
-- broker ACL or per-device credentials
-- device topics restricted to the device’s own namespace
-- no broad cross-device publish/subscribe permissions
-
-This is the long-term target because transport auth and product auth should not be conflated.
+This keeps transport auth and product auth separate without changing the current topic contract.
 
 ## Fallback Rules
 
@@ -182,6 +176,7 @@ The gateway should not:
 
 Firmware must:
 - connect to MQTT when Wi-Fi and broker config are present
+- fetch and persist per-device MQTT credentials over validated HTTPS before using the realtime lane
 - subscribe to its own command topic
 - parse and apply realtime commands using the same command handler as the poll path
 - publish command acknowledgements, local day events, presence, and runtime snapshots through the realtime lane when possible, with HTTP fallback
@@ -201,6 +196,12 @@ For v1, the broker and gateway are separate from Supabase:
 - Supabase handles product data
 - MQTT handles online runtime delivery
 - the gateway bridges the two
+
+The launch-blocking hardening split is now explicit:
+- `device_auth_token` authenticates device-to-Supabase RPCs only
+- MQTT credentials authenticate device-to-broker transport only
+- `register_factory_device(...)` remains factory-only and is not a runtime self-heal path
+- field devices obtain MQTT credentials through `issue_device_mqtt_credentials(...)` after authenticated cloud access is established
 
 For the hosted beta split and required repo config, see [AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md).
 

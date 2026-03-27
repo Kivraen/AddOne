@@ -7,6 +7,8 @@
 #include "habit_tracker.h"
 #include "provisioning_contract.h"
 
+class WiFiClientSecure;
+
 class CloudClient {
 public:
   enum class CommandAckStatus : uint8_t {
@@ -33,10 +35,14 @@ public:
   void begin(const DeviceIdentity& identity);
   bool ackCommand(const String& commandId, CommandAckStatus status, const String& lastError = "");
   void clearPersistedDeviceAuthToken();
+  void clearPersistedMqttTransportCredentials();
   const String& deviceAuthToken();
+  bool ensureMqttTransportCredentials();
   bool heartbeat();
   bool hasPersistedDeviceAuthToken() const;
   bool isConfigured() const;
+  const String& mqttTransportPassword() const;
+  const String& mqttTransportUsername() const;
   bool pullCommands(DeviceCommand* outCommands, size_t maxCommands, size_t& outCount);
   bool queueFriendCelebration(const String& sourceLocalDate,
                               const HabitTracker::WeekDate& currentWeekStart,
@@ -57,10 +63,13 @@ public:
 
 private:
   const char* ackStatusName_(CommandAckStatus status) const;
+  bool configureSecureHttpClient_(WiFiClientSecure& client) const;
   bool ensureDeviceAuthToken_();
-  bool registerDeviceAuthToken_();
+  bool loadPersistedMqttTransportCredentials_();
   bool postRpc_(const char* rpcName, const String& payload, String& responseBody);
 
   String deviceAuthToken_{};
+  String mqttBrokerPassword_{};
+  String mqttBrokerUsername_{};
   const DeviceIdentity* identity_ = nullptr;
 };

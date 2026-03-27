@@ -85,6 +85,19 @@ Purpose:
 - attaches the device to the owner
 - optionally seeds `device_auth_token_hash` if it was not already registered
 
+### `issue_device_mqtt_credentials(...)`
+Called by:
+- device firmware after authenticated cloud access is available
+
+Payload:
+- `hardware_uid`
+- `device_auth_token`
+
+Purpose:
+- authenticates the device over the product-auth path
+- returns the device-scoped MQTT username and password for the broker transport lane
+- keeps MQTT transport auth separate from `device_auth_token`
+
 ### `device_heartbeat(...)`
 Called by:
 - device firmware
@@ -172,6 +185,7 @@ Purpose:
   - keep fallback command poll enabled for backlog recovery
 - During steady state:
   - periodically call heartbeat
+  - fetch or refresh MQTT transport credentials through authenticated HTTPS if none are stored locally
   - process realtime commands immediately when online
   - periodically pull commands only as fallback / backlog recovery
   - ack command results
@@ -188,6 +202,7 @@ Purpose:
 - Firmware v2 now also applies `apply_device_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
 - A dedicated realtime transport contract now exists for MQTT-based online command delivery, with fallback polling retained for reliability.
 - The gateway now handles MQTT command publish plus MQTT ack, presence, day-event, and runtime-snapshot forwarding back into the existing Supabase RPC surface.
+- Runtime devices no longer rely on `register_factory_device(...)` as an auth-failure self-heal path; factory registration stays service-role only.
 - Runtime snapshots should now use the same realtime lane whenever possible:
   - `device -> MQTT -> gateway -> upload_device_runtime_snapshot(...)`
   - direct device -> Supabase HTTP snapshot upload is fallback only

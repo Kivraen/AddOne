@@ -1,0 +1,18 @@
+# This ACL assumes the repo-standard MQTT topic prefix: `addone`.
+# If `MQTT_TOPIC_PREFIX` changes, update these topic patterns to match.
+# The gateway stanza also assumes the dedicated gateway username
+# `addone-beta-gateway`.
+user addone-beta-gateway
+topic write addone/device/+/command
+topic read addone/device/+/ack
+topic read addone/device/+/presence
+topic read addone/device/+/event/day-state
+topic read addone/device/+/event/friend-celebration-ready
+topic read addone/device/+/snapshot/runtime
+
+pattern read addone/device/%u/command
+pattern write addone/device/%u/ack
+pattern write addone/device/%u/presence
+pattern write addone/device/%u/event/day-state
+pattern write addone/device/%u/event/friend-celebration-ready
+pattern write addone/device/%u/snapshot/runtime

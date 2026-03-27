@@ -51,7 +51,8 @@ Later runtime/settings support:
 ## Data Boundary
 
 - Wi-Fi passwords do not belong in Supabase
-- raw device-local secrets do not belong in Supabase
+- product-auth device secrets do not belong in app-visible Supabase tables
+- the new `device_mqtt_credentials` table is service-only transport-auth storage used to render broker password files without fleet-shared MQTT credentials
 - Supabase stores ownership, metadata, queued commands, onboarding sessions, and the mirrored latest runtime snapshot
 - when the device and cloud disagree, the device snapshot is the healing path
 

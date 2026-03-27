@@ -89,6 +89,22 @@ Notes:
 - `hardware_uid` stays internal; the normal user-facing flow should not require typing it.
 - devices can be pre-registered during factory flashing / QA before customer shipment.
 - `device_auth_token_hash` stores the hashed device-local secret used for device/cloud authentication.
+- per-device MQTT transport credentials are stored separately in a service-only table and are not exposed through the app-facing `devices` row.
+
+### `device_mqtt_credentials`
+Purpose:
+- stores service-only MQTT transport credentials for the current device identity
+
+Key fields:
+- `device_id`
+- `mqtt_username`
+- `mqtt_password`
+
+Notes:
+- `mqtt_username` is the device `hardware_uid`, which lets the broker ACL map directly onto the existing topic namespace.
+- `mqtt_password` is transport auth only; it is distinct from the device-local `device_auth_token`.
+- this table is service-only and exists so the broker password file can be rendered without reusing fleet-shared credentials.
+- account removal and factory reset revoke these credentials so later onboarding can issue fresh device-scoped transport secrets.
 
 ### `device_onboarding_sessions`
 Purpose:
@@ -258,6 +274,7 @@ The realtime transport layer adds:
 - MQTT topic contract for per-device command delivery
 - a small gateway service that bridges queued `device_commands` rows into broker publishes
 - MQTT presence / day-event topics so device-originated sync can stay off the blocking HTTP path when realtime is available
+- `issue_device_mqtt_credentials(...)` so firmware can fetch or re-fetch its device-scoped broker credentials after authenticated HTTPS access
 
 These functions are important because they keep multi-table mutations atomic and reduce client-side mistakes.
 The first-beta `Friends` implementation now uses the existing share-code and approval RPCs directly, with no new sharing migration required in `T-001`.

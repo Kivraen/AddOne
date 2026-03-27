@@ -44,13 +44,11 @@ String escapeJson(const String& input) {
 }
 }
 
-void RealtimeClient::begin(const DeviceIdentity& identity) {
+void RealtimeClient::begin(const DeviceIdentity& identity, CloudClient& cloudClient) {
   identity_ = &identity;
+  cloudClient_ = &cloudClient;
 
   if (CloudConfig::kMqttUseTls) {
-    if (CloudConfig::kMqttAllowInsecureTls) {
-      secureClient_.setInsecure();
-    }
     mqttClient_.setClient(secureClient_);
   } else {
     mqttClient_.setClient(wifiClient_);
@@ -64,7 +62,15 @@ void RealtimeClient::begin(const DeviceIdentity& identity) {
 }
 
 bool RealtimeClient::isConfigured() const {
-  return identity_ && strlen(CloudConfig::kMqttBrokerHost) > 0 && strlen(CloudConfig::kMqttTopicPrefix) > 0;
+  if (!identity_ || strlen(CloudConfig::kMqttBrokerHost) == 0 || strlen(CloudConfig::kMqttTopicPrefix) == 0) {
+    return false;
+  }
+
+  if (CloudConfig::kMqttUseTls && strlen(CloudConfig::kMqttBrokerCaPem) == 0) {
+    return false;
+  }
+
+  return true;
 }
 
 bool RealtimeClient::isConnected() {
@@ -261,13 +267,43 @@ bool RealtimeClient::popCommand(CloudClient::DeviceCommand& outCommand) {
   return true;
 }
 
+bool RealtimeClient::configureSecureClient_() {
+  if (strlen(CloudConfig::kMqttBrokerCaPem) == 0) {
+    Serial.println("MQTT TLS trust missing: set CloudConfig::kMqttBrokerCaPem before shipping firmware.");
+    return false;
+  }
+
+  secureClient_.setCACert(CloudConfig::kMqttBrokerCaPem);
+  return true;
+}
+
 bool RealtimeClient::connect_() {
   if (!identity_) {
     return false;
   }
 
-  const char* username = strlen(CloudConfig::kMqttBrokerUsername) > 0 ? CloudConfig::kMqttBrokerUsername : nullptr;
-  const char* password = strlen(CloudConfig::kMqttBrokerPassword) > 0 ? CloudConfig::kMqttBrokerPassword : nullptr;
+  const char* username = nullptr;
+  const char* password = nullptr;
+  if (CloudConfig::kMqttUseTls) {
+    if (!configureSecureClient_()) {
+      return false;
+    }
+
+    if (!cloudClient_ || !cloudClient_->ensureMqttTransportCredentials()) {
+      Serial.println("MQTT connect skipped: device transport credentials are unavailable.");
+      return false;
+    }
+
+    username = cloudClient_->mqttTransportUsername().c_str();
+    password = cloudClient_->mqttTransportPassword().c_str();
+    if (!username || !password || strlen(username) == 0 || strlen(password) == 0) {
+      Serial.println("MQTT connect skipped: persisted device transport credentials are incomplete.");
+      return false;
+    }
+  } else {
+    username = strlen(CloudConfig::kMqttBrokerUsername) > 0 ? CloudConfig::kMqttBrokerUsername : nullptr;
+    password = strlen(CloudConfig::kMqttBrokerPassword) > 0 ? CloudConfig::kMqttBrokerPassword : nullptr;
+  }
 
   const bool connected = mqttClient_.connect(clientId_().c_str(), username, password);
   if (!connected) {

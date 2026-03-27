@@ -74,8 +74,9 @@ Recommended hostname targets:
 - beta profile:
   - PlatformIO env: `addone-esp32dev-beta`
   - ignored config header: `firmware/include/cloud_config.beta.h`
-  - current practical beta TLS mode: encrypted MQTT with `kMqttAllowInsecureTls = true`
-  - broker hostname can be the managed provider hostname; custom MQTT domain is optional for beta
+  - firmware now requires `kSupabaseRootCaPem` and `kMqttBrokerCaPem` for the shipped HTTPS + MQTT path
+  - device MQTT usernames and passwords are no longer compiled into the beta header; they are issued per-device after authenticated cloud access and persisted locally
+  - broker hostname should use a CA-signed endpoint; custom MQTT domain is still optional, but self-signed bootstrap is no longer the normal shipped path
 
 ## Required Beta Secrets / Values
 
@@ -97,27 +98,32 @@ Current beta backend values live locally in:
 ### Beta firmware
 - Supabase project URL
 - Supabase anon/publishable key
+- Supabase CA PEM
 - MQTT broker host
 - MQTT broker port
-- MQTT credentials
-- TLS settings for the hosted broker
+- MQTT broker CA PEM
+- one per-device MQTT username and password issued after authenticated claim or on the first post-migration secure sync
 
 ## Beta Bring-Up Sequence
 1. Treat the current hosted Supabase project `AddOne` as beta.
-2. Ensure `device_runtime_snapshots` is added to `supabase_realtime`.
-3. Provision the beta MQTT broker.
-4. Deploy the realtime gateway with beta env vars.
-5. Point `gateway-beta.addone.studio` to the hosted gateway if we want a branded endpoint.
-6. Leave the broker on its managed hostname unless we explicitly want to add custom-domain complexity.
-7. Create a beta app build with EAS internal distribution.
-8. Flash the beta firmware profile to the device.
-9. Validate onboarding, today toggle, edit/save, settings, and Wi-Fi recovery without the laptop.
+2. Apply the transport hardening migration set so `issue_device_mqtt_credentials(...)` and broker sync support exist.
+3. Ensure `device_runtime_snapshots` is added to `supabase_realtime`.
+4. Provision the beta MQTT broker with a CA-signed certificate.
+5. Render the broker password file from active device MQTT credentials and the dedicated gateway account.
+6. Deploy the realtime gateway with beta env vars.
+7. Point `gateway-beta.addone.studio` to the hosted gateway if we want a branded endpoint.
+8. Leave the broker on its managed hostname unless we explicitly want to add custom-domain complexity.
+9. Create a beta app build with EAS internal distribution.
+10. Flash the beta firmware profile with the real CA PEMs in `cloud_config.beta.h`.
+11. Validate onboarding, today toggle, edit/save, settings, and Wi-Fi recovery without the laptop.
 
 ## Beta Validation Checklist
 - app installs without Expo Go
 - sign-in works against beta
-- device connects to hosted broker
+- device fetches per-device MQTT credentials over validated HTTPS
+- device connects to hosted broker with its own broker account
 - gateway mirrors runtime snapshots into beta Supabase
 - app receives live snapshot updates
 - device and app recover cleanly after Wi-Fi loss/rejoin
 - no normal device control path depends on the laptop being powered on
+- no shipped firmware path relies on `setInsecure()` or fleet-shared MQTT credentials
