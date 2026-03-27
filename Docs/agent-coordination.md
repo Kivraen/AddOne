@@ -1,6 +1,6 @@
 # AddOne Agent Coordination
 
-Last updated: March 21, 2026
+Last updated: March 27, 2026
 
 This file defines how AddOne uses the coordinator-led stage workflow.
 
@@ -45,6 +45,21 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - UI briefs should bias toward native Expo Router patterns, safe-area-correct scroll roots, native tabs conventions, and restrained black-glass styling that fits the existing AddOne shell.
 - Do not accept UI work that ignores the current visual direction or regresses the native navigation structure.
 
+## Native App Proof Rule
+
+- For native app visual proof in this repo, default to simulator-first validation, not Playwright-first validation.
+- Preferred proof path for Expo app screens:
+  - check whether Metro is already running and reuse it if possible
+  - boot or open the iOS Simulator
+  - open the app route in the simulator via `xcrun simctl openurl booted <exp://...>` or the installed app target
+  - capture proof with `xcrun simctl io booted screenshot ...`
+- Use Playwright only for:
+  - true web surfaces
+  - external hosted pages
+  - cases where the proof target is not a native Expo screen
+- Do not default to browser or Chrome automation for native AddOne app proof when the same proof can be captured from the simulator.
+- If simulator proof is blocked, the worker should say exactly what is blocked instead of silently switching to browser proof.
+
 ## Default Coordinator Loop
 
 1. Confirm the active stage and the next execution task that belongs to it.
@@ -80,6 +95,8 @@ Every delegated brief must include:
 - non-negotiables
 - active stage note path
 - scoped files and docs
+- explicit proof-path preference when the task touches visible native app UI:
+  - prefer Metro plus simulator plus `xcrun simctl` screenshots over browser automation
 - report format
 - explicit iteration rule for user-facing work when the slice is likely to need aesthetic or usability feedback
 - AddOne-specific UI direction doc when the task changes visible product UI
