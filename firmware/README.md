@@ -15,6 +15,7 @@ Reference documents:
 - [AP provisioning contract](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_AP_Provisioning_Contract.md)
 - [Cloud contract](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md)
 - [Realtime transport](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Realtime_Transport.md)
+- [OTA safety contract](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/OTA_SAFETY_CONTRACT.md)
 
 Current contents:
 - minimal PlatformIO project
@@ -47,6 +48,8 @@ Local flashing:
 - device MQTT usernames and passwords are now fetched per-device over authenticated HTTPS and persisted locally; they are no longer the normal shipped value in the beta header
 - `cloud_config.local.h` is ignored from Git
 - `cloud_config.beta.h` is ignored from Git
+- the tracked OTA-capable partition layout now lives in [partitions/addone_ota.csv](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/partitions/addone_ota.csv), and the build explicitly uses it instead of relying on the framework default
+- the first field OTA release contract is locked in [OTA_SAFETY_CONTRACT.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/OTA_SAFETY_CONTRACT.md) and [releases/ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)
 
 PlatformIO environments:
 - `addone-esp32dev`: local development firmware profile

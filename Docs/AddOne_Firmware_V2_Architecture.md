@@ -1,6 +1,6 @@
 # AddOne Firmware V2 Architecture
 
-Last locked: March 17, 2026
+Last locked: March 26, 2026
 
 This document marks the transition from `contract validation` to `real AddOne firmware v2`.
 
@@ -127,6 +127,12 @@ Used for:
 - Firmware v2 now has a minimal `reward_engine.*` module and a real reward state with built-in `clock` and palette-based `paint` rendering.
 - Firmware v2 now has the first MQTT realtime client seam for online command delivery, while cloud polling remains as fallback.
 - The next firmware milestone is real broker-backed validation, then remaining hardware polish, custom reward payload sync, and real-device validation.
+- The OTA safety baseline is now locked before client implementation:
+  - field OTA targets only the application image
+  - `addone-dual-ota-v1` is the required partition layout
+  - a new image confirms only after local post-boot health passes
+  - failed verification, failed boot, or failed confirmation must roll back automatically
+  - the detailed release envelope now lives in [firmware/OTA_SAFETY_CONTRACT.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/OTA_SAFETY_CONTRACT.md)
 - Firmware v2 runtime rebuild direction:
   - physical button is fully local-first
   - background sync now runs separately from the main interaction loop

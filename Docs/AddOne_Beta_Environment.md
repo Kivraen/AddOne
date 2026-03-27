@@ -85,6 +85,8 @@ Recommended hostname targets:
   - firmware now requires `kSupabaseRootCaPem` and `kMqttBrokerCaPem` for the shipped HTTPS + MQTT path
   - device MQTT usernames and passwords are no longer compiled into the beta header; they are issued per-device after authenticated cloud access and persisted locally
   - broker hostname should use a CA-signed endpoint; custom MQTT domain is still optional, but self-signed bootstrap is no longer the normal shipped path
+  - beta devices intended for OTA validation must be flashed with the tracked dual-slot layout in [firmware/partitions/addone_ota.csv](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/partitions/addone_ota.csv)
+  - field OTA will target only the application image; bootloader and partition-layout changes remain factory or USB operations
 
 ## Required Beta Secrets / Values
 
@@ -140,3 +142,4 @@ Current beta backend values live locally in:
 - device and app recover cleanly after Wi-Fi loss/rejoin
 - no normal device control path depends on the laptop being powered on
 - no shipped firmware path relies on `setInsecure()` or fleet-shared MQTT credentials
+- OTA beta validation must use immutable HTTPS firmware artifacts plus the locked release envelope in [firmware/releases/ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)

@@ -1,6 +1,6 @@
 # AddOne Device Cloud Contract
 
-Last locked: March 16, 2026
+Last locked: March 26, 2026
 
 This document defines the v1 contract between:
 - the mobile app during onboarding
@@ -167,11 +167,52 @@ Purpose:
 - mirrors device-confirmed runtime settings
 - advances device sync timestamps and runtime revision metadata
 
+### Reserved OTA RPC contract
+
+The first OTA control-plane slice should add these RPCs without changing the safety model locked in
+[firmware/OTA_SAFETY_CONTRACT.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/OTA_SAFETY_CONTRACT.md).
+
+#### `check_device_firmware_release(...)`
+Called by:
+- device firmware
+
+Payload:
+- `hardware_uid`
+- `device_auth_token`
+- current `firmware_version`
+- current confirmed `release_id` when available
+- current `partition_layout`
+
+Purpose:
+- authenticates the device over the existing product-auth path
+- returns either `no eligible release` or one eligible release envelope matching
+  [ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)
+- keeps rollout eligibility authoritative on the HTTPS control plane rather than on MQTT
+
+#### `report_device_ota_progress(...)`
+Called by:
+- device firmware
+
+Payload:
+- `hardware_uid`
+- `device_auth_token`
+- `release_id`
+- `state`
+- optional `failure_code`
+- optional `failure_detail`
+- current `firmware_version`
+
+Purpose:
+- records device OTA state transitions for operator visibility and rollout safety
+- distinguishes download, verify, staging, boot, and rollback failures
+- gives the app and operator tooling one durable state model instead of ad hoc serial logs
+
 ## Command Semantics
 - Device commands are at-least-once, not exactly-once.
 - `request_key` is used on the cloud side to avoid duplicate queueing.
 - `set_day_state` and `apply_history_draft` carry `base_revision` so the device can reject stale requests.
 - `enter_wifi_recovery` is a deliberate owner-triggered command that tells the device to stop normal cloud control and start its temporary `AddOne-XXXX` AP without clearing ownership, history, or settings.
+- a future OTA install request may arrive as a normal cloud command, but the command is only an install trigger; the device must still re-check release eligibility over authenticated HTTPS before downloading or rebooting into a staged image
 - Firmware should tolerate receiving the same command more than once.
 
 ## Firmware Expectations

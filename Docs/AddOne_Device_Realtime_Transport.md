@@ -1,6 +1,6 @@
 # AddOne Device Realtime Transport
 
-Last locked: March 9, 2026
+Last locked: March 26, 2026
 
 This document defines the low-latency command path for AddOne devices.
 
@@ -97,6 +97,12 @@ Supported `kind` values in v1:
 - `apply_history_draft`
 - `apply_device_settings`
 
+Reserved launch-readiness kind:
+- `begin_firmware_update`
+
+`begin_firmware_update` is only a trigger.
+The device must still call the HTTPS OTA release check before it downloads, stages, or reboots into a new image.
+
 ### Device day-event topic
 - `addone/device/<hardware_uid>/event/day-state`
 
@@ -181,6 +187,7 @@ Firmware must:
 - parse and apply realtime commands using the same command handler as the poll path
 - publish command acknowledgements, local day events, presence, and runtime snapshots through the realtime lane when possible, with HTTP fallback
 - keep fallback poll enabled at a slower interval
+- treat any future OTA MQTT or polled command as a best-effort trigger only; OTA eligibility, artifact metadata, pause state, and rollback targeting remain HTTPS control-plane decisions
 
 ## App Responsibilities
 
@@ -202,6 +209,7 @@ The launch-blocking hardening split is now explicit:
 - MQTT credentials authenticate device-to-broker transport only
 - `register_factory_device(...)` remains factory-only and is not a runtime self-heal path
 - field devices obtain MQTT credentials through `issue_device_mqtt_credentials(...)` after authenticated cloud access is established
+- future OTA must keep the same split: MQTT can nudge an install, but release selection and artifact download authority stay on CA-validated HTTPS
 - the current hosted beta fallback may still pin the broker's self-signed certificate in firmware while DNS-backed broker hosting is pending, but the ESP32 MQTT TLS path still needs a DNS verification name even when the socket dials a raw IP
 - for the current hosted beta broker, firmware should now prefer `kMqttBrokerHost = "mqtt-beta.addone.studio"` and remove `device-fleet-beta` or any other fleet-shared broker password from the hosted broker password file
 - if broker DNS regresses and the device must dial `72.62.200.12` directly again, keep the CA pinned and set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to `mqtt-beta.addone.studio` so the ESP32 TLS verifier still uses a DNS name

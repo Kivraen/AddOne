@@ -51,4 +51,9 @@ constexpr unsigned long kWifiReconnectTimeoutMs = 15000;
 constexpr unsigned long kNtpResyncMs = 3600000;
 constexpr unsigned long kRtcWriteIntervalMs = 300000;
 
+// Frozen OTA safety baseline for the first field-update implementation.
+constexpr const char* kOtaPartitionLayout = "addone-dual-ota-v1";
+constexpr uint32_t kOtaSlotSizeBytes = 0x140000;
+constexpr unsigned long kOtaConfirmWindowMs = 120000;
+
 } // namespace Config
