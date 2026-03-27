@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdtemp, copyFile, rm } from "node:fs/promises";
+import { mkdtemp, copyFile, chmod, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -171,6 +171,7 @@ async function main() {
     }
 
     await copyFile(tempPasswordPath, args.output);
+    await chmod(args.output, 0o644);
     console.log(`[mosquitto-sync] wrote ${deviceCredentials.length + 1} broker accounts to ${args.output}`);
   } finally {
     await rm(tempDir, { recursive: true, force: true });

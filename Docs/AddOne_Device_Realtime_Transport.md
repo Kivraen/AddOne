@@ -202,6 +202,7 @@ The launch-blocking hardening split is now explicit:
 - MQTT credentials authenticate device-to-broker transport only
 - `register_factory_device(...)` remains factory-only and is not a runtime self-heal path
 - field devices obtain MQTT credentials through `issue_device_mqtt_credentials(...)` after authenticated cloud access is established
+- the current hosted beta fallback may still pin the broker's self-signed certificate in firmware while DNS-backed broker hosting is pending, but `device-fleet-beta` and any other fleet-shared broker password must be treated as legacy bootstrap-only state and removed from the hosted broker password file
 
 For the hosted beta split and required repo config, see [AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md).
 

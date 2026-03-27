@@ -36,9 +36,7 @@ services:
     ports:
       - "8883:8883"
     volumes:
-      - ./mosquitto/acl.txt:/mosquitto/config/acl.txt:ro
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./mosquitto/passwords.txt:/mosquitto/config/passwords.txt:ro
+      - ./mosquitto:/mosquitto/config:ro
       - /etc/letsencrypt/live/${MQTT_DOMAIN}:/mosquitto/certs:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log

@@ -1,6 +1,6 @@
 # AddOne Beta Environment
 
-Last locked: March 14, 2026
+Last locked: March 27, 2026
 
 This document defines the first always-on hosted environment for AddOne.
 
@@ -43,6 +43,12 @@ Recommended beta shape:
 - one small hosted gateway service
 - dedicated beta Supabase project
 - EAS internal distribution app build
+
+Current hosted beta reality on March 27, 2026:
+- the current beta backend is still the hosted `AddOne` Supabase project `sqhzaayqacmgxseiqihs`
+- the current hosted broker is still `72.62.200.12:8883`
+- that broker currently uses a beta-only MQTT CA plus a server certificate signed for `72.62.200.12`, so the hardened beta firmware must pin the current broker CA PEM in `cloud_config.beta.h`
+- `gateway-beta.addone.studio` is not publicly resolving yet, so gateway health should be treated as an on-host VPS check instead of a public DNS check
 
 Recommended hostname targets:
 - MQTT: provider hostname by default, custom domain optional later
@@ -103,25 +109,28 @@ Current beta backend values live locally in:
 - MQTT broker port
 - MQTT broker CA PEM
 - one per-device MQTT username and password issued after authenticated claim or on the first post-migration secure sync
+- current hosted beta uses the live broker IP plus its pinned broker CA PEM until DNS-backed broker hosting is real
 
 ## Beta Bring-Up Sequence
 1. Treat the current hosted Supabase project `AddOne` as beta.
 2. Apply the transport hardening migration set so `issue_device_mqtt_credentials(...)` and broker sync support exist.
 3. Ensure `device_runtime_snapshots` is added to `supabase_realtime`.
-4. Provision the beta MQTT broker with a CA-signed certificate.
-5. Render the broker password file from active device MQTT credentials and the dedicated gateway account.
-6. Deploy the realtime gateway with beta env vars.
-7. Point `gateway-beta.addone.studio` to the hosted gateway if we want a branded endpoint.
-8. Leave the broker on its managed hostname unless we explicitly want to add custom-domain complexity.
+4. If the current hosted broker is still the raw VPS host, use `deploy/beta-vps/.env.bootstrap.example` plus `docker-compose.bootstrap.yml` instead of pretending the DNS-backed path already exists.
+5. Install the current broker certificate chain, private key, and broker CA under `deploy/beta-vps/certs/`.
+6. Render and install the broker password file from active device MQTT credentials and the dedicated gateway account with `deploy/beta-vps/sync-passwords.sh --compose-file ./docker-compose.bootstrap.yml`.
+7. Deploy or rebuild the realtime gateway and broker with the selected compose file.
+8. Only switch to `gateway-beta.addone.studio` plus `mqtt-beta.addone.studio` after those DNS records and the CA-signed broker certificate are actually live.
 9. Create a beta app build with EAS internal distribution.
-10. Flash the beta firmware profile with the real CA PEMs in `cloud_config.beta.h`.
-11. Validate onboarding, today toggle, edit/save, settings, and Wi-Fi recovery without the laptop.
+10. Flash the beta firmware profile with the current Supabase CA chain and current broker CA PEM in `cloud_config.beta.h`.
+11. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, and reconnect without the laptop.
 
 ## Beta Validation Checklist
 - app installs without Expo Go
 - sign-in works against beta
 - device fetches per-device MQTT credentials over validated HTTPS
+- `list_active_device_mqtt_credentials()` returns rows for flashed hardened devices
 - device connects to hosted broker with its own broker account
+- broker password file no longer contains `device-fleet-beta`
 - gateway mirrors runtime snapshots into beta Supabase
 - app receives live snapshot updates
 - device and app recover cleanly after Wi-Fi loss/rejoin
