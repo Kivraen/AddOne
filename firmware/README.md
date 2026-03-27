@@ -43,6 +43,7 @@ Local flashing:
   - [cloud_config.beta.example.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/cloud_config.beta.example.h)
 - Supabase and broker CA PEMs now live in those environment-specific headers when secure HTTPS and `mqtts` are enabled
 - the current hosted beta baseline still uses `72.62.200.12:8883`, so `cloud_config.beta.h` must pin the current broker CA PEM until broker DNS and a CA-signed certificate are actually live
+- when the broker is still reached by raw IP, `cloud_config.beta.h` must also define `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to a DNS SAN present on the broker certificate, because the ESP32 TLS verifier does not treat IP literals as sufficient hostname proof
 - device MQTT usernames and passwords are now fetched per-device over authenticated HTTPS and persisted locally; they are no longer the normal shipped value in the beta header
 - `cloud_config.local.h` is ignored from Git
 - `cloud_config.beta.h` is ignored from Git

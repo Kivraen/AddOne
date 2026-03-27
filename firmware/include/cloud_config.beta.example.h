@@ -1,5 +1,7 @@
 #pragma once
 
+#define ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"
+
 namespace CloudConfig {
 constexpr const char* kSupabaseAnonKey = "your-beta-supabase-anon-key";
 constexpr const char* kSupabaseProjectUrl = "https://your-beta-project-id.supabase.co";

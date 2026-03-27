@@ -44,6 +44,7 @@ private:
   static constexpr size_t kCommandQueueSize = 16;
 
   const char* ackStatusName_(CloudClient::CommandAckStatus status) const;
+  bool connectSecureSocket_();
   bool configureSecureClient_();
   bool connect_();
   bool enqueueCommand_(const CloudClient::DeviceCommand& command);
@@ -58,6 +59,7 @@ private:
   String friendCelebrationReadyTopic_() const;
   String presenceTopic_() const;
   String runtimeSnapshotTopic_() const;
+  const char* tlsServerName_() const;
 
   CloudClient* cloudClient_ = nullptr;
   const DeviceIdentity* identity_ = nullptr;

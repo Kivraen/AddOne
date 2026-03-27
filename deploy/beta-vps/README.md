@@ -17,6 +17,7 @@ This folder deploys the beta runtime on a single VPS with:
 Current hosted beta reality on March 27, 2026:
 - the live host is still `72.62.200.12`
 - the broker is still presenting a self-signed certificate
+- that certificate currently carries SANs for both `72.62.200.12` and `mqtt-beta.addone.studio`
 - `gateway-beta.addone.studio` is not resolving publicly yet
 - the current hosted baseline should therefore use the bootstrap compose path plus a pinned broker certificate in firmware until DNS-backed cutover is real
 
@@ -64,6 +65,7 @@ That command:
 - the current Supabase CA chain in `kSupabaseRootCaPem`
 - the current broker CA in `kMqttBrokerCaPem`
 - `kMqttBrokerHost = "72.62.200.12"`
+- `ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"` so the ESP32 can verify the certificate SAN while still dialing the raw IP
 - `kMqttUseTls = true`
 - `kMqttAllowInsecureTls = false`
 
@@ -130,6 +132,7 @@ docker compose up -d --build
 Use the current live host until DNS-backed cutover is real:
 - `kMqttBrokerHost = "72.62.200.12"`
 - `kMqttBrokerPort = 8883`
+- `ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"`
 - `kSupabaseRootCaPem = R"PEM(...current Supabase CA chain...)PEM"`
 - `kMqttBrokerCaPem = R"PEM(...current broker CA...)PEM"`
 - `kMqttUseTls = true`

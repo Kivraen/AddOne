@@ -25,3 +25,14 @@ constexpr const char* kBootstrapWifiPassword = "";
 
 } // namespace CloudConfig
 #endif
+
+#ifndef ADDONE_MQTT_BROKER_TLS_SERVER_NAME
+#define ADDONE_MQTT_BROKER_TLS_SERVER_NAME ""
+#endif
+
+namespace CloudConfig {
+// Optional TLS verification name for bootstrap deployments that still dial a raw IP.
+constexpr const char* kMqttBrokerTlsServerName = ADDONE_MQTT_BROKER_TLS_SERVER_NAME;
+} // namespace CloudConfig
+
+#undef ADDONE_MQTT_BROKER_TLS_SERVER_NAME

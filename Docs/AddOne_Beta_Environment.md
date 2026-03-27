@@ -47,7 +47,9 @@ Recommended beta shape:
 Current hosted beta reality on March 27, 2026:
 - the current beta backend is still the hosted `AddOne` Supabase project `sqhzaayqacmgxseiqihs`
 - the current hosted broker is still `72.62.200.12:8883`
-- that broker currently uses a beta-only MQTT CA plus a server certificate signed for `72.62.200.12`, so the hardened beta firmware must pin the current broker CA PEM in `cloud_config.beta.h`
+- that broker currently uses a beta-only MQTT CA plus a server certificate whose SAN covers both `72.62.200.12` and `mqtt-beta.addone.studio`
+- because the ESP32 TLS stack verifies broker names as DNS names, the hardened beta firmware must keep `kMqttBrokerHost = "72.62.200.12"` for transport but set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"` in `cloud_config.beta.h`
+- the hardened beta firmware must also pin the current broker CA PEM in `cloud_config.beta.h`
 - `gateway-beta.addone.studio` is not publicly resolving yet, so gateway health should be treated as an on-host VPS check instead of a public DNS check
 
 Recommended hostname targets:
@@ -107,6 +109,7 @@ Current beta backend values live locally in:
 - Supabase CA PEM
 - MQTT broker host
 - MQTT broker port
+- MQTT TLS verification name when the broker is still reached by raw IP
 - MQTT broker CA PEM
 - one per-device MQTT username and password issued after authenticated claim or on the first post-migration secure sync
 - current hosted beta uses the live broker IP plus its pinned broker CA PEM until DNS-backed broker hosting is real
@@ -122,7 +125,8 @@ Current beta backend values live locally in:
 8. Only switch to `gateway-beta.addone.studio` plus `mqtt-beta.addone.studio` after those DNS records and the CA-signed broker certificate are actually live.
 9. Create a beta app build with EAS internal distribution.
 10. Flash the beta firmware profile with the current Supabase CA chain and current broker CA PEM in `cloud_config.beta.h`.
-11. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, and reconnect without the laptop.
+11. If the broker is still reached by raw IP, set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to the DNS SAN carried by the broker certificate before flashing.
+12. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, and reconnect without the laptop.
 
 ## Beta Validation Checklist
 - app installs without Expo Go

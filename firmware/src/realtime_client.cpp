@@ -277,6 +277,50 @@ bool RealtimeClient::configureSecureClient_() {
   return true;
 }
 
+const char* RealtimeClient::tlsServerName_() const {
+  if (strlen(CloudConfig::kMqttBrokerTlsServerName) > 0) {
+    return CloudConfig::kMqttBrokerTlsServerName;
+  }
+
+  return CloudConfig::kMqttBrokerHost;
+}
+
+bool RealtimeClient::connectSecureSocket_() {
+  if (secureClient_.connected()) {
+    return true;
+  }
+
+  IPAddress brokerIp;
+  if (!brokerIp.fromString(CloudConfig::kMqttBrokerHost)) {
+    return true;
+  }
+
+  if (strlen(CloudConfig::kMqttBrokerTlsServerName) == 0) {
+    Serial.println(
+        "MQTT TLS verification name missing: set ADDONE_MQTT_BROKER_TLS_SERVER_NAME when dialing a raw broker IP.");
+    return false;
+  }
+
+  const bool connected = secureClient_.connect(brokerIp,
+                                               CloudConfig::kMqttBrokerPort,
+                                               tlsServerName_(),
+                                               CloudConfig::kMqttBrokerCaPem,
+                                               nullptr,
+                                               nullptr);
+  if (!connected) {
+    char error[128] = {0};
+    secureClient_.lastError(error, sizeof(error));
+    Serial.printf("MQTT TLS socket connect failed: %s\n", error);
+    secureClient_.stop();
+    return false;
+  }
+
+  Serial.printf("MQTT TLS socket ready via %s with verification name %s\n",
+                CloudConfig::kMqttBrokerHost,
+                tlsServerName_());
+  return true;
+}
+
 bool RealtimeClient::connect_() {
   if (!identity_) {
     return false;
@@ -298,6 +342,10 @@ bool RealtimeClient::connect_() {
     password = cloudClient_->mqttTransportPassword().c_str();
     if (!username || !password || strlen(username) == 0 || strlen(password) == 0) {
       Serial.println("MQTT connect skipped: persisted device transport credentials are incomplete.");
+      return false;
+    }
+
+    if (!connectSecureSocket_()) {
       return false;
     }
   } else {
