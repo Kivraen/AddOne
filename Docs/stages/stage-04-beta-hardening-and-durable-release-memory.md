@@ -40,4 +40,4 @@ Harden AddOne for beta release and reconcile the durable docs so the repo reflec
 
 ## Recommendation
 
-Start with [T-034-production-deployment-readiness-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-034-production-deployment-readiness-plan.md) so deployment, security, and update strategy are audited together before implementation. Treat `T-028` and `T-029` as the first two implementation tracks that will likely come out of that planning checkpoint.
+`T-034` is now accepted as the planning checkpoint. Start with [T-035-transport-trust-and-device-identity-hardening.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/tasks/T-035-transport-trust-and-device-identity-hardening.md), then move to release-operations cleanup and OTA safety work from that hardened baseline.

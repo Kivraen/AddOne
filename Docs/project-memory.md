@@ -63,8 +63,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-034` production deployment readiness plan
-- Current execution task: run `T-034` to audit deployment, security, and update readiness before more polish or feature work
+- Next brief: `T-035` transport trust and device identity hardening
+- Current execution task: implement the first launch-blocking hardening slice for validated HTTPS/MQTT, per-device broker credentials, ACLs, and removal of runtime self-reregistration assumptions
 
 ## Current Blockers
 
@@ -76,6 +76,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-028` beta security and production readiness audit is now one of the first explicit `S4` priorities.
 - `T-029` app and firmware update strategy is also a first explicit `S4` priority because wider distribution without a clear update model is operationally risky.
 - `T-034` now packages the first publish-readiness planning pass across deployment, security, and update strategy.
+- `T-034` is now accepted as planning-complete enough to start implementation slices.
+- `T-035` is now the first implementation slice coming out of launch planning.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

@@ -35,7 +35,7 @@ source_docs:
   - Docs/AddOne_Beta_Hosting_Recommendation.md
   - Docs/AddOne_Device_Realtime_Transport.md
 success_gate: Strict gate
-report_path: Docs/agent-reports/2026-03-25-production-deployment-readiness-plan.md
+report_path: Docs/agent-reports/2026-03-26-launch-readiness-coordinator-plan.md
 ---
 
 ## Objective

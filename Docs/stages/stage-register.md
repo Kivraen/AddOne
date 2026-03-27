@@ -14,7 +14,7 @@ Last updated: March 25, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: `T-034` production deployment readiness plan
+- Next brief: `T-035` transport trust and device identity hardening
 
 ## Stage Notes
 
@@ -37,6 +37,8 @@ Last updated: March 25, 2026
 - `T-024` reward-display configuration is explicitly later than `T-027`.
 - `T-028` and `T-029` are now explicit first-priority `S4` implementation tracks for security hardening and update strategy.
 - `T-034` now packages the first release-planning pass across deployment, security, and updates.
+- `T-034` is now accepted as the launch-readiness planning checkpoint.
+- `T-035` is now the next active implementation slice.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
