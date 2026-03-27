@@ -1,6 +1,6 @@
 # AddOne Beta Environment
 
-Last locked: March 26, 2026
+Last locked: March 27, 2026
 
 This document defines the first always-on hosted environment for AddOne.
 
@@ -50,7 +50,7 @@ Current hosted beta reality on March 27, 2026:
 - that broker currently uses a beta-only MQTT CA plus a server certificate whose SAN covers both `72.62.200.12` and `mqtt-beta.addone.studio`
 - hardened beta firmware should now prefer `kMqttBrokerHost = "mqtt-beta.addone.studio"` and keep the current broker CA PEM pinned in `cloud_config.beta.h`
 - the raw IP plus `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` override remains a supported fallback if DNS regresses, but it is no longer the preferred path
-- `gateway-beta.addone.studio` now resolves publicly, but `https://gateway-beta.addone.studio/health` is still failing server-side, so gateway health should remain an on-host VPS check until the HTTPS path is repaired
+- `gateway-beta.addone.studio` now resolves publicly, but `https://gateway-beta.addone.studio/health` currently returns `HTTP 404`, so gateway health should remain an on-host VPS check until the HTTPS path is repaired
 
 Recommended hostname targets:
 - MQTT: provider hostname by default, custom domain optional later
@@ -194,3 +194,34 @@ Operator notes:
 - `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`
 - the original March 27, 2026 stack-canary loop is cleared; `fw-beta-20260327-05` reached `downloaded`, `verifying`, `staged`, `rebooting`, provisional `2.0.0-beta.3` boot, `pending_confirm`, and `succeeded` on real hardware
 - avoid reset-toggling serial monitors during provisional OTA boots; the accepted March 27 proof run kept serial detached during the real OTA request and still completed a clean backend-visible `pending_confirm -> succeeded` pass
+
+## Internal Release-Candidate Validation Status
+
+Validation date:
+- March 27, 2026
+
+Exact matrix used on the accepted `T-043` baseline:
+- installable app path:
+  - `eas build:list --platform ios --limit 10 --json --non-interactive`
+  - `eas build:list --platform android --limit 10 --json --non-interactive`
+  - config audit in [eas.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/eas.json) and [app.config.js](/Users/viktor/Desktop/DevProjects/Codex/AddOne/app.config.js)
+- active OTA release and artifact:
+  - `node services/firmware-rollout-operator/index.mjs inspect --release fw-beta-20260327-05 --env-file .codex-tmp/realtime-gateway.env --json`
+  - `curl -I https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin`
+- live beta cohort:
+  - read-only `devices`, `device_firmware_ota_statuses`, `device_firmware_update_requests`, `device_commands`, and `device_runtime_snapshots` queries for `AO_B0CBD8CFABB0` and `AO_A4F00F767008`
+  - read-only `get_device_firmware_update_summary(...)` RPC checks for both devices
+  - read-only `list_active_device_mqtt_credentials()` verification that both devices still have issued per-device broker accounts
+- public operator surface:
+  - `curl -I https://gateway-beta.addone.studio/health`
+
+Current result:
+- passed:
+  - `fw-beta-20260327-05` remains the active beta release and its immutable artifact still returns `HTTP 200`
+  - `AO_B0CBD8CFABB0` remains on `2.0.0-beta.3` with backend-visible `succeeded` OTA state on `fw-beta-20260327-05`
+  - both beta boards still have per-device MQTT credential rows and recent `last_seen_at` heartbeats in the hosted beta backend
+- failed and blocking:
+  - `AO_A4F00F767008` is still on `2.0.0-beta.1` and still rejects `begin_firmware_update` with `Unsupported command kind.`
+  - no finished installable build exists for the accepted March 27, 2026 release-candidate baseline; the latest finished iOS internal build is from March 18, 2026, the latest finished iOS store build is from March 20, 2026, and there are still no finished Android builds
+- non-blocking operational risk:
+  - `https://gateway-beta.addone.studio/health` still is not a usable public health target because it returns `HTTP 404`; keep on-host checks until that route is repaired
