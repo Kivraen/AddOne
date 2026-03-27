@@ -290,12 +290,36 @@ Return:
 - `command_status`
 - `requested_at`
 
+#### Service-role rollout management
+Called by:
+- beta-only operator tooling with the service-role key
+
+Purpose:
+- keeps release activation, rollout targeting, and rollback transitions out of ad hoc table edits
+- preserves the accepted immutable-release and previous-stable rollback rules in SQL
+- leaves per-device install nudges on the existing `begin_firmware_update(...)` path
+
+Operator-only functions:
+- `operator_activate_firmware_release(release_id)`
+  - activates one draft or paused release
+  - archives the current active release for the same `channel + hardware_profile`
+  - requires `previous_stable_release_id` on the target release to match the current active release
+- `operator_set_firmware_release_rollout(release_id, rollout_mode, rollout_value, hardware_uids[])`
+  - updates one release to `allowlist`, `all`, or `percentage`
+  - replaces the stored allowlist when `rollout_mode = allowlist`
+  - rejects archived or rolled-back releases
+- `operator_rollback_firmware_release(release_id)`
+  - marks the bad release `rolled_back`
+  - re-activates that release's `previous_stable_release_id`, even if the previous stable row was archived
+  - rejects rollback when the release does not declare a valid previous stable target
+
 ## Command Semantics
 - Device commands are at-least-once, not exactly-once.
 - `request_key` is used on the cloud side to avoid duplicate queueing.
 - `set_day_state` and `apply_history_draft` carry `base_revision` so the device can reject stale requests.
 - `enter_wifi_recovery` is a deliberate owner-triggered command that tells the device to stop normal cloud control and start its temporary `AddOne-XXXX` AP without clearing ownership, history, or settings.
 - `begin_firmware_update` now exists as a normal cloud command, but the command is only an install trigger; the device must still re-check release eligibility over authenticated HTTPS before downloading or rebooting into a staged image
+- operator rollout state changes should go through the service-role rollout functions above instead of direct `firmware_releases` or `firmware_release_rollout_allowlist` edits
 - Firmware should tolerate receiving the same command more than once.
 
 ## Firmware Expectations

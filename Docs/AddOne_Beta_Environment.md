@@ -98,6 +98,7 @@ Recommended hostname targets:
       - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin`
   - the OTA control-plane migration is now applied on the hosted beta project, and the live REST schema now exposes `devices.firmware_channel`, `firmware_releases`, and `check_device_firmware_release(...)`
   - the owner-facing firmware card in the beta app now also depends on `get_device_firmware_update_summary(...)` plus `begin_firmware_update(...)`
+  - the beta operator rollout path now uses [services/firmware-rollout-operator/index.mjs](/Users/viktor/Desktop/DevProjects/Codex/AddOne/services/firmware-rollout-operator/index.mjs) for release activation, rollout targeting, operator-triggered install requests, rollback, and rollout inspection
   - that owner-facing summary currently assumes beta user devices on the shipped OTA path already use `addone-dual-ota-v1`; per-device partition layout is still not projected into an owner-readable device field
   - the original `addone_sync` OTA crash on `AO_B0CBD8CFABB0` is fixed by increasing the sync-task stack headroom in firmware
   - the rolled-back release `fw-beta-20260326-02` should stay non-active because it reproduced the stack-canary failure on real hardware
@@ -153,6 +154,25 @@ Current beta backend values live locally in:
 12. Apply the OTA control-plane migration so `firmware_releases`, `device_firmware_update_requests`, and `device_firmware_ota_statuses` exist before OTA validation, then verify the hosted schema exposes `devices.firmware_channel`, `check_device_firmware_release(...)`, and `get_device_firmware_update_summary(...)` before flashing a bench OTA candidate.
 13. Load release-registry rows that match the immutable HTTPS artifact metadata in [ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json).
 14. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, reconnect, and the OTA control-plane RPCs without the laptop.
+
+## Beta Firmware Rollout Operator Flow
+
+Use the rollout tool from the repo root against the hosted beta env:
+
+```bash
+node services/firmware-rollout-operator/index.mjs inspect --release <release_id> --env-file .codex-tmp/realtime-gateway.env --json
+node services/firmware-rollout-operator/index.mjs target --release <release_id> --hardware-uids AO_B0CBD8CFABB0 --env-file .codex-tmp/realtime-gateway.env
+node services/firmware-rollout-operator/index.mjs activate --release <release_id> --env-file .codex-tmp/realtime-gateway.env
+node services/firmware-rollout-operator/index.mjs request --release <release_id> --hardware-uids AO_B0CBD8CFABB0 --env-file .codex-tmp/realtime-gateway.env
+node services/firmware-rollout-operator/index.mjs rollback --release <bad_release_id> --hardware-uids AO_B0CBD8CFABB0 --env-file .codex-tmp/realtime-gateway.env
+```
+
+Operator notes:
+- `target` replaces the stored rollout allowlist for that release when the mode stays `allowlist`.
+- `activate` only works when the target release already points `previous_stable_release_id` at the current active beta release.
+- `rollback` marks the bad release `rolled_back`, re-activates its previous stable release, and can queue the explicit rollback request for affected devices in the same command.
+- `inspect` is the default rollout-state check before and after any activation or rollback change.
+- Remaining manual step in this slice: artifact upload plus initial draft release-row creation still happen outside this operator tool.
 
 ## Beta Validation Checklist
 - app installs without Expo Go

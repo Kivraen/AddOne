@@ -54,6 +54,7 @@ OTA control plane:
   - rollout cohorts in `firmware_release_rollout_allowlist`
   - persisted install requests in `device_firmware_update_requests`
   - per-device OTA history and current state in `device_firmware_ota_events` plus `device_firmware_ota_statuses`
+  - service-role rollout management RPCs for release activation, rollout targeting, and rollback without direct table edits
 - sharing, rewards, and reminders still exist in schema for future phases, but first-user v1 should keep those surfaces hidden
 
 ## Data Boundary
