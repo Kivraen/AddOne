@@ -449,10 +449,6 @@ void FirmwareApp::begin() {
   stateMutex_ = xSemaphoreCreateMutex();
   if (!queueMutex_ || !stateMutex_) {
     Serial.println("Failed to create firmware mutexes.");
-  } else if (!syncTaskHandle_) {
-    // OTA now performs nested HTTPS/TLS work from the sync task, including
-    // certificate verification during progress RPCs and artifact fetches.
-    xTaskCreatePinnedToCore(syncTaskEntry_, "addone_sync", 16384, this, 1, &syncTaskHandle_, 0);
   }
 
   Serial.printf("AddOne firmware %s\n", Config::kFirmwareVersion);
@@ -475,6 +471,13 @@ void FirmwareApp::begin() {
     enterState_(FirmwareState::TimeInvalid);
   } else {
     enterState_(FirmwareState::Tracking);
+  }
+
+  if (queueMutex_ && stateMutex_ && !syncTaskHandle_) {
+    // Resolve the initial firmware state before the sync task evaluates OTA
+    // confirmation health gates, or pending images can be judged against the
+    // default SetupRecovery state during boot.
+    xTaskCreatePinnedToCore(syncTaskEntry_, "addone_sync", 16384, this, 1, &syncTaskHandle_, 0);
   }
 }
 

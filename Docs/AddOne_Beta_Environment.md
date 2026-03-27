@@ -91,26 +91,22 @@ Recommended hostname targets:
   - the first real OTA artifact path now uses the hosted project-domain storage bucket `firmware-artifacts`, for example:
     - rolled-back beta.2 validation artifact:
       - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260326-02/firmware-42e687ee3dae9497.bin`
-    - current fixed beta.3 validation artifact:
+    - rolled-back beta.3 validation retries:
       - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-03/firmware-9b6857af3439fcfb.bin`
+      - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-04/firmware-4b56ab655fc7a18e.bin`
+    - current active beta.3 validation artifact:
+      - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin`
   - the OTA control-plane migration is now applied on the hosted beta project, and the live REST schema now exposes `devices.firmware_channel`, `firmware_releases`, and `check_device_firmware_release(...)`
   - the original `addone_sync` OTA crash on `AO_B0CBD8CFABB0` is fixed by increasing the sync-task stack headroom in firmware
   - the rolled-back release `fw-beta-20260326-02` should stay non-active because it reproduced the stack-canary failure on real hardware
-  - current bench-only blocker after the stack fix is narrower but still unresolved:
-    - an earlier March 27 validation run still proves `fw-beta-20260327-03` can reach `downloaded`, `verifying`, `staged`, `rebooting`, and provisional `2.0.0-beta.3` boot on real hardware
-    - the later March 27 revise-and-retry pass fixed the earlier "applied command but no first OTA progress" gap on real hardware by:
-      - keeping command-triggered release checks pending across transient failures
-      - retrying OTA progress writes
-      - flushing command acks before OTA work and falling back to the RPC ack path when MQTT ack publish fails
-    - on hardware, fresh commands now deliver and apply exactly once, then reach backend-visible `requested` and `downloading` with no serial monitor attached
-    - the remaining blocker is now later in the OTA path and better isolated:
-      - two no-serial retries reached backend-visible `failed_download` with `failure_detail = "Device restarted before OTA phase 'downloading' could complete (reset_reason=ESP_RST_TASK_WDT)."`
-      - the latest no-serial retry replaced that immediate reboot loop with a stable mid-stream failure:
-        - `failed_download`
-        - `failure_detail = "OTA artifact download stalled after 379900/1134144 bytes with a 45000 ms idle timeout."`
-        - the board stayed on `2.0.0-beta.1` and checked back in after the failure
-      - `downloaded`, `verifying`, `staged`, provisional `2.0.0-beta.3` boot, `pending_confirm`, and `succeeded` were still not observed in the final March 27 branch state
-    - the clean real-hardware `pending_confirm -> succeeded` proof for `fw-beta-20260327-03` is still missing
+  - current March 27, 2026 OTA validation status on `AO_B0CBD8CFABB0`:
+    - `fw-beta-20260327-03` is rolled back because the staged image reached `downloaded`, `verifying`, `staged`, and `rebooting`, then fell back to `2.0.0-beta.1` before `pending_confirm`
+    - `fw-beta-20260327-04` is rolled back because the later no-serial retry hit `failed_download` with `reset_reason=ESP_RST_TASK_WDT`
+    - the remaining artifact-stream gap was fixed by keeping availability-gated reads, restoring the smaller OTA chunk buffer, moving sync-task startup until after initial state resolution, and then shortening the per-read TLS timeout back to `1000 ms`
+    - the clean no-serial real-hardware proof now exists on `fw-beta-20260327-05`:
+      - backend-visible `downloaded`, `verifying`, `staged`, `rebooting`, `pending_confirm`, and `succeeded`
+      - backend-visible provisional boot on `2.0.0-beta.3`
+      - device stable on `2.0.0-beta.3` after the local confirmation window
 
 ## Required Beta Secrets / Values
 
@@ -173,5 +169,5 @@ Current beta backend values live locally in:
 - `check_device_firmware_release(...)` returns a real decision row for the beta device
 - `begin_firmware_update(...)` creates a persisted install request plus one queued `begin_firmware_update` command
 - `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`
-- the original March 27, 2026 stack-canary loop is cleared; an earlier beta.3 validation run reached `downloaded`, `verifying`, `staged`, `rebooting`, and provisional boot on real hardware
-- avoid reset-toggling serial monitors during provisional OTA boots, but note that the latest serial-free retry still stalled before provisional boot; the clean `pending_confirm -> succeeded` proof is still missing
+- the original March 27, 2026 stack-canary loop is cleared; `fw-beta-20260327-05` reached `downloaded`, `verifying`, `staged`, `rebooting`, provisional `2.0.0-beta.3` boot, `pending_confirm`, and `succeeded` on real hardware
+- avoid reset-toggling serial monitors during provisional OTA boots; the accepted March 27 proof run kept serial detached during the real OTA request and still completed a clean backend-visible `pending_confirm -> succeeded` pass

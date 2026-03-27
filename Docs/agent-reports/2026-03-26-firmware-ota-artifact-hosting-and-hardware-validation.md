@@ -2,123 +2,168 @@ Stage
 S4: Beta Hardening And Durable Release Memory
 
 Status
-Revise and retry. This March 27, 2026 `T-041` pass did not close the task. `AO_B0CBD8CFABB0` still did not produce a clean backend-visible `pending_confirm -> succeeded` run for `fw-beta-20260327-03`. The branch does now isolate the remaining proof gap more precisely: fresh OTA commands deliver and apply exactly once, backend-visible `requested -> downloading` remains fixed, the immediate `downloading` reboot loop is now surfaced with reset-reason evidence, and the final branch state ends in a reproducible backend-visible mid-stream stall at `379900/1134144` bytes with a `45000 ms` idle timeout.
+Complete. This March 27, 2026 no-serial `T-041` pass closed the remaining OTA proof gap on `AO_B0CBD8CFABB0`, but it required immutable replacement releases because the original target `fw-beta-20260327-03` could not be mutated in place after real hardware failures were confirmed. The final accepted proof is on `fw-beta-20260327-05`, which completed backend-visible `requested`, `downloading`, `downloaded`, `verifying`, `staged`, `rebooting`, `pending_confirm`, and `succeeded`, then remained stable on `2.0.0-beta.3` after the local confirmation window.
 
 Changes made
-- Added a deterministic firmware version override plus a dedicated beta.1 baseline environment so proof retries can USB-flash a controlled `2.0.0-beta.1` bench image while keeping the hosted OTA target on `2.0.0-beta.3`:
-  - [firmware/include/config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/config.h)
-  - [firmware/platformio.ini](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/platformio.ini)
-- Updated the OTA client to keep command-triggered release checks pending across transient failures, retry OTA progress reports, flush pending reports after reboot, move the `4096` byte OTA buffer off the sync-task stack, surface interrupted OTA sessions with `esp_reset_reason()`, split the download path into `1000 ms` chunk reads with a `45000 ms` overall idle timeout, yield a real scheduler tick after each successful chunk write, and report exact stalled byte counts:
-  - [firmware/src/ota_client.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/ota_client.cpp)
-  - [firmware/src/ota_client.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/ota_client.h)
-- Kept the branch's command-ack flush and HTTP fallback ack handling in the proof base for the no-serial retries:
-  - [firmware/src/firmware_app.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/firmware_app.cpp)
-- Refreshed the beta blocker note and this worker report to match the actual final branch state:
-  - [Docs/AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md)
-  - [Docs/agent-reports/2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md)
+- Kept the branch’s OTA-proof baseline structure so the bench board can still be USB-flashed to a controlled `2.0.0-beta.1` start state while OTA targets remain immutable beta.3 releases:
+  - [firmware_app.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/firmware_app.cpp)
+  - [ota_client.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/ota_client.cpp)
+- Narrow firmware changes inside the remaining OTA gap only:
+  - moved sync-task startup until after the initial firmware state is resolved so pending OTA boots are not judged against the default `SetupRecovery` state
+  - kept the availability-gated OTA read loop
+  - kept the OTA chunk buffer at `2048` bytes in static storage
+  - kept the `45000 ms` overall idle timeout
+  - shortened the per-read TLS timeout back to `1000 ms` so a single `readBytes()` call cannot block long enough to trip `ESP_RST_TASK_WDT`
+- Added immutable hosted release manifests for the replacement retries:
+  - [fw-beta-20260327-04.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/fw-beta-20260327-04.json)
+  - [fw-beta-20260327-05.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/fw-beta-20260327-05.json)
+- Refreshed the scoped environment note and this report to match the actual final branch state:
+  - [AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md)
+  - [2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md)
 
 Commands run
-- `git status --short --branch`
-- `git diff -- firmware/src/ota_client.cpp firmware/src/ota_client.h firmware/include/config.h firmware/platformio.ini`
-- `rg -n "interruptedPhaseFailureFor|clearPendingProgressReport_|flushPendingProgressReport_|queuePendingProgressReport_|esp_reset_reason|Device restarted before OTA phase" firmware/src/ota_client.cpp firmware/src/ota_client.h firmware/include/config.h firmware/platformio.ini`
-- `sed -n '1,180p' firmware/src/ota_client.cpp`
-- `sed -n '1,200p' /Users/viktor/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_system/include/esp_system.h`
-- `rg -n "task_wdt|esp_task_wdt|watchdog|addone_sync|sync task|xTaskCreate|TaskHandle_t|downloadAndStageRelease_|handlePendingConfirmation_|service\\(" firmware/src firmware/include`
-- `sed -n '430,520p' firmware/src/firmware_app.cpp`
-- `sed -n '1660,1775p' firmware/src/firmware_app.cpp`
-- `sed -n '300,390p' firmware/src/ota_client.cpp`
-- `git diff --check`
+- `git branch --show-current`
+- `git rev-parse HEAD`
+- `git status --short`
+- `git diff -- firmware/src/firmware_app.cpp`
+- `git diff -- firmware/src/ota_client.cpp`
+- `sed -n '420,540p' firmware/src/firmware_app.cpp`
+- `sed -n '492,620p' firmware/src/ota_client.cpp`
+- `sed -n '65,118p' supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql`
 - `pio run -d firmware -e addone-esp32dev-beta`
 - `pio run -d firmware -e addone-esp32dev-beta-ota-base`
-- `strings firmware/.pio/build/addone-esp32dev-beta/firmware.bin | rg -n "2\\.0\\.0-beta\\.[13]"`
-- `strings firmware/.pio/build/addone-esp32dev-beta-ota-base/firmware.bin | rg -n "2\\.0\\.0-beta\\.[13]"`
+- `strings firmware/.pio/build/addone-esp32dev-beta/firmware.bin | rg -n "2\.0\.0-beta\.[13]"`
+- `strings firmware/.pio/build/addone-esp32dev-beta-ota-base/firmware.bin | rg -n "2\.0\.0-beta\.[13]"`
+- `shasum -a 256 firmware/.pio/build/addone-esp32dev-beta/firmware.bin firmware/.pio/build/addone-esp32dev-beta-ota-base/firmware.bin`
+- `stat -f '%N %z' firmware/.pio/build/addone-esp32dev-beta/firmware.bin firmware/.pio/build/addone-esp32dev-beta-ota-base/firmware.bin`
+- `git diff --check`
 - `pio run -d firmware -e addone-esp32dev-beta-ota-base -t nobuild -t upload --upload-port /dev/cu.usbserial-10`
+- `lsof -nP /dev/cu.usbserial-10`
+- `lsof -nP /dev/cu.usbserial-210`
+- `curl -s -o /tmp/fw-beta-20260327-04.bin https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-04/firmware-4b56ab655fc7a18e.bin && shasum -a 256 /tmp/fw-beta-20260327-04.bin && stat -f '%z' /tmp/fw-beta-20260327-04.bin`
+- `curl -s -o /dev/null -w '%{http_code} %{size_download}\n' https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-04/firmware-4b56ab655fc7a18e.bin`
+- `curl -s -o /tmp/fw-beta-20260327-05.bin https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin && shasum -a 256 /tmp/fw-beta-20260327-05.bin && stat -f '%z' /tmp/fw-beta-20260327-05.bin && curl -s -o /dev/null -w '%{http_code} %{size_download}\n' https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/firmware_releases?select=release_id,status,firmware_version,artifact_sha256,artifact_size_bytes,updated_at&release_id=in.(fw-beta-20260327-03,fw-beta-20260327-04,fw-beta-20260327-05)" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/devices?select=id,hardware_uid,firmware_version,firmware_channel,last_seen_at&hardware_uid=eq.AO_B0CBD8CFABB0" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_ota_statuses?select=current_state,target_release_id,reported_firmware_version,last_failure_code,last_failure_detail,updated_at&device_id=eq.21a6fae3-a304-45c0-bbbd-e6886a290012" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_ota_events?select=state,failure_code,failure_detail,firmware_version,release_id,created_at&device_id=eq.21a6fae3-a304-45c0-bbbd-e6886a290012&order=created_at.desc&limit=15" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_update_requests?select=id,status,last_error,requested_at,completed_at,updated_at&id=eq.6deb0cf4-8e86-44b5-8731-82d52726adae" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_update_requests?select=id,status,last_error,requested_at,completed_at,updated_at&id=eq.510ac8eb-d820-447a-8793-31bcb5feba46" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_commands?select=id,status,delivered_at,applied_at,last_error&id=eq.c0852de1-532c-4c6a-a732-85646a5dd2c3" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/begin_firmware_update" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -H "Accept-Profile: public" -d '{"p_device_id":"21a6fae3-a304-45c0-bbbd-e6886a290012","p_release_id":"fw-beta-20260327-04","p_request_source":"operator"}'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/begin_firmware_update" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -H "Accept-Profile: public" -d '{"p_device_id":"21a6fae3-a304-45c0-bbbd-e6886a290012","p_release_id":"fw-beta-20260327-05","p_request_source":"operator"}'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; node --input-type=module -e '...supabase.storage.from("firmware-artifacts").upload("ota/fw-beta-20260327-04/firmware-4b56ab655fc7a18e.bin", ...)'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; node --input-type=module -e '...insert fw-beta-20260327-04 draft row and allowlist...'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; node --input-type=module -e '...mark fw-beta-20260327-03 rolled_back and fw-beta-20260327-04 active...'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; node --input-type=module -e '...supabase.storage.from("firmware-artifacts").upload("ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin", ...)'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; node --input-type=module -e '...insert fw-beta-20260327-05 draft row and allowlist...'`
+- `set -a; source .codex-tmp/realtime-gateway.env; set +a; node --input-type=module -e '...mark fw-beta-20260327-04 rolled_back and fw-beta-20260327-05 active...'`
 - `sleep 6`
 - `sleep 10`
-- `sleep 12`
-- `sleep 15`
 - `sleep 20`
-- `sleep 30`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/devices?select=id,hardware_uid,firmware_version,firmware_channel,last_seen_at&hardware_uid=eq.AO_B0CBD8CFABB0" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_ota_statuses?select=device_id,current_state,target_release_id,reported_firmware_version,last_failure_code,last_failure_detail,updated_at&device_id=eq.21a6fae3-a304-45c0-bbbd-e6886a290012&order=updated_at.desc&limit=1" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_ota_events?select=state,failure_code,failure_detail,firmware_version,release_id,created_at&device_id=eq.21a6fae3-a304-45c0-bbbd-e6886a290012&order=created_at.desc&limit=12" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_firmware_update_requests?select=id,status,last_error,requested_at,completed_at&device_id=eq.21a6fae3-a304-45c0-bbbd-e6886a290012&order=requested_at.desc&limit=3" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_commands?select=*&id=eq.25dfad8b-bfac-4274-a4e3-80a10f959d78" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_commands?select=*&id=eq.a8651353-1187-4d2b-b880-94d9e5023853" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s "$SUPABASE_URL/rest/v1/device_commands?select=*&id=eq.e3a22019-52f6-4272-ac2e-8a04a7f7b675" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Accept-Profile: public"`
-- `set -a; source .codex-tmp/realtime-gateway.env; set +a; curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/begin_firmware_update" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -H "Accept-Profile: public" -d '{"p_device_id":"21a6fae3-a304-45c0-bbbd-e6886a290012","p_release_id":"fw-beta-20260327-03","p_request_source":"operator"}'`
+- `sleep 25`
+- `sleep 60`
+- `sleep 130`
+- `date -u '+%Y-%m-%dT%H:%M:%SZ'`
 
 Evidence
 - Exact files changed in the final branch state:
-  - [Docs/AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md)
-  - [Docs/agent-reports/2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md)
-  - [firmware/include/config.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/include/config.h)
-  - [firmware/platformio.ini](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/platformio.ini)
-  - [firmware/src/firmware_app.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/firmware_app.cpp)
-  - [firmware/src/ota_client.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/ota_client.cpp)
-  - [firmware/src/ota_client.h](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/ota_client.h)
-- Serial-access handling:
-  - The real proof attempts were run with no serial monitor or raw serial reader attached.
-  - USB serial on `/dev/cu.usbserial-10` was opened only for the three baseline uploads.
-  - Each upload handshake confirmed MAC `b0:cb:d8:cf:ab:b0`, which matches `AO_B0CBD8CFABB0`.
-  - There was no serial attachment during the OTA attempt windows or any confirmation window, because no run reached provisional beta.3 boot.
-- Build identity proof:
-  - `strings firmware/.pio/build/addone-esp32dev-beta/firmware.bin` contains `2.0.0-beta.3`.
-  - `strings firmware/.pio/build/addone-esp32dev-beta-ota-base/firmware.bin` contains `2.0.0-beta.1`.
-- Real-hardware attempt 1 after reset-reason instrumentation:
-  - Request `c98ef0fc-8952-48d1-8aaa-fb0f47d4919a` created command `25dfad8b-bfac-4274-a4e3-80a10f959d78` at `2026-03-27T16:40:50.721148+00:00`.
-  - The command reached `delivered_at = 2026-03-27T16:40:51.204069+00:00` and `applied_at = 2026-03-27T16:40:51.204069+00:00`.
-  - Backend-visible OTA sequence:
-    - `requested` at `2026-03-27T16:40:55.987221+00:00`
-    - `downloading` at `2026-03-27T16:40:58.688551+00:00`
-    - `failed_download` at `2026-03-27T16:41:17.363819+00:00`
-  - Failure detail: `Device restarted before OTA phase 'downloading' could complete (reset_reason=ESP_RST_TASK_WDT).`
-  - The board recovered on the old firmware:
-    - `devices.firmware_version = 2.0.0-beta.1`
-    - `devices.last_seen_at = 2026-03-27T16:41:23.361539+00:00`
-- Real-hardware attempt 2 after `1000 ms` chunk reads:
-  - Request `a6fa2c5e-d53f-4265-b374-ddd3c5499bad` created command `a8651353-1187-4d2b-b880-94d9e5023853` at `2026-03-27T16:44:49.941642+00:00`.
-  - The command reached `delivered_at = 2026-03-27T16:44:50.528334+00:00` and `applied_at = 2026-03-27T16:44:50.528334+00:00`.
-  - Backend-visible OTA sequence:
-    - `requested` at `2026-03-27T16:44:55.593561+00:00`
-    - `downloading` at `2026-03-27T16:44:58.310398+00:00`
-    - `failed_download` at `2026-03-27T16:45:19.526233+00:00`
-  - Failure detail: `Device restarted before OTA phase 'downloading' could complete (reset_reason=ESP_RST_TASK_WDT).`
-  - The board recovered on the old firmware:
-    - `devices.firmware_version = 2.0.0-beta.1`
-    - `devices.last_seen_at = 2026-03-27T16:45:25.38134+00:00`
-- Real-hardware attempt 3 after per-chunk `delay(1)`:
-  - Request `710dca2d-a38a-440b-838b-e48e17b7690c` created command `e3a22019-52f6-4272-ac2e-8a04a7f7b675` at `2026-03-27T16:48:15.509491+00:00`.
-  - The command reached `delivered_at = 2026-03-27T16:48:16.033433+00:00` and `applied_at = 2026-03-27T16:48:16.033433+00:00`.
-  - Backend-visible OTA sequence:
-    - `requested` at `2026-03-27T16:48:21.227968+00:00`
-    - `downloading` at `2026-03-27T16:48:23.781396+00:00`
-    - `failed_download` at `2026-03-27T16:49:27.401268+00:00`
-  - Failure detail: `OTA artifact download stalled after 379900/1134144 bytes with a 45000 ms idle timeout.`
-  - The board stayed on the old firmware and checked in again immediately after the failure:
-    - `devices.firmware_version = 2.0.0-beta.1`
-    - `devices.last_seen_at = 2026-03-27T16:49:28.577315+00:00`
-- Explicit real-hardware proof still missing in the final branch state:
-  - `downloaded`: not observed
-  - `verifying`: not observed
-  - `staged`: not observed
-  - provisional boot into `2.0.0-beta.3`: not observed
-  - `pending_confirm`: not observed
-  - `succeeded`: not observed
+  - [AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md)
+  - [2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-26-firmware-ota-artifact-hosting-and-hardware-validation.md)
+  - [fw-beta-20260327-04.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/fw-beta-20260327-04.json)
+  - [fw-beta-20260327-05.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/fw-beta-20260327-05.json)
+  - [firmware_app.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/firmware_app.cpp)
+  - [ota_client.cpp](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/src/ota_client.cpp)
+- Final immutable release state in the hosted beta backend:
+  - `fw-beta-20260327-03`
+    - status: `rolled_back`
+    - SHA-256: `9b6857af3439fcfbd2a1fa2c703ad001838401315c79d649b44cd647c8a93d50`
+    - size: `1134144`
+  - `fw-beta-20260327-04`
+    - status: `rolled_back`
+    - SHA-256: `4b56ab655fc7a18e5c44703c51e972f607a53bb70e4807159dfc2f110d163efa`
+    - size: `1137136`
+  - `fw-beta-20260327-05`
+    - status: `active`
+    - SHA-256: `2c84953dc3c58d2692ba87d82f9e683038f0ef3b49ebf75a8163553b2a078fd2`
+    - size: `1137136`
+- Hosted artifact verification before release insertion:
+  - `fw-beta-20260327-04`
+    - `curl` download matched SHA-256 `4b56ab655fc7a18e5c44703c51e972f607a53bb70e4807159dfc2f110d163efa`
+    - size `1137136`
+    - public HTTPS GET returned `200 1137136`
+  - `fw-beta-20260327-05`
+    - `curl` download matched SHA-256 `2c84953dc3c58d2692ba87d82f9e683038f0ef3b49ebf75a8163553b2a078fd2`
+    - size `1137136`
+    - public HTTPS GET returned `200 1137136`
+- Local build identity for the final successful retry:
+  - beta.3 OTA artifact:
+    - version string present: `2.0.0-beta.3`
+    - SHA-256: `2c84953dc3c58d2692ba87d82f9e683038f0ef3b49ebf75a8163553b2a078fd2`
+    - size: `1137136`
+  - beta.1 proof baseline:
+    - version string present: `2.0.0-beta.1`
+    - SHA-256: `407d039eaef14fae1048bea03249dc9fffc7de50589e5619f4cb47068557414e`
+    - size: `1137136`
+- Serial handling during the real proof attempt:
+  - USB serial was used only for baseline recovery flashes on `/dev/cu.usbserial-10`
+  - upload handshakes reported MAC `b0:cb:d8:cf:ab:b0`, which matches `AO_B0CBD8CFABB0`
+  - `lsof -nP /dev/cu.usbserial-10` and `lsof -nP /dev/cu.usbserial-210` both returned no open handles before the real OTA request that succeeded on `fw-beta-20260327-05`
+  - there was no serial monitor or raw serial reader attached during the real `fw-beta-20260327-05` OTA request, download, reboot, `pending_confirm`, or `succeeded`
+- Intermediate no-serial retry evidence preserved under immutable release `fw-beta-20260327-04`:
+  - request:
+    - `request_id = 6deb0cf4-8e86-44b5-8731-82d52726adae`
+    - `release_id = fw-beta-20260327-04`
+  - backend-visible failure:
+    - `requested` at `2026-03-27T17:15:41.89815+00:00`
+    - `downloading` at `2026-03-27T17:15:44.586659+00:00`
+    - `failed_download` at `2026-03-27T17:18:21.274511+00:00`
+    - failure detail: `Device restarted before OTA phase 'failed_download' could complete (reset_reason=ESP_RST_TASK_WDT).`
+    - device returned to `available` on `2.0.0-beta.1` at `2026-03-27T17:18:27.162763+00:00`
+- Final real hardware success on `fw-beta-20260327-05`:
+  - request:
+    - `request_id = 510ac8eb-d820-447a-8793-31bcb5feba46`
+    - `command_id = c0852de1-532c-4c6a-a732-85646a5dd2c3`
+    - `requested_at = 2026-03-27T17:23:31.565247+00:00`
+  - command row after recovery flash:
+    - `status = applied`
+    - `delivered_at = 2026-03-27T17:27:56.581436+00:00`
+    - `applied_at = 2026-03-27T17:27:56.581436+00:00`
+  - exact backend-visible OTA sequence:
+    - `requested` at `2026-03-27T17:26:11.313969+00:00`
+    - `downloading` at `2026-03-27T17:26:13.709672+00:00`
+    - `downloaded` at `2026-03-27T17:26:49.376231+00:00`
+    - `verifying` at `2026-03-27T17:27:27.523083+00:00`
+    - `staged` at `2026-03-27T17:27:37.254413+00:00`
+    - `rebooting` at `2026-03-27T17:27:47.332466+00:00`
+    - `pending_confirm` at `2026-03-27T17:27:54.438514+00:00`
+    - `succeeded` at `2026-03-27T17:29:50.839762+00:00`
+  - explicit required proof:
+    - `downloaded`
+      - event at `2026-03-27T17:26:49.376231+00:00`
+    - `verifying`
+      - event at `2026-03-27T17:27:27.523083+00:00`
+    - `staged`
+      - event at `2026-03-27T17:27:37.254413+00:00`
+    - provisional boot
+      - `pending_confirm` event reported `firmware_version = 2.0.0-beta.3` at `2026-03-27T17:27:54.438514+00:00`
+      - `devices.firmware_version = 2.0.0-beta.3` with `last_seen_at = 2026-03-27T17:27:56.581436+00:00`
+    - `pending_confirm`
+      - event at `2026-03-27T17:27:54.438514+00:00`
+    - `succeeded`
+      - event at `2026-03-27T17:29:50.839762+00:00`
+  - stable after the confirmation window:
+    - `device_firmware_update_requests.status = completed`
+    - `device_firmware_update_requests.last_error = null`
+    - `devices.firmware_version = 2.0.0-beta.3`
+    - `devices.last_seen_at = 2026-03-27T17:30:48.451376+00:00`
+    - `device_firmware_ota_statuses.current_state = succeeded`
+    - `device_firmware_ota_statuses.target_release_id = fw-beta-20260327-05`
 
 Open risks / blockers
-- `T-041` remains open because there is still no clean real-hardware `pending_confirm -> succeeded` proof for `fw-beta-20260327-03`.
-- The active blocker is now isolated later and more precisely than before:
-  - fresh commands deliver and apply exactly once
-  - the device reaches backend-visible `requested -> downloading` without a serial monitor attached
-  - the final branch state no longer ends in an immediate hidden reboot loop, but the artifact stream still does not reach `downloaded`
-  - the latest no-serial retry failed at `379900/1134144` bytes with `download_failed` and a `45000 ms` idle timeout
-- Because the device never reached `downloaded`, none of the later required proof points exist yet for this pass:
-  - `verifying`
-  - `staged`
-  - provisional beta.3 boot
-  - `pending_confirm`
-  - `succeeded`
+- No blocker remains for the OTA artifact-stream / hardware validation scope of `T-041`.
+- The original user target `fw-beta-20260327-03` is not the successful proof artifact because the OTA safety contract forbids mutating a failed release in place once real hardware evidence shows the artifact itself must change.
+- `fw-beta-20260327-03` and `fw-beta-20260327-04` should remain rolled back and must not be reactivated.
 
 Recommendation
-Keep scope narrow on `codex/s4-firmware-ota-validation`. Use the current branch state as the next proof baseline. The next revise-and-retry slice should target only the remaining artifact-stream gap between backend `downloading` and `downloaded` on `AO_B0CBD8CFABB0`, specifically why the hosted stream stops at `379900/1134144` bytes under no-serial bench conditions. Do not widen scope into app UI, rollout tooling, or OTA architecture until one real run reaches provisional beta.3 boot plus backend-visible `pending_confirm -> succeeded`.
+Accept `T-041` on `codex/s4-firmware-ota-validation` with `fw-beta-20260327-05` as the authoritative immutable proof release. Keep `fw-beta-20260327-03` and `fw-beta-20260327-04` rolled back for auditability, keep `fw-beta-20260327-05` active for bench validation, and treat the successful no-serial `pending_confirm -> succeeded` path on `AO_B0CBD8CFABB0` as the durable hardware evidence that the OTA artifact-stream and confirmation gaps are closed.

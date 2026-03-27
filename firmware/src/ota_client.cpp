@@ -29,7 +29,7 @@ constexpr unsigned long kReleaseCheckIntervalMs = 3600000UL;
 constexpr unsigned long kReleaseCheckFailureRetryMs = 5000UL;
 constexpr unsigned long kDownloadIdleTimeoutMs = 45000UL;
 constexpr unsigned long kDownloadReadChunkTimeoutMs = 1000UL;
-constexpr size_t kDownloadBufferSize = 4096U;
+constexpr size_t kDownloadBufferSize = 2048U;
 constexpr uint8_t kProgressReportAttempts = 4;
 constexpr unsigned long kProgressReportRetryDelayMs = 1000UL;
 uint8_t gOtaDownloadBuffer[kDownloadBufferSize];
@@ -358,10 +358,8 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
   bool success = true;
 
   while (totalRead < release.artifact.sizeBytes) {
-    const size_t remaining = release.artifact.sizeBytes - totalRead;
-    const size_t targetRead = remaining < kDownloadBufferSize ? remaining : kDownloadBufferSize;
-    const size_t bytesRead = stream->readBytes(reinterpret_cast<char*>(gOtaDownloadBuffer), targetRead);
-    if (bytesRead == 0) {
+    const size_t available = stream->available();
+    if (available == 0) {
       if (!http.connected()) {
         success = false;
         failureCode = "download_incomplete";
@@ -381,6 +379,35 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
         delay(1);
         continue;
       }
+    }
+
+    const size_t remaining = release.artifact.sizeBytes - totalRead;
+    size_t targetRead = available < kDownloadBufferSize ? available : kDownloadBufferSize;
+    if (targetRead > remaining) {
+      targetRead = remaining;
+    }
+
+    const size_t bytesRead = stream->readBytes(reinterpret_cast<char*>(gOtaDownloadBuffer), targetRead);
+    if (bytesRead == 0) {
+      if (!http.connected()) {
+        success = false;
+        failureCode = "download_incomplete";
+        failureDetail = String("OTA artifact stream closed after ") + String(totalRead) + "/" +
+                        String(release.artifact.sizeBytes) + " bytes.";
+        break;
+      }
+
+      if (millis() - lastReadAtMs > kDownloadIdleTimeoutMs) {
+        success = false;
+        failureCode = "download_failed";
+        failureDetail = String("OTA artifact download stalled after ") + String(totalRead) + "/" +
+                        String(release.artifact.sizeBytes) + " bytes with a " +
+                        String(kDownloadIdleTimeoutMs) + " ms idle timeout.";
+        break;
+      }
+
+      delay(1);
+      continue;
     }
 
     lastReadAtMs = millis();

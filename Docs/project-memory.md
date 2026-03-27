@@ -63,8 +63,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-041` firmware OTA artifact hosting and hardware validation
-- Current execution task: rerun `T-041` on the same validation branch and isolate the artifact-stream stall between backend-visible `downloading` and `downloaded`, while still aiming to capture one backend-visible `pending_confirm -> succeeded` pass for `fw-beta-20260327-03`
+- Next brief: `T-042` minimum app update and firmware status surfaces
+- Current execution task: build the smallest user-facing firmware update/status surface on top of the accepted OTA baseline, then leave broader rollout and rollback tooling for the next slice
 
 ## Current Blockers
 
@@ -90,7 +90,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - keep the broker cert SAN aligned with `mqtt-beta.addone.studio`
   - repair the public `gateway-beta.addone.studio` HTTPS path before relying on it externally
   - tighten Mosquitto host-file ownership and mode warnings before broader rollout
-- `T-041` remains the active slice, but it is now a narrow proof-gap loop rather than an infra blocker: the latest proof pass shows the remaining problem is later than command delivery and first OTA progress, because the board now reaches backend-visible `requested -> downloading` and then still fails before `downloaded`, most recently stalling at `379900/1134144` bytes with a `45000 ms` idle timeout while staying on `2.0.0-beta.1`.
+- `T-041` is now accepted on `codex/s4-firmware-ota-validation`: the real immutable firmware artifact flow is hardware-proven end to end, with the authoritative successful proof on `fw-beta-20260327-05`, backend-visible `pending_confirm -> succeeded`, and stable post-window runtime on `2.0.0-beta.3`.
+- `fw-beta-20260327-03` and `fw-beta-20260327-04` are now durable rolled-back OTA releases and must remain non-active for auditability; the immutable release contract means the successful proof is carried by replacement release `fw-beta-20260327-05`, not by mutating prior failed releases.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.
