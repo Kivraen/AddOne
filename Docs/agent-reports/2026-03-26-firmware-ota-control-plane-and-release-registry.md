@@ -2,7 +2,7 @@ Stage
 S4: Beta Hardening And Durable Release Memory
 
 Status
-Implemented on `codex/s4-firmware-ota-control-plane`. The repo now has one backend OTA control plane and release registry on top of the accepted `T-038` safety contract. This slice adds the release-state model, HTTPS eligibility lookup, durable OTA progress reporting, and the `begin_firmware_update` trigger path. It does not implement the firmware OTA client or any app UI.
+Implemented on `codex/s4-firmware-ota-control-plane` and revised after coordinator review. The repo still has one backend OTA control plane and release registry on top of the accepted `T-038` safety contract. This revise-and-retry pass keeps the slice backend-only and fixes the mid-flow re-check enforcement gap in `check_device_firmware_release(...)` so paused, rolled-back, non-active, or no-longer-eligible targets cannot continue during an in-progress OTA flow.
 
 Changes made
 - Added the backend OTA control-plane migration:
@@ -14,6 +14,16 @@ Changes made
   - [supabase/README.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/README.md)
 - Added this worker report:
   - [Docs/agent-reports/2026-03-26-firmware-ota-control-plane-and-release-registry.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-26-firmware-ota-control-plane-and-release-registry.md)
+- Coordinator revise-and-retry fix:
+  - tightened the no-active-request `ota_in_progress` branch inside `check_device_firmware_release(...)`
+  - mid-flow re-checks for `current_ota_status.target_release_id` now block when the target release is:
+    - missing
+    - `paused`
+    - `rolled_back`
+    - otherwise non-`active`
+    - no longer in rollout
+    - no longer version-eligible
+  - the same branch now returns `install_ready` only when the in-progress target is still the same release and still satisfies the frozen `T-038` rules
 
 Commands run
 - `git status --short --branch`
@@ -41,6 +51,8 @@ Commands run
 - `git diff --check`
 - `git diff --stat`
 - `rg -n "check_device_firmware_release|report_device_ota_progress|begin_firmware_update|firmware_releases|device_firmware_ota_statuses|device_firmware_update_requests" ...`
+- `rg -n "ota_in_progress|current_ota_status.target_release_id|release_paused|release_rolled_back|release_not_active" supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql`
+- `sed -n '840,1085p' supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql`
 
 Evidence
 - Exact schema references for the OTA control plane now exist in [supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql):
@@ -67,6 +79,11 @@ Evidence
   - `require_cloud_check_in` is frozen to `false`
   - explicit operator rollback is only allowed to the current release’s `previous_stable_release_id`
   - a second OTA target is blocked while a different OTA is already in progress
+  - the mid-flow re-check path now reuses the stricter active-request-style enforcement instead of the fresh-availability path:
+    - `release_not_found` now blocks if an in-progress target disappears
+    - `release_paused`, `release_rolled_back`, and `release_not_active` now block the same target during re-check
+    - `not_in_rollout` and `version_not_allowed` now block the same target during re-check instead of quietly downgrading to `none`
+    - only an unchanged, still-active, still-eligible in-progress target now returns `install_ready`
 - Exact doc references now point to the same contract:
   - cloud RPC contract: [Docs/AddOne_Device_Cloud_Contract.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Device_Cloud_Contract.md)
   - beta rollout preconditions: [Docs/AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md)
@@ -77,11 +94,12 @@ Evidence
   - the docs now describe the same tables, RPC names, and `begin_firmware_update` command kind as the migration
   - `git diff --check` passed, so the changed files are free of whitespace and merge-marker issues
   - the existing realtime path remains compatible because queued device commands are already published generically through the broker bridge, so the new `begin_firmware_update` command uses the same backend control-plane lane rather than a special-case side channel
+  - the coordinator-blocking gap is closed in the migration itself rather than only in docs or report text
 - What the next firmware OTA client slice can now assume:
   - the backend release registry is the source of truth for firmware rollout state
   - `check_device_firmware_release(...)` returns a decision row with `none | available | install_ready | blocked` plus the concrete release envelope when applicable
   - `available` means a rollout-eligible release exists but user confirmation is still required
-  - `install_ready` means the control plane authorizes download now
+  - `install_ready` means the control plane authorizes download now, including a same-target in-progress re-check that remains valid
   - `begin_firmware_update(...)` persists the install request before the device ever receives the command nudge
   - `report_device_ota_progress(...)` is the durable place to write OTA states and terminal failures
   - rollback targeting is explicit and anchored to `previous_stable_release_id`, not to an arbitrary older build
@@ -93,4 +111,4 @@ Open risks / blockers
 - Operator tooling to create and manage `firmware_releases` rows is still later work; this slice only establishes the backend contract and storage model.
 
 Recommendation
-Treat this branch as the backend OTA control-plane baseline for `T-039`. The next firmware slice can now stay narrow to client work: call `check_device_firmware_release(...)`, treat `begin_firmware_update` as a nudge only, write OTA state transitions through `report_device_ota_progress(...)`, and rely on the backend to enforce release state, single-target safety, and previous-stable rollback targeting.
+Treat this branch as the revised backend OTA control-plane baseline for `T-039`. The coordinator-blocking re-check gap is fixed, so the next firmware slice can stay narrow to client work: call `check_device_firmware_release(...)`, treat `begin_firmware_update` as a nudge only, write OTA state transitions through `report_device_ota_progress(...)`, and rely on the backend to enforce release state, mid-flow re-check safety, single-target safety, and previous-stable rollback targeting.

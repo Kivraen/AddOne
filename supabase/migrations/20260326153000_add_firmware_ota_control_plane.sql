@@ -798,6 +798,7 @@ declare
   minimum_compare integer;
   rollout_eligible boolean := false;
   ota_in_progress boolean := false;
+  recheck_existing_target boolean := false;
   result_decision public.device_firmware_release_check_decision := 'none';
   result_reason text := 'no_active_release';
   result_release jsonb := null;
@@ -855,6 +856,7 @@ begin
     'rebooting',
     'pending_confirm'
   );
+  recheck_existing_target := ota_in_progress and current_ota_status.target_release_id is not null;
 
   select *
   into active_request
@@ -985,7 +987,7 @@ begin
         and requests.status = 'requested';
     end if;
   else
-    if ota_in_progress and current_ota_status.target_release_id is not null then
+    if recheck_existing_target then
       select *
       into candidate_release
       from public.firmware_releases releases
@@ -1001,14 +1003,28 @@ begin
     end if;
 
     if not found then
-      result_decision := 'none';
-      result_reason := 'no_active_release';
-    elsif ota_in_progress and (
+      if recheck_existing_target then
+        result_decision := 'blocked';
+        result_reason := 'release_not_found';
+      else
+        result_decision := 'none';
+        result_reason := 'no_active_release';
+      end if;
+    elsif recheck_existing_target and (
       current_ota_status.target_release_id is null
       or current_ota_status.target_release_id <> candidate_release.release_id
     ) then
       result_decision := 'blocked';
       result_reason := 'ota_already_in_progress';
+    elsif recheck_existing_target and candidate_release.status = 'paused' then
+      result_decision := 'blocked';
+      result_reason := 'release_paused';
+    elsif recheck_existing_target and candidate_release.status = 'rolled_back' then
+      result_decision := 'blocked';
+      result_reason := 'release_rolled_back';
+    elsif recheck_existing_target and candidate_release.status <> 'active' then
+      result_decision := 'blocked';
+      result_reason := 'release_not_active';
     elsif normalized_partition_layout <> candidate_release.minimum_partition_layout then
       result_decision := 'blocked';
       result_reason := 'partition_layout_mismatch';
@@ -1028,11 +1044,20 @@ begin
       end;
 
       if not rollout_eligible then
-        result_decision := 'none';
+        result_decision := case
+          when recheck_existing_target then 'blocked'
+          else 'none'
+        end;
         result_reason := 'not_in_rollout';
       elsif normalized_current_release_id = candidate_release.release_id then
-        result_decision := 'none';
-        result_reason := 'up_to_date';
+        result_decision := case
+          when recheck_existing_target then 'blocked'
+          else 'none'
+        end;
+        result_reason := case
+          when recheck_existing_target then 'version_not_allowed'
+          else 'up_to_date'
+        end;
       else
         version_compare := public.compare_firmware_versions(
           candidate_release.firmware_version,
@@ -1040,8 +1065,14 @@ begin
         );
 
         if version_compare is not null and version_compare <= 0 then
-          result_decision := 'none';
-          result_reason := 'up_to_date';
+          result_decision := case
+            when recheck_existing_target then 'blocked'
+            else 'none'
+          end;
+          result_reason := case
+            when recheck_existing_target then 'version_not_allowed'
+            else 'up_to_date'
+          end;
         elsif candidate_release.minimum_confirmed_firmware_version is not null then
           minimum_compare := public.compare_firmware_versions(
             normalized_current_firmware_version,
@@ -1054,28 +1085,32 @@ begin
           else
             result_release := public.build_firmware_release_envelope(candidate_release.release_id);
             result_target_release_id := candidate_release.release_id;
-            result_decision := case candidate_release.install_policy
-              when 'auto_apply' then 'install_ready'
+            result_decision := case
+              when recheck_existing_target then 'install_ready'
+              when candidate_release.install_policy = 'auto_apply' then 'install_ready'
               else 'available'
             end;
-            result_reason := case candidate_release.install_policy
-              when 'auto_apply' then 'auto_apply'
+            result_reason := case
+              when recheck_existing_target then 'in_progress_recheck'
+              when candidate_release.install_policy = 'auto_apply' then 'auto_apply'
               else 'user_confirmation_required'
             end;
-            result_install_authorized := candidate_release.install_policy = 'auto_apply';
+            result_install_authorized := recheck_existing_target or candidate_release.install_policy = 'auto_apply';
           end if;
         else
           result_release := public.build_firmware_release_envelope(candidate_release.release_id);
           result_target_release_id := candidate_release.release_id;
-          result_decision := case candidate_release.install_policy
-            when 'auto_apply' then 'install_ready'
+          result_decision := case
+            when recheck_existing_target then 'install_ready'
+            when candidate_release.install_policy = 'auto_apply' then 'install_ready'
             else 'available'
           end;
-          result_reason := case candidate_release.install_policy
-            when 'auto_apply' then 'auto_apply'
+          result_reason := case
+            when recheck_existing_target then 'in_progress_recheck'
+            when candidate_release.install_policy = 'auto_apply' then 'auto_apply'
             else 'user_confirmation_required'
           end;
-          result_install_authorized := candidate_release.install_policy = 'auto_apply';
+          result_install_authorized := recheck_existing_target or candidate_release.install_policy = 'auto_apply';
         end if;
       end if;
     end if;
