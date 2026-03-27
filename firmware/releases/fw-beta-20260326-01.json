@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "release_id": "fw-beta-20260326-01",
+  "firmware_version": "2.0.0-beta.1",
+  "hardware_profile": "addone-v1",
+  "partition_layout": "addone-dual-ota-v1",
+  "channel": "beta",
+  "status": "archived",
+  "install_policy": "user_triggered",
+  "rollout": {
+    "mode": "allowlist",
+    "allowlist": ["AO_B0CBD8CFABB0"]
+  },
+  "artifact": {
+    "kind": "esp32-application-bin",
+    "url": "https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260326-01/firmware-ce6cd2a54dc0038a.bin",
+    "sha256": "ce6cd2a54dc0038a1c08e8f053c17d763c332d3743215a242a75a39732f1ffbf",
+    "size_bytes": 1134144
+  },
+  "compatibility": {
+    "minimum_partition_layout": "addone-dual-ota-v1",
+    "minimum_confirmed_firmware_version": null,
+    "minimum_app_version": null
+  },
+  "rollback": {
+    "previous_stable_release_id": null,
+    "allow_downgrade_to_previous_stable": true
+  },
+  "boot_confirmation": {
+    "confirm_window_seconds": 120,
+    "require_normal_runtime_state": true,
+    "require_cloud_check_in": false
+  }
+}

@@ -90,7 +90,8 @@ Recommended hostname targets:
   - OTA registry records now live in Supabase `firmware_releases` plus `firmware_release_rollout_allowlist`; install requests are persisted in `device_firmware_update_requests`, not only in MQTT traffic
   - the first real OTA artifact path now uses the hosted project-domain storage bucket `firmware-artifacts`, for example:
     - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260326-02/firmware-42e687ee3dae9497.bin`
-  - current hosted blocker discovered during `T-041`: the beta project still does not expose `devices.firmware_channel`, `firmware_releases`, or `check_device_firmware_release(...)` through the hosted REST schema, so the OTA control-plane migration still needs to be applied on the real beta backend before bench OTA can complete
+  - the OTA control-plane migration is now applied on the hosted beta project, and the live REST schema now exposes `devices.firmware_channel`, `firmware_releases`, and `check_device_firmware_release(...)`
+  - current real-hardware blocker after that unblock: bench device `AO_B0CBD8CFABB0` now reaches `install_ready`, writes real `device_firmware_update_requests` plus `device_firmware_ota_statuses` rows, and begins the OTA install path, but the current `2.0.0-beta.1` runtime hits a stack canary in `addone_sync` before staged download advances beyond backend-visible `requested`
 
 ## Required Beta Secrets / Values
 
@@ -153,3 +154,4 @@ Current beta backend values live locally in:
 - `check_device_firmware_release(...)` returns a real decision row for the beta device
 - `begin_firmware_update(...)` creates a persisted install request plus one queued `begin_firmware_update` command
 - `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`
+- current March 27, 2026 blocker after the hosted schema fix: the bench OTA loop is backend-visible through `requested`, but the current running firmware crashes in `addone_sync` before `downloading`, staged boot, local confirmation, or backend-visible `succeeded`
