@@ -13,6 +13,7 @@
 #include "device_settings.h"
 #include "device_identity.h"
 #include "habit_tracker.h"
+#include "ota_client.h"
 #include "provisioning_store.h"
 #include "realtime_client.h"
 #include "reward_engine.h"
@@ -135,6 +136,7 @@ private:
   CloudClient cloudClient_{};
   DeviceSettingsStore deviceSettings_{};
   HabitTracker habitTracker_{};
+  OtaClient otaClient_{};
   ProvisioningStore provisioningStore_{};
   RealtimeClient realtimeClient_{};
   RewardEngine rewardEngine_{};

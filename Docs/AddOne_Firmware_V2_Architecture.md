@@ -126,19 +126,24 @@ Used for:
 - Firmware v2 now has a minimal `device_settings.*` module, applies `apply_device_settings` commands from the cloud contract, and uses `ambient_light.*` to derive runtime brightness.
 - Firmware v2 now has a minimal `reward_engine.*` module and a real reward state with built-in `clock` and palette-based `paint` rendering.
 - Firmware v2 now has the first MQTT realtime client seam for online command delivery, while cloud polling remains as fallback.
-- The next firmware milestone is real broker-backed validation, then remaining hardware polish, custom reward payload sync, real-device validation, and the OTA client implementation against the now-live backend contract.
-- The OTA safety baseline is now locked before client implementation:
+- Firmware v2 now also has the first real OTA client path on top of the accepted backend contract:
+  - background release checks now call `check_device_firmware_release(...)`
+  - queued `begin_firmware_update` commands are treated as nudges and re-check the HTTPS control plane before install
+  - artifacts are downloaded into the inactive OTA slot and verified against the locked release envelope
+  - the provisional image stays unconfirmed until the local `120` second health gate passes
+  - failed confirmation rolls back through the ESP32 rollback path and is reported back through `report_device_ota_progress(...)`
+- The OTA safety baseline is now locked in the implemented client path:
   - field OTA targets only the application image
   - `addone-dual-ota-v1` is the required partition layout
   - a new image confirms only after local post-boot health passes
   - failed verification, failed boot, or failed confirmation must roll back automatically
   - the detailed release envelope now lives in [firmware/OTA_SAFETY_CONTRACT.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/OTA_SAFETY_CONTRACT.md)
-- The backend OTA control plane now exists before client implementation:
+- The backend OTA control plane now exists behind the client implementation:
   - release registry rows live in Supabase `firmware_releases`
   - rollout cohorts live in `firmware_release_rollout_allowlist`
   - persisted install requests live in `device_firmware_update_requests`
   - per-device OTA progress now lands in `device_firmware_ota_events` plus `device_firmware_ota_statuses`
-  - firmware can now build against `check_device_firmware_release(...)`, `report_device_ota_progress(...)`, and the queued `begin_firmware_update` trigger path without reopening the backend contract
+  - firmware now consumes `check_device_firmware_release(...)`, `report_device_ota_progress(...)`, and the queued `begin_firmware_update` trigger path without reopening the backend contract
 - Firmware v2 runtime rebuild direction:
   - physical button is fully local-first
   - background sync now runs separately from the main interaction loop

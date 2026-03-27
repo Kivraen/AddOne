@@ -429,6 +429,7 @@ void FirmwareApp::begin() {
   const bool freshFactoryBoard = !provisioningStore_.hasPendingClaim() && !provisioningStore_.isReadyForTracking();
   factoryQa_.available = factoryQaRequestedAtBoot_ || freshFactoryBoard;
   cloudClient_.begin(identity_);
+  otaClient_.begin(identity_, cloudClient_);
   timeService_.begin();
   timeService_.applySettings(deviceSettings_.current());
   if (factoryResetRequestedAtBoot_) {
@@ -463,6 +464,8 @@ void FirmwareApp::begin() {
   Serial.printf("Recovery requested at boot: %s\n", recoveryRequestedAtBoot_ ? "yes" : "no");
   Serial.printf("Factory reset requested at boot: %s\n", factoryResetRequestedAtBoot_ ? "yes" : "no");
   Serial.printf("Current reset epoch: %lu\n", static_cast<unsigned long>(provisioningStore_.resetEpoch()));
+  Serial.printf("Confirmed OTA release: %s\n",
+                otaClient_.confirmedReleaseId().isEmpty() ? "(none)" : otaClient_.confirmedReleaseId().c_str());
 
   if (recoveryRequestedAtBoot_ || provisioningStore_.hasPendingClaim() || !bootReadyForTracking_()) {
     enterState_(FirmwareState::SetupRecovery);
@@ -1314,6 +1317,15 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     return true;
   }
 
+  if (command.kind == "begin_firmware_update") {
+    if (!otaClient_.handleBeginUpdateCommand(command, failureReason)) {
+      return false;
+    }
+
+    Serial.println("Firmware OTA update check requested from cloud.");
+    return true;
+  }
+
   if (command.kind == "request_runtime_snapshot") {
     if (!hasAuthoritativeTime_()) {
       failureReason = "Authoritative time is unavailable.";
@@ -1710,6 +1722,12 @@ void FirmwareApp::drainIncomingCommands_() {
 
 void FirmwareApp::syncTask_() {
   for (;;) {
+    otaClient_.service(state_,
+                       bootReadyForTracking_(),
+                       recoveryRequestedAtRuntime_,
+                       pendingFactoryReset_,
+                       WiFi.status() == WL_CONNECTED);
+
     if (state_ == FirmwareState::SetupRecovery || !cloudClient_.isConfigured() || WiFi.status() != WL_CONNECTED) {
       vTaskDelay(pdMS_TO_TICKS(50));
       continue;

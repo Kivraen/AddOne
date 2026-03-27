@@ -63,8 +63,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-040` firmware OTA client and device flow
-- Current execution task: implement the firmware-side OTA client on top of the accepted `T-038` safety contract and accepted `T-039` backend control plane
+- Next brief: `T-041` firmware OTA artifact hosting and hardware validation
+- Current execution task: publish a real immutable firmware artifact, create a real OTA release row, and prove the OTA path on hardware on top of the accepted `T-040` firmware client baseline
 
 ## Current Blockers
 
@@ -84,11 +84,12 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-037` is now accepted on the same branch: both beta boards reconnect over TLS on per-device MQTT usernames, the broker helper now forces a Mosquitto recreate after password sync, and MQTT prefers `mqtt-beta.addone.studio` instead of the raw IP bootstrap path.
 - `T-038` is now accepted on `codex/s4-firmware-ota-safety`: the OTA safety contract is locked in-repo, the dual-slot OTA partition layout is tracked explicitly in the firmware build, and the OTA release envelope is concrete enough for implementation.
 - `T-039` is now accepted on `codex/s4-firmware-ota-control-plane`: the release registry schema, OTA progress sink, trigger path, and same-target in-progress re-check enforcement are now aligned with the frozen `T-038` safety contract.
+- `T-040` is now accepted on `codex/s4-firmware-ota-client`: the firmware now has a concrete OTA client path for HTTPS release checks, inactive-slot staging, provisional boot, local confirmation, and rollback reporting, but it is compile-proven rather than hardware-proven.
 - Residual rollout notes remain, but they are no longer `T-036`/`T-037` blockers:
   - keep the broker cert SAN aligned with `mqtt-beta.addone.studio`
   - repair the public `gateway-beta.addone.studio` HTTPS path before relying on it externally
   - tighten Mosquitto host-file ownership and mode warnings before broader rollout
-- `T-040` is now the active next slice: implement the firmware OTA client against the accepted `T-038` plus `T-039` contracts before opening app update UI or broader operator tooling.
+- `T-041` is now the active next slice: host a real immutable artifact, create a real release row, and validate the OTA flow on hardware before opening app update UI or broader operator tooling.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

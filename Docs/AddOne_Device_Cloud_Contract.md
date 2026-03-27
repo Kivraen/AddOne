@@ -283,11 +283,15 @@ Return:
   - keep fallback command poll enabled for backlog recovery
 - During steady state:
   - periodically call heartbeat
+  - periodically call `check_device_firmware_release(...)` so the device can discover `available` or `auto_apply` releases even without a queued command
   - fetch or refresh MQTT transport credentials through authenticated HTTPS if none are stored locally
   - process realtime commands immediately when online
   - periodically pull commands only as fallback / backlog recovery
   - ack command results
   - upload runtime snapshots after accepted runtime changes and after reconnect
+  - treat `begin_firmware_update` as a nudge only, then re-check the target over authenticated HTTPS before download or reboot
+  - persist the confirmed firmware `release_id` locally after a healthy OTA boot so later release checks and explicit rollback targeting stay aligned with the control plane
+  - report OTA progress through `report_device_ota_progress(...)` for `available`, `requested`, `downloading`, `downloaded`, `verifying`, `staged`, `rebooting`, `pending_confirm`, `succeeded`, and terminal rollback or failure states when the network path is available
 
 ## Current Implementation Status
 - App-side onboarding sessions are implemented.
@@ -298,6 +302,12 @@ Return:
 - Firmware v2 now has claim-redemption, heartbeat, command pull/ack, and runtime snapshot upload plumbing against the cloud RPC surface.
 - Firmware v2 now has the first real AddOne product behavior layer on top of that transport: button input, 21-week board state, time service, and board rendering.
 - Firmware v2 now also applies `apply_device_settings` commands for the AddOne v1 settings subset and uses ambient brightness at render time.
+- Firmware v2 now has a real OTA client path on top of the accepted `T-038` plus `T-039` contracts:
+  - periodic `check_device_firmware_release(...)` discovery
+  - `begin_firmware_update` command nudges that re-check the control plane before install
+  - inactive-slot application-image staging over CA-validated HTTPS
+  - local boot confirmation with the locked `120` second pending-confirm window
+  - automatic rollback reporting when a provisional image fails to confirm
 - A dedicated realtime transport contract now exists for MQTT-based online command delivery, with fallback polling retained for reliability.
 - The gateway now handles MQTT command publish plus MQTT ack, presence, day-event, and runtime-snapshot forwarding back into the existing Supabase RPC surface.
 - Runtime devices no longer rely on `register_factory_device(...)` as an auth-failure self-heal path; factory registration stays service-role only.

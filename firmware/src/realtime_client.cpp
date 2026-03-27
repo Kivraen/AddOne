@@ -446,6 +446,11 @@ bool RealtimeClient::replaceExistingQueuedCommand_(const CloudClient::DeviceComm
       return true;
     }
 
+    if (command.kind == "begin_firmware_update" && queued.kind == "begin_firmware_update") {
+      queued = command;
+      return true;
+    }
+
     if (command.kind == "set_day_state" &&
         queued.kind == "set_day_state" &&
         !command.localDate.isEmpty() &&

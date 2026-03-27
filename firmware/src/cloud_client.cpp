@@ -229,6 +229,65 @@ bool CloudClient::heartbeat() {
   return ok;
 }
 
+bool CloudClient::checkFirmwareRelease(OtaReleaseCheckResult& outResult, const String& currentConfirmedReleaseId) {
+  outResult = OtaReleaseCheckResult{};
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_current_firmware_version\":\"";
+  payload += escapeJson(Config::kFirmwareVersion);
+  payload += "\",\"p_current_partition_layout\":\"";
+  payload += escapeJson(Config::kOtaPartitionLayout);
+  payload += "\"";
+
+  if (!currentConfirmedReleaseId.isEmpty()) {
+    payload += ",\"p_current_confirmed_release_id\":\"";
+    payload += escapeJson(currentConfirmedReleaseId);
+    payload += "\"";
+  }
+
+  payload += "}";
+
+  String response;
+  if (!postRpc_("check_device_firmware_release", payload, response)) {
+    return false;
+  }
+
+  const size_t responseCapacity = response.length() * 2U + 2048U;
+  DynamicJsonDocument doc(responseCapacity < 6144U ? 6144U : responseCapacity);
+  JsonObjectConst resultObject;
+  if (!extractRpcObject_(response, doc, resultObject)) {
+    Serial.println("Failed to parse firmware release check payload.");
+    return false;
+  }
+
+  outResult.decision = resultObject["decision"] | "";
+  outResult.reason = resultObject["reason"] | "";
+  outResult.targetReleaseId = resultObject["target_release_id"] | "";
+  outResult.requestId = resultObject["request_id"] | "";
+  outResult.commandId = resultObject["command_id"] | "";
+  outResult.requestedAt = resultObject["requested_at"] | "";
+  outResult.installAuthorized =
+      resultObject["install_authorized"].isNull() ? false : resultObject["install_authorized"].as<bool>();
+
+  JsonVariantConst releaseVariant = resultObject["release"];
+  if (!releaseVariant.isNull() && releaseVariant.is<JsonObjectConst>()) {
+    outResult.hasRelease = parseOtaReleaseEnvelope_(releaseVariant, outResult.release);
+  }
+
+  if (outResult.targetReleaseId.isEmpty() && outResult.hasRelease) {
+    outResult.targetReleaseId = outResult.release.releaseId;
+  }
+
+  return !outResult.decision.isEmpty();
+}
+
 bool CloudClient::hasPersistedDeviceAuthToken() const {
   Preferences prefs;
   prefs.begin(kCloudPrefsNamespace, true);
@@ -424,6 +483,68 @@ bool CloudClient::reportFactoryReset(uint32_t resetEpoch) {
   return postRpc_("report_device_factory_reset", payload, response);
 }
 
+bool CloudClient::reportOtaProgress(const String& releaseId,
+                                    const String& state,
+                                    const String& failureCode,
+                                    const String& failureDetail,
+                                    OtaStatusSnapshot* outStatus) {
+  if (outStatus) {
+    *outStatus = OtaStatusSnapshot{};
+  }
+
+  if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_() ||
+      releaseId.isEmpty() || state.isEmpty()) {
+    return false;
+  }
+
+  String payload = "{";
+  payload += "\"p_hardware_uid\":\"";
+  payload += escapeJson(identity_->hardwareUid());
+  payload += "\",\"p_device_auth_token\":\"";
+  payload += escapeJson(deviceAuthToken_);
+  payload += "\",\"p_release_id\":\"";
+  payload += escapeJson(releaseId);
+  payload += "\",\"p_state\":\"";
+  payload += escapeJson(state);
+  payload += "\",\"p_firmware_version\":\"";
+  payload += escapeJson(Config::kFirmwareVersion);
+  payload += "\"";
+
+  if (!failureCode.isEmpty()) {
+    payload += ",\"p_failure_code\":\"";
+    payload += escapeJson(failureCode);
+    payload += "\"";
+  }
+
+  if (!failureDetail.isEmpty()) {
+    payload += ",\"p_failure_detail\":\"";
+    payload += escapeJson(failureDetail);
+    payload += "\"";
+  }
+
+  payload += "}";
+
+  String response;
+  if (!postRpc_("report_device_ota_progress", payload, response)) {
+    return false;
+  }
+
+  if (!outStatus) {
+    return true;
+  }
+
+  const size_t responseCapacity = response.length() * 2U + 2048U;
+  DynamicJsonDocument doc(responseCapacity < 6144U ? 6144U : responseCapacity);
+  JsonObjectConst resultObject;
+  if (!extractRpcObject_(response, doc, resultObject)) {
+    Serial.println("Failed to parse OTA progress response payload.");
+    return true;
+  }
+
+  outStatus->valid = parseOtaStatusSnapshot_(resultObject, *outStatus);
+  return true;
+}
+
 bool CloudClient::redeemPendingClaim(const ProvisioningContract::PendingClaim& claim, uint32_t resetEpoch) {
   if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
     return false;
@@ -586,6 +707,116 @@ bool CloudClient::loadPersistedMqttTransportCredentials_() {
   mqttBrokerUsername_ = username;
   mqttBrokerPassword_ = password;
   return true;
+}
+
+bool CloudClient::extractRpcObject_(const String& responseBody,
+                                    DynamicJsonDocument& document,
+                                    JsonObjectConst& outObject) const {
+  outObject = JsonObjectConst();
+  if (responseBody.isEmpty()) {
+    return false;
+  }
+
+  DeserializationError error = deserializeJson(document, responseBody);
+  if (error) {
+    Serial.printf("Failed to parse RPC payload: %s\n", error.c_str());
+    return false;
+  }
+
+  if (document.is<JsonArrayConst>()) {
+    JsonArrayConst entries = document.as<JsonArrayConst>();
+    if (entries.isNull() || entries.size() == 0 || !entries[0].is<JsonObjectConst>()) {
+      return false;
+    }
+    outObject = entries[0].as<JsonObjectConst>();
+    return !outObject.isNull();
+  }
+
+  if (!document.is<JsonObjectConst>()) {
+    return false;
+  }
+
+  outObject = document.as<JsonObjectConst>();
+  return !outObject.isNull();
+}
+
+bool CloudClient::parseOtaReleaseEnvelope_(JsonVariantConst source, OtaReleaseEnvelope& outRelease) const {
+  outRelease = OtaReleaseEnvelope{};
+  JsonObjectConst releaseObject = source.as<JsonObjectConst>();
+  if (releaseObject.isNull()) {
+    return false;
+  }
+
+  JsonObjectConst artifact = releaseObject["artifact"].as<JsonObjectConst>();
+  JsonObjectConst compatibility = releaseObject["compatibility"].as<JsonObjectConst>();
+  JsonObjectConst rollback = releaseObject["rollback"].as<JsonObjectConst>();
+  JsonObjectConst bootConfirmation = releaseObject["boot_confirmation"].as<JsonObjectConst>();
+
+  outRelease.schemaVersion = releaseObject["schema_version"] | 0;
+  outRelease.releaseId = releaseObject["release_id"] | "";
+  outRelease.firmwareVersion = releaseObject["firmware_version"] | "";
+  outRelease.hardwareProfile = releaseObject["hardware_profile"] | "";
+  outRelease.partitionLayout = releaseObject["partition_layout"] | "";
+  outRelease.channel = releaseObject["channel"] | "";
+  outRelease.status = releaseObject["status"] | "";
+  outRelease.installPolicy = releaseObject["install_policy"] | "";
+  if (releaseObject["rollout"].is<JsonObjectConst>()) {
+    outRelease.rolloutMode = releaseObject["rollout"]["mode"] | "";
+  }
+
+  outRelease.artifact.kind = artifact["kind"] | "";
+  outRelease.artifact.url = artifact["url"] | "";
+  outRelease.artifact.sha256 = artifact["sha256"] | "";
+  outRelease.artifact.sizeBytes = artifact["size_bytes"] | 0;
+
+  outRelease.compatibility.minimumPartitionLayout = compatibility["minimum_partition_layout"] | "";
+  outRelease.compatibility.minimumConfirmedFirmwareVersion =
+      compatibility["minimum_confirmed_firmware_version"] | "";
+
+  outRelease.rollback.previousStableReleaseId = rollback["previous_stable_release_id"] | "";
+  outRelease.rollback.allowDowngradeToPreviousStable =
+      rollback["allow_downgrade_to_previous_stable"].isNull()
+          ? false
+          : rollback["allow_downgrade_to_previous_stable"].as<bool>();
+
+  outRelease.bootConfirmation.confirmWindowSeconds = bootConfirmation["confirm_window_seconds"] | 0;
+  outRelease.bootConfirmation.requireNormalRuntimeState =
+      bootConfirmation["require_normal_runtime_state"].isNull()
+          ? false
+          : bootConfirmation["require_normal_runtime_state"].as<bool>();
+  outRelease.bootConfirmation.requireCloudCheckIn =
+      bootConfirmation["require_cloud_check_in"].isNull()
+          ? false
+          : bootConfirmation["require_cloud_check_in"].as<bool>();
+
+  outRelease.valid =
+      outRelease.schemaVersion == 1 &&
+      !outRelease.releaseId.isEmpty() &&
+      !outRelease.firmwareVersion.isEmpty() &&
+      !outRelease.hardwareProfile.isEmpty() &&
+      !outRelease.partitionLayout.isEmpty() &&
+      !outRelease.artifact.kind.isEmpty() &&
+      !outRelease.artifact.url.isEmpty() &&
+      !outRelease.artifact.sha256.isEmpty() &&
+      outRelease.artifact.sizeBytes > 0;
+  return outRelease.valid;
+}
+
+bool CloudClient::parseOtaStatusSnapshot_(JsonObjectConst source, OtaStatusSnapshot& outStatus) const {
+  outStatus = OtaStatusSnapshot{};
+  if (source.isNull()) {
+    return false;
+  }
+
+  outStatus.currentState = source["current_state"] | "";
+  outStatus.targetReleaseId = source["target_release_id"] | "";
+  outStatus.confirmedReleaseId = source["confirmed_release_id"] | "";
+  outStatus.lastFailureCode = source["last_failure_code"] | "";
+  outStatus.lastFailureDetail = source["last_failure_detail"] | "";
+  outStatus.otaStartedAt = source["ota_started_at"] | "";
+  outStatus.otaCompletedAt = source["ota_completed_at"] | "";
+  outStatus.valid = !outStatus.currentState.isEmpty() || !outStatus.targetReleaseId.isEmpty();
+  return outStatus.valid;
 }
 
 bool CloudClient::postRpc_(const char* rpcName, const String& payload, String& responseBody) {

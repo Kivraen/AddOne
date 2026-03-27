@@ -86,9 +86,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-040` firmware OTA client and device flow
+  `T-041` firmware OTA artifact hosting and hardware validation
 - Current execution task:
-  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, treat `T-039` as the accepted backend control-plane baseline, then implement the firmware OTA client in `T-040`
+  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, treat `T-039` as the accepted backend control-plane baseline, treat `T-040` as the accepted firmware OTA client baseline, then prove the OTA path on real hardware in `T-041`
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 
@@ -180,6 +180,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - lock the firmware OTA safety model and release contract
 - build the OTA control plane in Supabase
 - implement the firmware OTA client
+- host the immutable OTA artifact and prove the OTA path on real hardware
 - add the minimum app update and status surfaces
 - build operator rollout and rollback tooling
 - run internal, then small-cohort, then broader launch validation

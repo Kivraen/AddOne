@@ -30,6 +30,12 @@ Current contents:
 - ambient-light-driven brightness control with palette preset application
 - optional reward engine with built-in `clock` and palette-based `paint` rendering
 - realtime MQTT command client plus MQTT presence and runtime snapshot publish for low-latency online delivery, with fallback cloud polling still retained
+- OTA client plumbing that:
+  - periodically checks the HTTPS control plane for eligible releases
+  - treats `begin_firmware_update` as a nudge and re-checks the target before install
+  - stages the inactive OTA slot over CA-validated HTTPS
+  - keeps the new image provisional for the locked `120` second health gate
+  - reports success, failure, and rollback back through the OTA progress sink
 - offline-first boot behavior for provisioned devices with valid RTC time
 - capped background Wi-Fi reconnect without automatic AP takeover for ordinary offline boots
 - `5 second` runtime long-hold to enter Wi-Fi recovery

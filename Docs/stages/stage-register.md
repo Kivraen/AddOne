@@ -14,7 +14,7 @@ Last updated: March 26, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: `T-040` firmware OTA client and device flow
+- Next brief: `T-041` firmware OTA artifact hosting and hardware validation
 
 ## Stage Notes
 
@@ -43,7 +43,8 @@ Last updated: March 26, 2026
 - `T-037` is now accepted on `codex/s4-release-operations-baseline`.
 - `T-038` is now accepted on `codex/s4-firmware-ota-safety`.
 - `T-039` is now accepted on `codex/s4-firmware-ota-control-plane`.
-- `T-040` is now the active implementation slice.
+- `T-040` is now accepted on `codex/s4-firmware-ota-client`.
+- `T-041` is now the active implementation slice.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
