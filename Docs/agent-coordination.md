@@ -60,6 +60,21 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - Do not default to browser or Chrome automation for native AddOne app proof when the same proof can be captured from the simulator.
 - If simulator proof is blocked, the worker should say exactly what is blocked instead of silently switching to browser proof.
 
+Copy-paste brief snippet for native UI tasks:
+
+```md
+Native proof rule:
+- For native AddOne app proof, prefer Metro + iOS Simulator, not Playwright/browser automation.
+- Before starting a new dev server, check whether Metro is already running and reuse it if possible.
+- Preferred proof flow:
+  1. verify or start Metro
+  2. open or boot the iOS Simulator
+  3. open the target route with `xcrun simctl openurl booted <exp://...>` or the installed app target
+  4. capture proof with `xcrun simctl io booted screenshot ...`
+- Use Playwright only if the proof target is a real web surface or an external hosted page.
+- If simulator proof is blocked, say exactly what is blocked instead of switching silently to browser proof.
+```
+
 ## Default Coordinator Loop
 
 1. Confirm the active stage and the next execution task that belongs to it.
