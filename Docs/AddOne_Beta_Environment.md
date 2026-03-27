@@ -209,8 +209,12 @@ Exact matrix used on the corrected baseline:
 - installable app path:
   - `eas build:list --platform ios --limit 10 --json --non-interactive`
   - `eas build:list --platform android --limit 10 --json --non-interactive`
-  - local fallback attempt for a fresh internal IPA:
-    - `EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform ios --profile beta --local --non-interactive --output /tmp/addone-beta-dce8541.ipa`
+  - local fallback rerun for a fresh internal IPA:
+    - `git diff --name-only dce8541..d564389`
+    - `xcodebuild -version`
+    - `xcodebuild -showsdks`
+    - `ls /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport`
+    - `EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform ios --profile beta --local --non-interactive --output /tmp/addone-beta-d564389.ipa`
   - config audit in [eas.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/eas.json) and [app.config.js](/Users/viktor/Desktop/DevProjects/Codex/AddOne/app.config.js)
 - active OTA release and artifact:
   - read-only `firmware_releases` and `firmware_release_rollout_allowlist` queries for `fw-beta-20260327-05`
@@ -244,11 +248,19 @@ Current result:
       - status: `IN_QUEUE`
       - build version: `7`
       - created at: `2026-03-27T19:07:04.363Z`
-      - queue position at rerun time: `1033`
-      - estimated wait remaining at rerun time: `10694` seconds
+      - queue position at current rerun time: `943`
+      - estimated wait remaining at current rerun time: `9852` seconds
   - the local IPA fallback is still blocked on the host Xcode installation:
-    - the local `beta` build reached `xcodebuild archive`
-    - `xcodebuild` failed because `iOS 26.4 is not installed`
-    - no `/tmp/addone-beta-dce8541.ipa` artifact was produced
+    - `git diff --name-only dce8541..d564389` shows only doc files changed, so the resumed local rerun still exercised the same app/build inputs as `dce8541`
+    - the local `beta` build again reached `xcodebuild archive`
+    - `xcodebuild` still failed with:
+      - `Unable to find a destination matching the provided destination specifier`
+      - `Any iOS Device, error: iOS 26.4 is not installed. Please download and install the platform from Xcode > Settings > Components.`
+    - host state remains inconsistent:
+      - `xcodebuild -version` reports `Xcode 26.4`
+      - `xcodebuild -showsdks` lists `iOS 26.4`
+      - `/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport` only contains `15.0` through `16.4`
+    - a brief CLI repair attempt with `xcodebuild -downloadPlatform iOS` was stopped after it began downloading `iOS 26.4 Simulator (23E244) (arm64)`, which is not trustworthy proof that the missing device-archive component would be fixed
+    - no `/tmp/addone-beta-dce8541.ipa` or `/tmp/addone-beta-d564389.ipa` artifact was produced
 - non-blocking operational risk:
   - `https://gateway-beta.addone.studio/health` still is not a usable public health target because it returns `HTTP 404`; keep on-host checks until that route is repaired

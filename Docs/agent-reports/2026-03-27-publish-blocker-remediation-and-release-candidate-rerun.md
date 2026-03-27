@@ -4,7 +4,7 @@ S4: Beta Hardening And Durable Release Memory
 Status
 Blocked on `codex/s4-release-candidate-remediation`.
 
-This rerun stayed narrow to the explicit `T-044` blocker list. The live firmware-cohort blocker is cleared: `AO_A4F00F767008` is no longer in the active `fw-beta-20260327-05` allowlist, and its owner-facing update summary now reports `not_in_rollout` instead of offering a user-triggered install. The installable-artifact blocker is not cleared yet: fresh iOS builds were launched from commit `dce8541be1cd3fa1662c39b2d608a68f20158770`, but no finished March 27, 2026 iOS artifact exists yet because the remote store build is still queued in EAS and the local IPA fallback is blocked by the host Xcode installation missing the iOS 26.4 device platform. Android remains explicitly deferred and was not reopened in this iOS-first gate.
+This rerun stayed narrow to the explicit `T-044` blocker list. The live firmware-cohort blocker remains cleared: `AO_A4F00F767008` is still out of the active `fw-beta-20260327-05` allowlist, and its owner-facing update summary still reports `not_in_rollout` instead of offering a user-triggered install. The installable-artifact blocker is still not cleared. The remote `dce8541` iOS jobs are still `NEW` / `IN_QUEUE`, and a resumed local IPA retry from branch tip `d564389` also failed at `xcodebuild archive`. That branch-tip rerun is still relevant to the `dce8541` artifact gate because `git diff --name-only dce8541..d564389` shows only doc changes, not app or build-input changes. Android remains explicitly deferred and was not reopened in this iOS-first gate.
 
 Changes made
 - Remediated the active rollout state for `fw-beta-20260327-05` so the allowlist now contains only `AO_B0CBD8CFABB0`.
@@ -16,6 +16,12 @@ Changes made
   - temporarily set repo-local `core.ignorecase=true` so EAS could package, then restored it to `false`
   - installed `fastlane` with Homebrew
   - reinstalled `cocoapods` with Homebrew after the Ruby/ffi conflict broke `pod`
+- Resumed the remaining iOS-artifact blocker on branch tip `d564389`:
+  - verified `dce8541..d564389` is doc-only, so the local rerun still exercised the same app/build inputs as the accepted March 27 release-candidate baseline
+  - retried the local internal IPA build outside the sandbox to get through EAS cache and git-config writes
+  - confirmed the local archive still fails on the same `Any iOS Device` / `iOS 26.4 is not installed` host error even though Xcode 26.4 and the iOS 26.4 SDK are present
+  - checked `/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport` and found only `15.0` through `16.4`
+  - briefly tried `xcodebuild -downloadPlatform iOS`, then stopped it after confirming it was downloading the `iOS 26.4 Simulator` runtime rather than a clearly correct device-archive fix
 - Updated the scoped runbook and added this report.
 
 Exact files changed in the final branch state:
@@ -66,13 +72,44 @@ Commands run
 - `git config core.ignorecase false`
 - `git rev-parse HEAD`
 - `git log --oneline --decorate -1`
+- `git rev-parse HEAD`
+- `xcodebuild -version`
+- `xcodebuild -showsdks`
+- `ls /Applications/Xcode.app/Contents/Developer/Platforms`
+- `EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform ios --profile beta --local --non-interactive --output /tmp/addone-beta-d564389.ipa`
+- `xcodebuild -help`
+- `ls /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport`
+- `xcodebuild -checkFirstLaunchStatus`
+- `eas build:list --platform ios --limit 10 --json --non-interactive`
+- `git show --stat --oneline --no-patch d564389`
+- `git diff --stat dce8541..d564389`
+- `git diff --name-only dce8541..d564389`
+- `git status --short --branch`
+- `git config --get core.ignorecase`
+- `ls -lh /tmp/addone-beta-d564389.ipa /tmp/addone-beta-dce8541.ipa`
+- `xcodebuild -downloadPlatform iOS`
+- `ps -axo pid=,command= | rg "xcodebuild -downloadPlatform iOS|iOS 26.4 Simulator|xcodebuild -downloadPlatform"`
+- `kill 64628`
 
 Evidence
 - Corrected baseline:
-  - branch: `codex/s4-release-candidate-remediation`
-  - commit: `dce8541be1cd3fa1662c39b2d608a68f20158770`
-  - subject: `Refine T-045 for iOS-first launch`
-  - `npm run typecheck` passed on this baseline
+  - accepted March 27 release-candidate baseline:
+    - branch: `codex/s4-release-candidate-remediation`
+    - commit: `dce8541be1cd3fa1662c39b2d608a68f20158770`
+    - subject: `Refine T-045 for iOS-first launch`
+    - `npm run typecheck` passed on this baseline
+  - current branch tip during the blocked-slice resume:
+    - commit: `d564389283406156d23575b3857090f661e794e8`
+    - subject: `Checkpoint blocked T-045 iOS artifact gate`
+    - `git diff --name-only dce8541..d564389` shows only:
+      - `Docs/Active_Work.md`
+      - `Docs/AddOne_Beta_Environment.md`
+      - `Docs/AddOne_Main_Plan.md`
+      - `Docs/agent-reports/2026-03-27-publish-blocker-remediation-and-release-candidate-rerun.md`
+      - `Docs/project-memory.md`
+      - `Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md`
+      - `Docs/stages/stage-register.md`
+    - no app, build-profile, or native source files changed between `dce8541` and `d564389`
 - Exact remediation action on `AO_A4F00F767008`:
   - changed live rollout state for `fw-beta-20260327-05` with:
     - `node services/firmware-rollout-operator/index.mjs target --release fw-beta-20260327-05 --hardware-uids AO_B0CBD8CFABB0 --env-file .codex-tmp/realtime-gateway.env --json`
@@ -100,29 +137,48 @@ Evidence
   - remote EAS jobs created from `dce8541`:
     - internal `beta`
       - build id: `eeaf522a-4cd8-41a2-b77d-338354af7689`
-      - status at rerun time: `NEW`
+      - status at current rerun time: `NEW`
       - app version: `0.2.0`
       - build version: `7`
       - created at: `2026-03-27T19:07:04.657Z`
     - store `testflight`
       - build id: `7d230430-ddb5-43df-b700-2b2c05a31fc8`
-      - status at rerun time: `IN_QUEUE`
+      - status at current rerun time: `IN_QUEUE`
       - app version: `0.2.0`
       - build version: `7`
       - created at: `2026-03-27T19:07:04.363Z`
-      - queue position at rerun time: `1033`
-      - estimated wait remaining at rerun time: `10694` seconds
+      - queue position at current rerun time: `943`
+      - estimated wait remaining at current rerun time: `9852` seconds
   - local fallback attempts:
     - repaired host toolchain until local EAS reached `xcodebuild archive`
-    - no fresh `.ipa` was produced
-    - final local blocker:
+    - resumed local `beta` IPA rerun from branch tip `d564389` after verifying that `dce8541..d564389` is doc-only
+    - no fresh `.ipa` was produced at `/tmp/addone-beta-dce8541.ipa` or `/tmp/addone-beta-d564389.ipa`
+    - exact repeated local blocker:
       - `xcodebuild: error: Unable to find a destination matching the provided destination specifier`
-      - `iOS 26.4 is not installed. Please download and install the platform from Xcode > Settings > Components.`
+      - `Ineligible destinations for the "AddOneBeta" scheme:`
+      - `{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device, error:iOS 26.4 is not installed. Please download and install the platform from Xcode > Settings > Components. }`
+    - supporting host state:
+      - `xcodebuild -version` returned `Xcode 26.4` / `Build version 17E192`
+      - `xcodebuild -showsdks` listed `iOS 26.4`
+      - `/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport` contained only `15.0`, `15.2`, `15.4`, `15.5`, `16.0`, `16.1`, and `16.4`
+    - attempted CLI repair path:
+      - `xcodebuild -downloadPlatform iOS` began downloading `iOS 26.4 Simulator (23E244) (arm64)` as an 8.46 GB payload
+      - that download was stopped because it targets the simulator runtime and is not trustworthy proof that the missing device-archive component would be repaired
 - Exact rerun matrix and results:
   - installable app path:
     - `eas build:list --platform ios --limit 10 --json --non-interactive`
-      - shows the new `dce8541` internal/store jobs above
+      - still shows the `dce8541` internal/store jobs above in `NEW` / `IN_QUEUE`
       - still shows no finished March 27, 2026 iOS artifact
+    - `git diff --name-only dce8541..d564389`
+      - confirmed the resumed local rerun used the same app/build inputs as the accepted `dce8541` baseline
+    - `xcodebuild -version`
+      - returned `Xcode 26.4`
+    - `xcodebuild -showsdks`
+      - listed `iOS 26.4`
+    - `ls /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport`
+      - showed only `15.0` through `16.4`
+    - `EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform ios --profile beta --local --non-interactive --output /tmp/addone-beta-d564389.ipa`
+      - again reached `xcodebuild archive` and failed on the same missing `Any iOS Device` / `iOS 26.4` component error
     - `eas build:list --platform android --limit 10 --json --non-interactive`
       - returned `[]`
       - Android remains explicitly deferred and was not reopened in this iOS-first gate
@@ -163,7 +219,11 @@ Open risks / blockers
 - `P0` iOS artifact blocker:
   - there is still no finished installable iOS artifact for baseline `dce8541`.
   - remote builds were launched correctly, but they are not done yet.
-  - local IPA fallback is blocked because the host Xcode installation does not have the iOS 26.4 platform component required for device archives.
+  - local IPA fallback is still blocked by a host Xcode device-archive inconsistency:
+    - Xcode 26.4 and the iOS 26.4 SDK are present
+    - `Any iOS Device` still reports `iOS 26.4 is not installed`
+    - the visible `DeviceSupport` directory stops at `16.4`
+    - the obvious CLI repair attempt only pulled the simulator runtime, not a clearly correct fix for the archive path
 - `P2` operational risk:
   - `https://gateway-beta.addone.studio/health` still returns `HTTP/2 404`.
   - this remains non-blocking for the RC evidence because hosted device traffic and OTA state are still live, but it should be repaired before broader operations rely on it.
@@ -175,8 +235,8 @@ Open risks / blockers
 Recommendation
 Do not start iOS submission prep yet.
 
-`AO_A4F00F767008` is no longer a release-candidate blocker because it is explicitly out of the active cohort, but `T-045` is still blocked on fresh finished iOS artifacts. The next narrow move should be one of:
+`AO_A4F00F767008` is no longer a release-candidate blocker because it is explicitly out of the active cohort, but `T-045` is still blocked on one explicit remaining blocker: no finished installable iOS artifact exists yet for baseline `dce8541`. The next narrow move should be one of:
 - wait for EAS jobs `eeaf522a-4cd8-41a2-b77d-338354af7689` and `7d230430-ddb5-43df-b700-2b2c05a31fc8` to finish, then rerun the installable-artifact portion of the matrix
-- or install the iOS 26.4 platform in Xcode, rerun the local `beta` and `testflight` IPA builds from `dce8541`, and then repeat the same artifact checks
+- or manually repair the missing Xcode device-archive component from Xcode Settings > Components, then rerun the local `beta` and `testflight` IPA builds from the same app/build baseline and repeat the artifact checks
 
-Until one of those completes, the corrected baseline is clearer than `T-044` but not yet ready for iOS submission prep.
+Do not use `xcodebuild -downloadPlatform iOS` as proof-path remediation for this gate; in this environment it started downloading the `iOS 26.4 Simulator` runtime, not a clearly correct fix for the `generic/platform=iOS` archive failure. Until one of the two paths above completes, the corrected baseline is clearer than `T-044` but not yet ready for iOS submission prep.
