@@ -5,11 +5,11 @@ You are working in:
 `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
 
 Implementation branch:
-Create a fresh branch from `main`:
+Create a fresh branch from the accepted `T-035` checkpoint:
 `codex/s4-release-operations-baseline`
 
 Stable baseline:
-`main` is the official stable branch. Do not work directly on `main`.
+Base this work on `codex/s4-transport-trust-and-device-identity` at the accepted checkpoint, because `T-036` depends on the unmerged `T-035` transport hardening slice. Do not work directly on `main`.
 
 Mode:
 This is an implementation task. Keep it narrow to making the accepted transport-hardening baseline actually operable on the hosted beta stack.
