@@ -63,8 +63,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-037` MQTT TLS acceptance and device reprovisioning
-- Current execution task: resolve the hosted MQTT TLS acceptance failure on the hardened device and reprovision the second beta device so the broker is running entirely on per-device MQTT credentials before OTA implementation begins
+- Next brief: `T-038` firmware OTA safety model and release contract
+- Current execution task: lock the device-side OTA safety model and release contract now that the hardened hosted baseline is accepted end to end
 
 ## Current Blockers
 
@@ -80,11 +80,13 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-035` is now accepted on `codex/s4-transport-trust-and-device-identity` as the first implementation slice coming out of launch planning.
 - `T-035` fixed the shipped firmware trust path: no `setInsecure()` in firmware, no fleet-shared MQTT credential model, broker ACLs now exist, and runtime self-reregistration is removed from the field-device path.
 - `T-035` is still operationally incomplete until the hosted beta stack has the new migration applied, real CA PEM material in the ignored firmware headers, and a rendered or installed Mosquitto `passwords.txt` generated from the new credential source.
-- `T-036` now has a real hosted checkpoint on `codex/s4-release-operations-baseline`: the migration is applied, the broker password render/install flow is live, and one hardened device completed a hosted command/apply loop.
-- `T-036` is not accepted yet. The remaining blocker is MQTT TLS acceptance on the hardened device (`state=-2` plus broker-side `ssl/tls alert bad certificate`), and the second beta device still needs reprovisioning off the legacy fleet credential.
-- `T-037` has now resolved the TLS root cause for `AO_B0CBD8CFABB0`: the hardened device reconnects over TLS using the verification-name override and the broker accepts it cleanly on its issued username.
-- `T-037` is still blocked because `AO_A4F00F767008` is not physically attached in this workspace and still needs reflashing or reprovisioning off the legacy fleet credential.
-- `T-037` remains the active slice because release-readiness still needs both beta boards on the per-device MQTT path before OTA or broader rollout work is safe.
+- `T-036` is now accepted on `codex/s4-release-operations-baseline`: the migration is applied, the broker password render/install flow is live, the hosted command loop is proven, and the hosted MQTT reconnect path is now real on the hardened model.
+- `T-037` is now accepted on the same branch: both beta boards reconnect over TLS on per-device MQTT usernames, the broker helper now forces a Mosquitto recreate after password sync, and MQTT prefers `mqtt-beta.addone.studio` instead of the raw IP bootstrap path.
+- Residual rollout notes remain, but they are no longer `T-036`/`T-037` blockers:
+  - keep the broker cert SAN aligned with `mqtt-beta.addone.studio`
+  - repair the public `gateway-beta.addone.studio` HTTPS path before relying on it externally
+  - tighten Mosquitto host-file ownership and mode warnings before broader rollout
+- `T-038` is now the next active slice because the hardened rollout baseline is finally good enough to lock the OTA safety model before building the OTA control plane or firmware client.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

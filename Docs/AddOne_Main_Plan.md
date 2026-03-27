@@ -86,9 +86,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-037` MQTT TLS acceptance and device reprovisioning
+  `T-038` firmware OTA safety model and release contract
 - Current execution task:
-  treat `T-035` as the accepted first transport-hardening baseline, use the `T-036` checkpoint as the hosted rollout starting point, preserve the `T-037` TLS fix on the active rollout branch, then finish the remaining second-device reprovisioning blocker before OTA implementation begins
+  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, then lock the OTA safety model before building the OTA control plane or firmware client
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 
@@ -118,7 +118,8 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - The beta backend now also has factory preregistration support plus `factory_device_runs` records for bench QA notes and ship-ready signoff.
 - The first `S4` hardening slice now exists on `codex/s4-transport-trust-and-device-identity`: firmware HTTPS/MQTT fail closed without CA material, devices fetch per-device MQTT credentials over authenticated HTTPS, broker ACLs isolate device topics, and runtime self-reregistration is removed from the field-device path.
 - The hosted rollout follow-up now exists on `codex/s4-release-operations-baseline`: the migration is applied, the broker password render/install flow is live, and one hardened device completed a hosted command/apply loop, but MQTT TLS acceptance is still failing and blocks acceptance of that slice.
-- The active rollout branch now also contains the `T-037` TLS fix: `AO_B0CBD8CFABB0` reconnects successfully over TLS using a broker verification-name override, but `AO_A4F00F767008` still needs physical reflashing or reprovisioning before the hosted MQTT lane is fully accepted.
+- The hosted rollout baseline on `codex/s4-release-operations-baseline` is now accepted: migration applied, broker password render/install flow fixed, both beta boards on per-device MQTT credentials, and MQTT cut over to `mqtt-beta.addone.studio`.
+- The public gateway hostname still needs server-side repair before it becomes the external health target, and the Mosquitto host-file ownership warnings still need cleanup, but those are now residual operator items rather than launch-baseline blockers.
 - Remaining backend work is mostly hosted-beta validation and hardening, not foundational schema design.
 
 ### Firmware
@@ -174,6 +175,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - accept and checkpoint the transport trust and device identity baseline
 - clean release operations and the hosted launch baseline on top of that hardened transport path
 - resolve the hardened-device MQTT TLS acceptance and finish reprovisioning the second beta device off the legacy fleet credential
+- lock the firmware OTA safety model and release contract
 - lock the device-side OTA safety model
 - build the OTA control plane in Supabase
 - implement the firmware OTA client

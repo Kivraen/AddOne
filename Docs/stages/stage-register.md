@@ -14,7 +14,7 @@ Last updated: March 26, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: `T-037` MQTT TLS acceptance and device reprovisioning
+- Next brief: `T-038` firmware OTA safety model and release contract
 
 ## Stage Notes
 
@@ -40,8 +40,9 @@ Last updated: March 26, 2026
 - `T-034` is now accepted as the launch-readiness planning checkpoint.
 - `T-035` is now accepted on `codex/s4-transport-trust-and-device-identity` as the first launch-blocking hardening slice.
 - `T-036` now has a checkpointed hosted-baseline branch but remains `revise and retry` because the hardened device still fails MQTT TLS reconnect and the second beta device still uses the legacy fleet credential.
-- `T-037` is now the active implementation slice.
-- `T-037` is currently `blocked`: the TLS fix is live-proven for `AO_B0CBD8CFABB0`, but `AO_A4F00F767008` still requires physical reflashing or reprovisioning before the broker is fully off the mixed legacy/per-device state.
+- `T-036` is now accepted on `codex/s4-release-operations-baseline`.
+- `T-037` is now accepted on `codex/s4-release-operations-baseline`.
+- `T-038` is now the next active implementation slice.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
