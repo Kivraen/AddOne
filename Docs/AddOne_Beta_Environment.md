@@ -96,7 +96,10 @@ Recommended hostname targets:
   - the OTA control-plane migration is now applied on the hosted beta project, and the live REST schema now exposes `devices.firmware_channel`, `firmware_releases`, and `check_device_firmware_release(...)`
   - the original `addone_sync` OTA crash on `AO_B0CBD8CFABB0` is fixed by increasing the sync-task stack headroom in firmware
   - the rolled-back release `fw-beta-20260326-02` should stay non-active because it reproduced the stack-canary failure on real hardware
-  - current bench-only blocker after the stack fix: the device now reaches `downloaded`, `verifying`, `staged`, `rebooting`, and boots `2.0.0-beta.3`, but attaching a normal serial monitor during provisional boot causes an extra `SW_CPU_RESET` and rollback before local confirmation completes
+  - current bench-only blocker after the stack fix is narrower but still unresolved:
+    - an earlier March 27 validation run still proves `fw-beta-20260327-03` can reach `downloaded`, `verifying`, `staged`, `rebooting`, and provisional `2.0.0-beta.3` boot on real hardware
+    - a later raw-serial diagnostic rerun on `/dev/cu.usbserial-10` only reached backend-visible `requested` and `downloading`, then logged `Cloud RPC report_device_ota_progress -> HTTP -1`; the board resumed `2.0.0-beta.1` check-ins only after the raw serial port was released
+    - a follow-up retry with no serial attached delivered and applied `begin_firmware_update`, but produced no new OTA progress rows and the board stopped checking in after `2026-03-27T07:50:57Z` while still on `2.0.0-beta.1`
 
 ## Required Beta Secrets / Values
 
@@ -159,5 +162,5 @@ Current beta backend values live locally in:
 - `check_device_firmware_release(...)` returns a real decision row for the beta device
 - `begin_firmware_update(...)` creates a persisted install request plus one queued `begin_firmware_update` command
 - `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`
-- the original March 27, 2026 stack-canary loop is cleared; bench OTA now reaches `downloaded`, `verifying`, `staged`, and provisional boot on real hardware
-- avoid reset-toggling serial monitors during provisional OTA boots, or they can force a rollback before the 120-second local confirmation window completes
+- the original March 27, 2026 stack-canary loop is cleared; an earlier beta.3 validation run reached `downloaded`, `verifying`, `staged`, `rebooting`, and provisional boot on real hardware
+- avoid reset-toggling serial monitors during provisional OTA boots, but note that the latest serial-free retry still stalled before provisional boot; the clean `pending_confirm -> succeeded` proof is still missing
