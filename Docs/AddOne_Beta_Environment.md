@@ -89,9 +89,14 @@ Recommended hostname targets:
   - field OTA will target only the application image; bootloader and partition-layout changes remain factory or USB operations
   - OTA registry records now live in Supabase `firmware_releases` plus `firmware_release_rollout_allowlist`; install requests are persisted in `device_firmware_update_requests`, not only in MQTT traffic
   - the first real OTA artifact path now uses the hosted project-domain storage bucket `firmware-artifacts`, for example:
-    - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260326-02/firmware-42e687ee3dae9497.bin`
+    - rolled-back beta.2 validation artifact:
+      - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260326-02/firmware-42e687ee3dae9497.bin`
+    - current fixed beta.3 validation artifact:
+      - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-03/firmware-9b6857af3439fcfb.bin`
   - the OTA control-plane migration is now applied on the hosted beta project, and the live REST schema now exposes `devices.firmware_channel`, `firmware_releases`, and `check_device_firmware_release(...)`
-  - current real-hardware blocker after that unblock: bench device `AO_B0CBD8CFABB0` now reaches `install_ready`, writes real `device_firmware_update_requests` plus `device_firmware_ota_statuses` rows, and begins the OTA install path, but the current `2.0.0-beta.1` runtime hits a stack canary in `addone_sync` before staged download advances beyond backend-visible `requested`
+  - the original `addone_sync` OTA crash on `AO_B0CBD8CFABB0` is fixed by increasing the sync-task stack headroom in firmware
+  - the rolled-back release `fw-beta-20260326-02` should stay non-active because it reproduced the stack-canary failure on real hardware
+  - current bench-only blocker after the stack fix: the device now reaches `downloaded`, `verifying`, `staged`, `rebooting`, and boots `2.0.0-beta.3`, but attaching a normal serial monitor during provisional boot causes an extra `SW_CPU_RESET` and rollback before local confirmation completes
 
 ## Required Beta Secrets / Values
 
@@ -154,4 +159,5 @@ Current beta backend values live locally in:
 - `check_device_firmware_release(...)` returns a real decision row for the beta device
 - `begin_firmware_update(...)` creates a persisted install request plus one queued `begin_firmware_update` command
 - `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`
-- current March 27, 2026 blocker after the hosted schema fix: the bench OTA loop is backend-visible through `requested`, but the current running firmware crashes in `addone_sync` before `downloading`, staged boot, local confirmation, or backend-visible `succeeded`
+- the original March 27, 2026 stack-canary loop is cleared; bench OTA now reaches `downloaded`, `verifying`, `staged`, and provisional boot on real hardware
+- avoid reset-toggling serial monitors during provisional OTA boots, or they can force a rollback before the 120-second local confirmation window completes

@@ -450,7 +450,9 @@ void FirmwareApp::begin() {
   if (!queueMutex_ || !stateMutex_) {
     Serial.println("Failed to create firmware mutexes.");
   } else if (!syncTaskHandle_) {
-    xTaskCreatePinnedToCore(syncTaskEntry_, "addone_sync", 8192, this, 1, &syncTaskHandle_, 0);
+    // OTA now performs nested HTTPS/TLS work from the sync task, including
+    // certificate verification during progress RPCs and artifact fetches.
+    xTaskCreatePinnedToCore(syncTaskEntry_, "addone_sync", 16384, this, 1, &syncTaskHandle_, 0);
   }
 
   Serial.printf("AddOne firmware %s\n", Config::kFirmwareVersion);
