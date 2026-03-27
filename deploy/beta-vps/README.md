@@ -18,8 +18,9 @@ Current hosted beta reality on March 27, 2026:
 - the live host is still `72.62.200.12`
 - the broker is still presenting a self-signed certificate
 - that certificate currently carries SANs for both `72.62.200.12` and `mqtt-beta.addone.studio`
-- `gateway-beta.addone.studio` is not resolving publicly yet
-- the current hosted baseline should therefore use the bootstrap compose path plus a pinned broker certificate in firmware until DNS-backed cutover is real
+- `mqtt-beta.addone.studio` now resolves publicly and should be the preferred broker hostname
+- `gateway-beta.addone.studio` now resolves publicly, but its HTTPS health path is still failing server-side
+- the current hosted baseline should therefore use the bootstrap compose path plus a pinned broker certificate in firmware, while preferring the MQTT hostname and keeping gateway health checks on-host until HTTPS is repaired
 
 ## Hardened beta assumptions
 
@@ -64,8 +65,7 @@ That command:
 5. Flash the beta firmware profile with:
 - the current Supabase CA chain in `kSupabaseRootCaPem`
 - the current broker CA in `kMqttBrokerCaPem`
-- `kMqttBrokerHost = "72.62.200.12"`
-- `ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"` so the ESP32 can verify the certificate SAN while still dialing the raw IP
+- `kMqttBrokerHost = "mqtt-beta.addone.studio"`
 - `kMqttUseTls = true`
 - `kMqttAllowInsecureTls = false`
 
@@ -85,7 +85,7 @@ That command should return no matches once the hardened broker password file is 
 
 ## Later DNS-backed path
 
-Use this only after `gateway-beta.addone.studio` and `mqtt-beta.addone.studio` are real and the broker is using a CA-signed certificate.
+Use this only after the public gateway HTTPS path is healthy and the broker is using a CA-signed certificate.
 
 ## DNS
 Create `A` records for:
@@ -122,20 +122,22 @@ docker compose up -d --build
 
 ## Health checks
 - Gateway:
-  - current hosted bootstrap path: `curl http://127.0.0.1:8787/health` from the VPS
-  - later DNS-backed path: `https://gateway-beta.addone.studio/health`
+  - current hosted path: `curl http://127.0.0.1:8787/health` from the VPS
+  - later public gateway path: `https://gateway-beta.addone.studio/health`
 - Broker:
-  - current hosted bootstrap path: `openssl s_client -connect 72.62.200.12:8883 -servername 72.62.200.12`
-  - later DNS-backed path: `mqtt-beta.addone.studio:8883`
+  - current hosted path: `openssl s_client -connect mqtt-beta.addone.studio:8883 -servername mqtt-beta.addone.studio`
+  - raw-IP fallback path: `openssl s_client -connect 72.62.200.12:8883 -servername 72.62.200.12`
 
 ## Firmware beta config
-Use the current live host until DNS-backed cutover is real:
-- `kMqttBrokerHost = "72.62.200.12"`
+Prefer the current live MQTT hostname:
+- `kMqttBrokerHost = "mqtt-beta.addone.studio"`
 - `kMqttBrokerPort = 8883`
-- `ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"`
 - `kSupabaseRootCaPem = R"PEM(...current Supabase CA chain...)PEM"`
 - `kMqttBrokerCaPem = R"PEM(...current broker CA...)PEM"`
 - `kMqttUseTls = true`
 - `kMqttAllowInsecureTls = false`
+
+If you must temporarily fall back to the raw broker IP, also set:
+- `ADDONE_MQTT_BROKER_TLS_SERVER_NAME "mqtt-beta.addone.studio"`
 
 Device MQTT usernames and passwords are no longer compiled into the beta header. The device fetches them through `issue_device_mqtt_credentials(...)` after authenticated HTTPS access is working.

@@ -37,6 +37,6 @@ else
     sh -lc "apk add --no-cache docker-cli >/dev/null && node \"$ROOT_DIR/mosquitto/render-passwords.mjs\" --env-file \"$ENV_FILE\" --output \"$ROOT_DIR/mosquitto/passwords.txt\""
 fi
 
-docker compose -f "$COMPOSE_FILE" up -d mosquitto
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps mosquitto
 
 echo "[mosquitto-sync] refreshed broker passwords using $ENV_FILE and $COMPOSE_FILE"

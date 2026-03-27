@@ -203,7 +203,8 @@ The launch-blocking hardening split is now explicit:
 - `register_factory_device(...)` remains factory-only and is not a runtime self-heal path
 - field devices obtain MQTT credentials through `issue_device_mqtt_credentials(...)` after authenticated cloud access is established
 - the current hosted beta fallback may still pin the broker's self-signed certificate in firmware while DNS-backed broker hosting is pending, but the ESP32 MQTT TLS path still needs a DNS verification name even when the socket dials a raw IP
-- for the current bootstrap broker on `72.62.200.12:8883`, firmware should keep the IP as `kMqttBrokerHost`, set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to the certificate SAN `mqtt-beta.addone.studio`, and remove `device-fleet-beta` or any other fleet-shared broker password from the hosted broker password file
+- for the current hosted beta broker, firmware should now prefer `kMqttBrokerHost = "mqtt-beta.addone.studio"` and remove `device-fleet-beta` or any other fleet-shared broker password from the hosted broker password file
+- if broker DNS regresses and the device must dial `72.62.200.12` directly again, keep the CA pinned and set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to `mqtt-beta.addone.studio` so the ESP32 TLS verifier still uses a DNS name
 
 For the hosted beta split and required repo config, see [AddOne_Beta_Environment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Beta_Environment.md).
 
