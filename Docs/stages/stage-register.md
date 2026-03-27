@@ -44,7 +44,7 @@ Last updated: March 26, 2026
 - `T-038` is now accepted on `codex/s4-firmware-ota-safety`.
 - `T-039` is now accepted on `codex/s4-firmware-ota-control-plane`.
 - `T-040` is now accepted on `codex/s4-firmware-ota-client`.
-- `T-041` is now the active implementation slice.
+- `T-041` is now the active implementation slice, but it is currently blocked because the hosted beta backend is missing the accepted `T-039` OTA schema and RPC surface.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
