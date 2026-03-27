@@ -1,6 +1,6 @@
 # AddOne Beta Environment
 
-Last locked: March 27, 2026
+Last locked: March 26, 2026
 
 This document defines the first always-on hosted environment for AddOne.
 
@@ -87,6 +87,7 @@ Recommended hostname targets:
   - broker hostname should use a CA-signed endpoint; custom MQTT domain is still optional, but self-signed bootstrap is no longer the normal shipped path
   - beta devices intended for OTA validation must be flashed with the tracked dual-slot layout in [firmware/partitions/addone_ota.csv](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/partitions/addone_ota.csv)
   - field OTA will target only the application image; bootloader and partition-layout changes remain factory or USB operations
+  - OTA registry records now live in Supabase `firmware_releases` plus `firmware_release_rollout_allowlist`; install requests are persisted in `device_firmware_update_requests`, not only in MQTT traffic
 
 ## Required Beta Secrets / Values
 
@@ -128,7 +129,9 @@ Current beta backend values live locally in:
 9. Create a beta app build with EAS internal distribution.
 10. Flash the beta firmware profile with the current Supabase CA chain and current broker CA PEM in `cloud_config.beta.h`.
 11. Only if MQTT DNS regresses back to a raw IP target, set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to the DNS SAN carried by the broker certificate before flashing.
-12. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, and reconnect without the laptop.
+12. Apply the OTA control-plane migration so `firmware_releases`, `device_firmware_update_requests`, and `device_firmware_ota_statuses` exist before OTA validation.
+13. Load release-registry rows that match the immutable HTTPS artifact metadata in [ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json).
+14. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, reconnect, and the OTA control-plane RPCs without the laptop.
 
 ## Beta Validation Checklist
 - app installs without Expo Go
@@ -143,3 +146,6 @@ Current beta backend values live locally in:
 - no normal device control path depends on the laptop being powered on
 - no shipped firmware path relies on `setInsecure()` or fleet-shared MQTT credentials
 - OTA beta validation must use immutable HTTPS firmware artifacts plus the locked release envelope in [firmware/releases/ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)
+- `check_device_firmware_release(...)` returns a real decision row for the beta device
+- `begin_firmware_update(...)` creates a persisted install request plus one queued `begin_firmware_update` command
+- `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`

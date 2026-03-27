@@ -43,7 +43,8 @@ Last updated: March 26, 2026
 - `T-036` is now accepted on `codex/s4-release-operations-baseline`.
 - `T-037` is now accepted on `codex/s4-release-operations-baseline`.
 - `T-038` is now accepted on `codex/s4-firmware-ota-safety`.
-- `T-039` is now the next active implementation slice.
+- `T-039` is now the active implementation slice.
+- `T-039` currently needs a narrow enforcement fix before acceptance: paused or rolled-back releases must block in-progress device re-checks as well, not only fresh requests.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

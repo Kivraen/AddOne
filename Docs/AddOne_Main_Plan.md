@@ -88,7 +88,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current execution brief:
   `T-039` firmware OTA control plane and release registry
 - Current execution task:
-  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, then build the OTA control plane before the firmware client
+  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, then finish the `T-039` control-plane enforcement pass before the firmware client
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 
@@ -120,6 +120,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - The hosted rollout follow-up now exists on `codex/s4-release-operations-baseline`: the migration is applied, the broker password render/install flow is live, and one hardened device completed a hosted command/apply loop, but MQTT TLS acceptance is still failing and blocks acceptance of that slice.
 - The hosted rollout baseline on `codex/s4-release-operations-baseline` is now accepted: migration applied, broker password render/install flow fixed, both beta boards on per-device MQTT credentials, and MQTT cut over to `mqtt-beta.addone.studio`.
 - The OTA safety baseline on `codex/s4-firmware-ota-safety` is now accepted: the safety contract is explicit, the OTA partition layout is tracked, and the release envelope is concrete enough for implementation.
+- The OTA control-plane branch on `codex/s4-firmware-ota-control-plane` now contains the release registry, OTA progress sink, and trigger path, but it still needs one more safety-enforcement pass before acceptance.
 - The public gateway hostname still needs server-side repair before it becomes the external health target, and the Mosquitto host-file ownership warnings still need cleanup, but those are now residual operator items rather than launch-baseline blockers.
 - Remaining backend work is mostly hosted-beta validation and hardening, not foundational schema design.
 

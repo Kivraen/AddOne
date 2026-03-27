@@ -64,7 +64,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
 - Next brief: `T-039` firmware OTA control plane and release registry
-- Current execution task: implement the backend OTA control plane and release registry against the accepted `T-038` safety contract
+- Current execution task: finish the `T-039` control-plane slice by fixing release-state enforcement so paused or rolled-back releases cannot continue through in-progress re-checks
 
 ## Current Blockers
 
@@ -83,11 +83,13 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-036` is now accepted on `codex/s4-release-operations-baseline`: the migration is applied, the broker password render/install flow is live, the hosted command loop is proven, and the hosted MQTT reconnect path is now real on the hardened model.
 - `T-037` is now accepted on the same branch: both beta boards reconnect over TLS on per-device MQTT usernames, the broker helper now forces a Mosquitto recreate after password sync, and MQTT prefers `mqtt-beta.addone.studio` instead of the raw IP bootstrap path.
 - `T-038` is now accepted on `codex/s4-firmware-ota-safety`: the OTA safety contract is locked in-repo, the dual-slot OTA partition layout is tracked explicitly in the firmware build, and the OTA release envelope is concrete enough for implementation.
+- `T-039` now has a real implementation checkpoint on `codex/s4-firmware-ota-control-plane`: the release registry schema, OTA progress sink, and trigger path exist in SQL and docs.
+- `T-039` is not accepted yet. The current `check_device_firmware_release(...)` logic does not fully enforce paused or rolled-back release state when a device is already mid-flow without an active request row, which violates the frozen `T-038` pause/rollback safety model.
 - Residual rollout notes remain, but they are no longer `T-036`/`T-037` blockers:
   - keep the broker cert SAN aligned with `mqtt-beta.addone.studio`
   - repair the public `gateway-beta.addone.studio` HTTPS path before relying on it externally
   - tighten Mosquitto host-file ownership and mode warnings before broader rollout
-- `T-039` is now the next active slice because the OTA safety model is finally explicit enough to build the backend control plane and release registry without reopening rollback or eligibility assumptions.
+- `T-039` remains the active slice because the backend control plane still needs one more enforcement pass before the firmware OTA client can rely on it safely.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

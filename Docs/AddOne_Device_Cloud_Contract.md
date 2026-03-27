@@ -167,10 +167,19 @@ Purpose:
 - mirrors device-confirmed runtime settings
 - advances device sync timestamps and runtime revision metadata
 
-### Reserved OTA RPC contract
+### Firmware OTA control plane
 
-The first OTA control-plane slice should add these RPCs without changing the safety model locked in
+The backend OTA control plane now lives in
+[supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql](/Users/viktor/Desktop/DevProjects/Codex/AddOne/supabase/migrations/20260326153000_add_firmware_ota_control_plane.sql)
+and stays locked to the safety model in
 [firmware/OTA_SAFETY_CONTRACT.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/OTA_SAFETY_CONTRACT.md).
+
+Release-state and progress storage now use:
+- `firmware_releases`
+- `firmware_release_rollout_allowlist`
+- `device_firmware_update_requests`
+- `device_firmware_ota_events`
+- `device_firmware_ota_statuses`
 
 #### `check_device_firmware_release(...)`
 Called by:
@@ -185,9 +194,21 @@ Payload:
 
 Purpose:
 - authenticates the device over the existing product-auth path
-- returns either `no eligible release` or one eligible release envelope matching
-  [ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)
+- returns one decision row with:
+  - `decision`: `none | available | install_ready | blocked`
+  - `reason`: a concrete control-plane reason such as `up_to_date`, `user_confirmation_required`, `release_paused`, or `partition_layout_mismatch`
+  - `release`: `null` or one release envelope matching
+    [ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)
+  - `target_release_id`
+  - `install_authorized`
+  - optional `request_id`, `command_id`, and `requested_at` when a persisted install request exists
 - keeps rollout eligibility authoritative on the HTTPS control plane rather than on MQTT
+- enforces the locked `T-038` contract:
+  - only one active forward release per `channel + hardware_profile`
+  - `addone-dual-ota-v1` partition-layout requirement
+  - forward-only installs by default
+  - explicit previous-stable rollback only when the current confirmed release is marked `rolled_back`
+  - no second OTA target while a different OTA is already in progress
 
 #### `report_device_ota_progress(...)`
 Called by:
@@ -203,16 +224,52 @@ Payload:
 - current `firmware_version`
 
 Purpose:
-- records device OTA state transitions for operator visibility and rollout safety
+- records device OTA state transitions in `device_firmware_ota_events`
+- projects the latest per-device state into `device_firmware_ota_statuses`
 - distinguishes download, verify, staging, boot, and rollback failures
 - gives the app and operator tooling one durable state model instead of ad hoc serial logs
+
+Return:
+- the updated `device_firmware_ota_statuses` row for that device, including:
+  - `current_state`
+  - `target_release_id`
+  - `confirmed_release_id` once a release reports `succeeded`
+  - `last_failure_code`
+  - `last_failure_detail`
+  - `ota_started_at`
+  - `ota_completed_at`
+
+#### `begin_firmware_update(...)`
+Called by:
+- authenticated device owner
+- service-role operator tooling
+
+Payload:
+- `device_id`
+- `release_id`
+- optional `request_id`
+- optional `request_source` in `user | operator | auto_rollout`
+
+Purpose:
+- creates one persisted install request in `device_firmware_update_requests`
+- queues one `device_commands.kind = begin_firmware_update` command as the realtime or polling nudge
+- records `requested` state in `device_firmware_ota_statuses` before the firmware client starts reporting progress
+- keeps the command path separate from the authoritative HTTPS eligibility check
+
+Return:
+- `request_id`
+- `command_id`
+- `release_id`
+- `request_status`
+- `command_status`
+- `requested_at`
 
 ## Command Semantics
 - Device commands are at-least-once, not exactly-once.
 - `request_key` is used on the cloud side to avoid duplicate queueing.
 - `set_day_state` and `apply_history_draft` carry `base_revision` so the device can reject stale requests.
 - `enter_wifi_recovery` is a deliberate owner-triggered command that tells the device to stop normal cloud control and start its temporary `AddOne-XXXX` AP without clearing ownership, history, or settings.
-- a future OTA install request may arrive as a normal cloud command, but the command is only an install trigger; the device must still re-check release eligibility over authenticated HTTPS before downloading or rebooting into a staged image
+- `begin_firmware_update` now exists as a normal cloud command, but the command is only an install trigger; the device must still re-check release eligibility over authenticated HTTPS before downloading or rebooting into a staged image
 - Firmware should tolerate receiving the same command more than once.
 
 ## Firmware Expectations
@@ -248,5 +305,10 @@ Purpose:
   - `device -> MQTT -> gateway -> upload_device_runtime_snapshot(...)`
   - direct device -> Supabase HTTP snapshot upload is fallback only
 - `device_runtime_snapshots` must be in the `supabase_realtime` publication or the app can miss live device-confirmed state and fall back to polling.
+- The backend OTA control plane now exists:
+  - release registry tables are in Supabase
+  - `check_device_firmware_release(...)` is the HTTPS eligibility path
+  - `report_device_ota_progress(...)` is the durable OTA progress path
+  - `begin_firmware_update(...)` plus `device_commands.kind = begin_firmware_update` is the trigger path
 - The remaining firmware gap is custom reward asset sync and end-to-end hardware validation.
 - Developer testing helpers still exist for manual staging checks, but firmware now owns the intended claim / heartbeat / snapshot runtime path.

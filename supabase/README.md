@@ -40,12 +40,20 @@ Later runtime/settings support:
 - `migrations/20260309171000_add_wifi_recovery_command.sql`
 - `migrations/20260315194000_add_palette_custom_to_runtime_snapshots.sql`
 
+OTA control plane:
+- `migrations/20260326153000_add_firmware_ota_control_plane.sql`
+
 ## Current Repo Status
 
 - typed database types already exist in `lib/supabase/database.types.ts`
 - the app already reads owned devices from Supabase
 - the app already uses onboarding-session RPCs and runtime/device command RPCs
 - the schema already supports runtime snapshots, history drafts, live settings apply, and Wi-Fi recovery commands
+- the schema now also supports the firmware OTA control plane:
+  - release registry rows in `firmware_releases`
+  - rollout cohorts in `firmware_release_rollout_allowlist`
+  - persisted install requests in `device_firmware_update_requests`
+  - per-device OTA history and current state in `device_firmware_ota_events` plus `device_firmware_ota_statuses`
 - sharing, rewards, and reminders still exist in schema for future phases, but first-user v1 should keep those surfaces hidden
 
 ## Data Boundary
@@ -58,6 +66,6 @@ Later runtime/settings support:
 
 ## Current Next Steps
 
-1. Validate the hosted beta environment end-to-end with real device snapshots and command delivery.
+1. Validate the hosted beta environment end-to-end with real device snapshots, OTA release checks, and queued firmware update triggers.
 2. Keep the docs in `Docs/` aligned with any schema or RPC changes.
 3. Create the dedicated beta Supabase project when account capacity allows, then regenerate `lib/supabase/database.types.ts`.
