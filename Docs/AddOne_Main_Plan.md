@@ -86,9 +86,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-036` release operations cleanup and launch baseline
+  `T-037` MQTT TLS acceptance and device reprovisioning
 - Current execution task:
-  treat `T-035` as the accepted first transport-hardening baseline, then make the hosted beta environment operational on that trust model before OTA implementation begins
+  treat `T-035` as the accepted first transport-hardening baseline, use the `T-036` checkpoint as the hosted rollout starting point, then resolve the remaining MQTT TLS/device reprovisioning blocker before OTA implementation begins
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 
@@ -117,6 +117,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - The TestFlight path is now real and working for the recovered latest app baseline.
 - The beta backend now also has factory preregistration support plus `factory_device_runs` records for bench QA notes and ship-ready signoff.
 - The first `S4` hardening slice now exists on `codex/s4-transport-trust-and-device-identity`: firmware HTTPS/MQTT fail closed without CA material, devices fetch per-device MQTT credentials over authenticated HTTPS, broker ACLs isolate device topics, and runtime self-reregistration is removed from the field-device path.
+- The hosted rollout follow-up now exists on `codex/s4-release-operations-baseline`: the migration is applied, the broker password render/install flow is live, and one hardened device completed a hosted command/apply loop, but MQTT TLS acceptance is still failing and blocks acceptance of that slice.
 - Remaining backend work is mostly hosted-beta validation and hardening, not foundational schema design.
 
 ### Firmware
@@ -171,6 +172,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 4. Harden for beta and production rollout.
 - accept and checkpoint the transport trust and device identity baseline
 - clean release operations and the hosted launch baseline on top of that hardened transport path
+- resolve the hardened-device MQTT TLS acceptance and finish reprovisioning the second beta device off the legacy fleet credential
 - lock the device-side OTA safety model
 - build the OTA control plane in Supabase
 - implement the firmware OTA client
