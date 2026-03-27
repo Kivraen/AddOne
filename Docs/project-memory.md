@@ -63,8 +63,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-043` operator rollout and rollback tooling
-- Current execution task: build the smallest repeatable operator flow for release activation, targeting, rollback, and rollout inspection on top of the accepted OTA baseline and the accepted minimum app/status surface
+- Next brief: `T-044` internal release-candidate validation and publish blockers
+- Current execution task: run one focused internal release-candidate validation pass on the real beta stack and reduce the remaining App Store / Play Store risk to an explicit blocker list
 
 ## Current Blockers
 
@@ -93,6 +93,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-041` is now accepted on `codex/s4-firmware-ota-validation`: the real immutable firmware artifact flow is hardware-proven end to end, with the authoritative successful proof on `fw-beta-20260327-05`, backend-visible `pending_confirm -> succeeded`, and stable post-window runtime on `2.0.0-beta.3`.
 - `fw-beta-20260327-03` and `fw-beta-20260327-04` are now durable rolled-back OTA releases and must remain non-active for auditability; the immutable release contract means the successful proof is carried by replacement release `fw-beta-20260327-05`, not by mutating prior failed releases.
 - `T-042` is now accepted on `codex/s4-app-update-status-surfaces`: the app now has a minimum owner-facing firmware status/update card backed by `get_device_firmware_update_summary(...)` and `begin_firmware_update(...)`, and unsupported-command rejection is surfaced truthfully as a board-baseline limitation instead of a false success.
+- `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

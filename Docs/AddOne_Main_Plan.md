@@ -86,9 +86,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-043` operator rollout and rollback tooling
+  `T-044` internal release-candidate validation and publish blockers
 - Current execution task:
-  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, treat `T-039` as the accepted backend control-plane baseline, treat `T-040` as the accepted firmware OTA client baseline, treat `T-041` as the accepted real OTA validation baseline on immutable release `fw-beta-20260327-05`, and treat `T-042` as the accepted minimum owner-facing update surface; then add the smallest repeatable operator rollout and rollback tooling before broader release validation
+  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, treat `T-039` as the accepted backend control-plane baseline, treat `T-040` as the accepted firmware OTA client baseline, treat `T-041` as the accepted real OTA validation baseline on immutable release `fw-beta-20260327-05`, treat `T-042` as the accepted minimum owner-facing update surface, and treat `T-043` as the accepted operator rollout/rollback baseline; then run one focused internal release-candidate validation pass and reduce the remaining publish risk to an explicit blocker list
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 

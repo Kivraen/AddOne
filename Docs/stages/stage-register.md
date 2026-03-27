@@ -14,7 +14,7 @@ Last updated: March 27, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: `T-043` operator rollout and rollback tooling
+- Next brief: `T-044` internal release-candidate validation and publish blockers
 
 ## Stage Notes
 
@@ -46,7 +46,8 @@ Last updated: March 27, 2026
 - `T-040` is now accepted on `codex/s4-firmware-ota-client`.
 - `T-041` is now accepted on `codex/s4-firmware-ota-validation`: the real immutable OTA path is hardware-proven end to end, with the successful no-serial proof carried by replacement release `fw-beta-20260327-05`.
 - `T-042` is now accepted on `codex/s4-app-update-status-surfaces`: the minimum owner-facing firmware status/update surface is real, and the remaining Meditation rejection is recorded as a board-baseline issue rather than a UI-slice blocker.
-- `T-043` is now the next active slice: operator rollout and rollback tooling on top of the accepted OTA and app-status baselines.
+- `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the minimum operator rollout and rollback path is real.
+- `T-044` is now the next active slice: internal release-candidate validation and explicit publish blockers.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
