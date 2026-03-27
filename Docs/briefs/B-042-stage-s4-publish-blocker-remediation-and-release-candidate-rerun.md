@@ -33,8 +33,8 @@ Clear the explicit publish blockers from `T-044`, then rerun the same release-ca
 
 Success metrics:
 - `AO_A4F00F767008` is either OTA-capable on the intended path or explicitly removed from the RC cohort
-- fresh installable artifacts exist for the accepted March 27 baseline
-- Android artifacts exist too unless launch is explicitly iOS-only
+- fresh installable iOS artifacts exist for the accepted March 27 baseline
+- Android is either explicitly deferred as a follow-up track or intentionally reopened as part of the same launch gate
 - the validation matrix is rerun against the corrected baseline
 - final recommendation is clearer than `T-044`, ideally ready for submission prep
 
