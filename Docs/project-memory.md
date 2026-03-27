@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -64,7 +64,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
 - Next brief: `T-041` firmware OTA artifact hosting and hardware validation
-- Current execution task: rerun `T-041` on the same validation branch and isolate the gap between an applied `begin_firmware_update` command and the first post-request OTA progress, while still aiming to capture one backend-visible `pending_confirm -> succeeded` pass for `fw-beta-20260327-03`
+- Current execution task: rerun `T-041` on the same validation branch and isolate the artifact-stream stall between backend-visible `downloading` and `downloaded`, while still aiming to capture one backend-visible `pending_confirm -> succeeded` pass for `fw-beta-20260327-03`
 
 ## Current Blockers
 
@@ -90,7 +90,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - keep the broker cert SAN aligned with `mqtt-beta.addone.studio`
   - repair the public `gateway-beta.addone.studio` HTTPS path before relying on it externally
   - tighten Mosquitto host-file ownership and mode warnings before broader rollout
-- `T-041` remains the active slice, but it is now a narrow proof-gap loop rather than an infra blocker: the latest proof pass shows the remaining problem may occur earlier than the confirmation window, because a delivered and applied `begin_firmware_update` command can still produce no new OTA progress rows while the board stays on `2.0.0-beta.1`.
+- `T-041` remains the active slice, but it is now a narrow proof-gap loop rather than an infra blocker: the latest proof pass shows the remaining problem is later than command delivery and first OTA progress, because the board now reaches backend-visible `requested -> downloading` and then still fails before `downloaded`, most recently stalling at `379900/1134144` bytes with a `45000 ms` idle timeout while staying on `2.0.0-beta.1`.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.
 - `T-021` is now accepted as the first beta factory-station checkpoint, but it still needs stable-release promotion, broader bench validation, and security hardening follow-up before wider operator use.

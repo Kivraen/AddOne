@@ -6,6 +6,7 @@
 #include <WiFiClientSecure.h>
 #include <esp_err.h>
 #include <esp_ota_ops.h>
+#include <esp_system.h>
 #include <mbedtls/sha256.h>
 
 #include "cloud_config.h"
@@ -25,8 +26,13 @@ constexpr const char* kPhaseRequested = "requested";
 constexpr const char* kPhaseSucceeded = "succeeded";
 
 constexpr unsigned long kReleaseCheckIntervalMs = 3600000UL;
-constexpr unsigned long kDownloadIdleTimeoutMs = 15000UL;
-constexpr size_t kDownloadBufferSize = 2048U;
+constexpr unsigned long kReleaseCheckFailureRetryMs = 5000UL;
+constexpr unsigned long kDownloadIdleTimeoutMs = 45000UL;
+constexpr unsigned long kDownloadReadChunkTimeoutMs = 1000UL;
+constexpr size_t kDownloadBufferSize = 4096U;
+constexpr uint8_t kProgressReportAttempts = 4;
+constexpr unsigned long kProgressReportRetryDelayMs = 1000UL;
+uint8_t gOtaDownloadBuffer[kDownloadBufferSize];
 
 bool equalsIgnoreCase(const String& left, const String& right) {
   if (left.length() != right.length()) {
@@ -87,6 +93,57 @@ String sha256ToHex(const unsigned char digest[32]) {
   buffer[64] = '\0';
   return String(buffer);
 }
+
+const char* resetReasonToString(esp_reset_reason_t reason) {
+  switch (reason) {
+    case ESP_RST_UNKNOWN:
+      return "ESP_RST_UNKNOWN";
+    case ESP_RST_POWERON:
+      return "ESP_RST_POWERON";
+    case ESP_RST_EXT:
+      return "ESP_RST_EXT";
+    case ESP_RST_SW:
+      return "ESP_RST_SW";
+    case ESP_RST_PANIC:
+      return "ESP_RST_PANIC";
+    case ESP_RST_INT_WDT:
+      return "ESP_RST_INT_WDT";
+    case ESP_RST_TASK_WDT:
+      return "ESP_RST_TASK_WDT";
+    case ESP_RST_WDT:
+      return "ESP_RST_WDT";
+    case ESP_RST_DEEPSLEEP:
+      return "ESP_RST_DEEPSLEEP";
+    case ESP_RST_BROWNOUT:
+      return "ESP_RST_BROWNOUT";
+    case ESP_RST_SDIO:
+      return "ESP_RST_SDIO";
+  }
+
+  return "ESP_RST_UNRECOGNIZED";
+}
+
+String interruptedPhaseFailureDetail(const String& phase, esp_reset_reason_t resetReason) {
+  return String("Device restarted before OTA phase '") + phase +
+         "' could complete (reset_reason=" + resetReasonToString(resetReason) + ").";
+}
+
+void interruptedPhaseFailureFor(const String& phase, String& failureState, String& failureCode) {
+  if (phase == "verifying") {
+    failureState = "failed_verify";
+    failureCode = "image_invalid";
+    return;
+  }
+
+  if (phase == "staged") {
+    failureState = "failed_stage";
+    failureCode = "slot_write_failed";
+    return;
+  }
+
+  failureState = "failed_download";
+  failureCode = "download_failed";
+}
 } // namespace
 
 #ifdef CONFIG_APP_ROLLBACK_ENABLE
@@ -103,7 +160,19 @@ void OtaClient::begin(const DeviceIdentity& identity, CloudClient& cloudClient) 
       !sessionPhase_.isEmpty() &&
       sessionPhase_ != kPhaseSucceeded &&
       !isRollbackRecoveryPhase(sessionPhase_)) {
-    clearSession_();
+    if (!sessionTargetReleaseId_.isEmpty()) {
+      const esp_reset_reason_t resetReason = esp_reset_reason();
+      String failureState;
+      String failureCode;
+      interruptedPhaseFailureFor(sessionPhase_, failureState, failureCode);
+      queuePendingProgressReport_(sessionTargetReleaseId_,
+                                  failureState,
+                                  failureCode,
+                                  interruptedPhaseFailureDetail(sessionPhase_, resetReason),
+                                  true);
+    } else {
+      clearSession_();
+    }
   }
 }
 
@@ -146,6 +215,16 @@ void OtaClient::service(FirmwareState state,
                         bool pendingFactoryReset,
                         bool wifiConnected) {
   if (!identity_ || !cloudClient_) {
+    return;
+  }
+
+  const bool hadPendingProgressReport =
+      !pendingReportReleaseId_.isEmpty() && !pendingReportState_.isEmpty();
+  if (!flushPendingProgressReport_(wifiConnected)) {
+    return;
+  }
+
+  if (hadPendingProgressReport) {
     return;
   }
 
@@ -234,7 +313,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
   }
 
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.setTimeout(15000);
+  http.setTimeout(kDownloadReadChunkTimeoutMs);
 
   const int responseCode = http.GET();
   if (responseCode != HTTP_CODE_OK) {
@@ -259,6 +338,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
     http.end();
     return false;
   }
+  stream->setTimeout(kDownloadReadChunkTimeoutMs);
 
   esp_ota_handle_t otaHandle = 0;
   const esp_err_t beginError = esp_ota_begin(updatePartition, release.artifact.sizeBytes, &otaHandle);
@@ -273,51 +353,41 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
   mbedtls_sha256_init(&shaContext);
   mbedtls_sha256_starts_ret(&shaContext, 0);
 
-  uint8_t buffer[kDownloadBufferSize];
   size_t totalRead = 0;
   unsigned long lastReadAtMs = millis();
   bool success = true;
 
   while (totalRead < release.artifact.sizeBytes) {
-    const size_t available = stream->available();
-    if (available == 0) {
+    const size_t remaining = release.artifact.sizeBytes - totalRead;
+    const size_t targetRead = remaining < kDownloadBufferSize ? remaining : kDownloadBufferSize;
+    const size_t bytesRead = stream->readBytes(reinterpret_cast<char*>(gOtaDownloadBuffer), targetRead);
+    if (bytesRead == 0) {
       if (!http.connected()) {
         success = false;
         failureCode = "download_incomplete";
-        failureDetail = "OTA artifact stream closed before the expected byte count arrived.";
+        failureDetail = String("OTA artifact stream closed after ") + String(totalRead) + "/" +
+                        String(release.artifact.sizeBytes) + " bytes.";
         break;
       }
 
       if (millis() - lastReadAtMs > kDownloadIdleTimeoutMs) {
         success = false;
         failureCode = "download_failed";
-        failureDetail = "OTA artifact download stalled before completion.";
+        failureDetail = String("OTA artifact download stalled after ") + String(totalRead) + "/" +
+                        String(release.artifact.sizeBytes) + " bytes with a " +
+                        String(kDownloadIdleTimeoutMs) + " ms idle timeout.";
         break;
+      } else {
+        delay(1);
+        continue;
       }
-
-      delay(1);
-      continue;
-    }
-
-    const size_t remaining = release.artifact.sizeBytes - totalRead;
-    const size_t toRead = available < kDownloadBufferSize ? available : kDownloadBufferSize;
-    const size_t cappedRead = toRead < remaining ? toRead : remaining;
-    const size_t bytesRead = stream->readBytes(buffer, cappedRead);
-    if (bytesRead == 0) {
-      if (millis() - lastReadAtMs > kDownloadIdleTimeoutMs) {
-        success = false;
-        failureCode = "download_failed";
-        failureDetail = "OTA artifact download stopped returning bytes.";
-        break;
-      }
-      continue;
     }
 
     lastReadAtMs = millis();
     totalRead += bytesRead;
-    mbedtls_sha256_update_ret(&shaContext, buffer, bytesRead);
+    mbedtls_sha256_update_ret(&shaContext, gOtaDownloadBuffer, bytesRead);
 
-    const esp_err_t writeError = esp_ota_write(otaHandle, buffer, bytesRead);
+    const esp_err_t writeError = esp_ota_write(otaHandle, gOtaDownloadBuffer, bytesRead);
     if (writeError != ESP_OK) {
       success = false;
       failureCode = "slot_write_failed";
@@ -325,7 +395,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
       break;
     }
 
-    yield();
+    delay(1);
   }
 
   unsigned char digest[32];
@@ -508,22 +578,31 @@ bool OtaClient::maybeCheckForRelease_(FirmwareState state,
   }
 
   const bool healthyRuntime = isHealthyRuntimeState_(state, bootReadyForTracking, recoveryRequested, pendingFactoryReset);
+  const unsigned long now = millis();
+  const bool commandTriggeredCheckPending = releaseCheckRequested_ || !releaseCheckPrimed_;
   const bool shouldCheck =
-      releaseCheckRequested_ ||
-      !releaseCheckPrimed_ ||
-      (healthyRuntime && millis() - lastReleaseCheckAtMs_ >= kReleaseCheckIntervalMs);
+      (commandTriggeredCheckPending && now >= nextReleaseCheckRetryAtMs_) ||
+      (healthyRuntime && now - lastReleaseCheckAtMs_ >= kReleaseCheckIntervalMs);
   if (!shouldCheck) {
+    return false;
+  }
+
+  CloudClient::OtaReleaseCheckResult result;
+  if (!cloudClient_->checkFirmwareRelease(result, confirmedReleaseId_)) {
+    if (commandTriggeredCheckPending) {
+      nextReleaseCheckRetryAtMs_ = now + kReleaseCheckFailureRetryMs;
+      Serial.printf("OTA release check failed; keeping request pending and retrying in %lu ms\n",
+                    static_cast<unsigned long>(kReleaseCheckFailureRetryMs));
+    } else {
+      lastReleaseCheckAtMs_ = now;
+    }
     return false;
   }
 
   releaseCheckPrimed_ = true;
   releaseCheckRequested_ = false;
-  lastReleaseCheckAtMs_ = millis();
-
-  CloudClient::OtaReleaseCheckResult result;
-  if (!cloudClient_->checkFirmwareRelease(result, confirmedReleaseId_)) {
-    return false;
-  }
+  nextReleaseCheckRetryAtMs_ = 0;
+  lastReleaseCheckAtMs_ = now;
 
   if (result.decision == "install_ready" && result.installAuthorized && result.hasRelease) {
     clearAnnouncedDecision_();
@@ -542,6 +621,38 @@ bool OtaClient::maybeCheckForRelease_(FirmwareState state,
     clearAnnouncedDecision_();
   }
 
+  return true;
+}
+
+void OtaClient::clearPendingProgressReport_() {
+  pendingReportReleaseId_ = "";
+  pendingReportState_ = "";
+  pendingReportFailureCode_ = "";
+  pendingReportFailureDetail_ = "";
+  pendingReportClearSession_ = false;
+}
+
+bool OtaClient::flushPendingProgressReport_(bool wifiConnected) {
+  if (pendingReportReleaseId_.isEmpty() || pendingReportState_.isEmpty()) {
+    return true;
+  }
+
+  if (!wifiConnected) {
+    return false;
+  }
+
+  if (!reportProgressBestEffort_(pendingReportReleaseId_,
+                                 pendingReportState_,
+                                 pendingReportFailureCode_,
+                                 pendingReportFailureDetail_)) {
+    return false;
+  }
+
+  const bool clearSessionOnSuccess = pendingReportClearSession_;
+  clearPendingProgressReport_();
+  if (clearSessionOnSuccess) {
+    clearSession_();
+  }
   return true;
 }
 
@@ -578,6 +689,18 @@ void OtaClient::persistSession_(const String& phase, const String& targetRelease
   sessionTargetReleaseId_ = targetReleaseId;
 }
 
+void OtaClient::queuePendingProgressReport_(const String& releaseId,
+                                            const String& state,
+                                            const String& failureCode,
+                                            const String& failureDetail,
+                                            bool clearSessionOnSuccess) {
+  pendingReportReleaseId_ = releaseId;
+  pendingReportState_ = state;
+  pendingReportFailureCode_ = failureCode;
+  pendingReportFailureDetail_ = failureDetail;
+  pendingReportClearSession_ = clearSessionOnSuccess;
+}
+
 bool OtaClient::reportDecisionState_(const CloudClient::OtaReleaseCheckResult& result) {
   const String releaseId = !result.targetReleaseId.isEmpty()
                                ? result.targetReleaseId
@@ -611,11 +734,24 @@ bool OtaClient::reportProgressBestEffort_(const String& releaseId,
     return false;
   }
 
-  const bool ok = cloudClient_->reportOtaProgress(releaseId, state, failureCode, failureDetail);
-  if (!ok) {
-    Serial.printf("OTA progress report failed: %s -> %s\n", releaseId.c_str(), state.c_str());
+  for (uint8_t attempt = 1; attempt <= kProgressReportAttempts; ++attempt) {
+    if (cloudClient_->reportOtaProgress(releaseId, state, failureCode, failureDetail)) {
+      return true;
+    }
+
+    if (attempt < kProgressReportAttempts) {
+      Serial.printf("OTA progress report retry %u/%u scheduled for %s -> %s\n",
+                    static_cast<unsigned int>(attempt + 1),
+                    static_cast<unsigned int>(kProgressReportAttempts),
+                    releaseId.c_str(),
+                    state.c_str());
+      delay(kProgressReportRetryDelayMs);
+      continue;
+    }
   }
-  return ok;
+
+  Serial.printf("OTA progress report failed: %s -> %s\n", releaseId.c_str(), state.c_str());
+  return false;
 }
 
 bool OtaClient::shouldAnnounceDecision_(const String& decision,
@@ -671,8 +807,13 @@ bool OtaClient::startAuthorizedInstall_(const CloudClient::OtaReleaseCheckResult
   String failureCode;
   String failureDetail;
   if (!downloadAndStageRelease_(release, failureCode, failureDetail)) {
-    reportProgressBestEffort_(release.releaseId, failureStateForCode(failureCode), failureCode, failureDetail);
-    clearSession_();
+    const String failureState = failureStateForCode(failureCode);
+    persistSession_(failureState, release.releaseId);
+    if (reportProgressBestEffort_(release.releaseId, failureState, failureCode, failureDetail)) {
+      clearSession_();
+    } else {
+      queuePendingProgressReport_(release.releaseId, failureState, failureCode, failureDetail, true);
+    }
     return false;
   }
 

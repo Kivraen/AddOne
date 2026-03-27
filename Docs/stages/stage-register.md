@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 ## Current Stage Map
 
@@ -44,7 +44,7 @@ Last updated: March 26, 2026
 - `T-038` is now accepted on `codex/s4-firmware-ota-safety`.
 - `T-039` is now accepted on `codex/s4-firmware-ota-control-plane`.
 - `T-040` is now accepted on `codex/s4-firmware-ota-client`.
-- `T-041` is now the active implementation slice and stays in `revise and retry`: the hosted OTA schema is live, the original crash loop is fixed, and the newest proof pass shows the remaining gap may start before confirmation, between an applied `begin_firmware_update` command and the next OTA progress event.
+- `T-041` is now the active implementation slice and stays in `revise and retry`: the hosted OTA schema is live, the original crash loop is fixed, and the newest proof pass shows the remaining gap is now the artifact stream between backend-visible `downloading` and `downloaded`, with the latest no-serial retry stalling at `379900/1134144` bytes before any provisional boot.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

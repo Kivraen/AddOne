@@ -44,8 +44,15 @@ private:
                              bool recoveryRequested,
                              bool pendingFactoryReset,
                              bool wifiConnected);
+  void clearPendingProgressReport_();
+  bool flushPendingProgressReport_(bool wifiConnected);
   void persistConfirmedReleaseId_(const String& releaseId);
   void persistSession_(const String& phase, const String& targetReleaseId);
+  void queuePendingProgressReport_(const String& releaseId,
+                                   const String& state,
+                                   const String& failureCode,
+                                   const String& failureDetail,
+                                   bool clearSessionOnSuccess);
   bool reportDecisionState_(const CloudClient::OtaReleaseCheckResult& result);
   bool reportProgressBestEffort_(const String& releaseId,
                                  const String& state,
@@ -68,8 +75,14 @@ private:
   String lastAnnouncedDecision_{};
   String lastAnnouncedReason_{};
   String lastAnnouncedReleaseId_{};
+  String pendingReportFailureCode_{};
+  String pendingReportFailureDetail_{};
+  String pendingReportReleaseId_{};
+  String pendingReportState_{};
   unsigned long lastReleaseCheckAtMs_ = 0;
+  unsigned long nextReleaseCheckRetryAtMs_ = 0;
   unsigned long pendingConfirmStartedAtMs_ = 0;
+  bool pendingReportClearSession_ = false;
   bool pendingConfirmReported_ = false;
   bool releaseCheckPrimed_ = false;
   bool releaseCheckRequested_ = false;

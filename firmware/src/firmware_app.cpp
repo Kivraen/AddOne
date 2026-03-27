@@ -1091,10 +1091,18 @@ void FirmwareApp::flushPendingCommandAcks_() {
     return;
   }
 
-  const bool acked =
-      realtimeClient_.isConnected()
-          ? realtimeClient_.publishAck(cloudClient_.deviceAuthToken(), pending.commandId, pending.status, pending.failureReason)
-          : cloudClient_.ackCommand(pending.commandId, pending.status, pending.failureReason);
+  bool acked = false;
+  if (realtimeClient_.isConnected()) {
+    acked = realtimeClient_.publishAck(cloudClient_.deviceAuthToken(), pending.commandId, pending.status, pending.failureReason);
+    if (!acked) {
+      Serial.printf("Realtime ack publish failed for %s; retrying via RPC.\n", pending.commandId.c_str());
+    }
+  }
+
+  if (!acked) {
+    acked = cloudClient_.ackCommand(pending.commandId, pending.status, pending.failureReason);
+  }
+
   if (!acked) {
     Serial.printf("Failed to ack command %s\n", pending.commandId.c_str());
     enqueuePendingAck_(pending.commandId, pending.status, pending.failureReason);
@@ -1724,6 +1732,8 @@ void FirmwareApp::drainIncomingCommands_() {
 
 void FirmwareApp::syncTask_() {
   for (;;) {
+    flushPendingCommandAcks_();
+
     otaClient_.service(state_,
                        bootReadyForTracking_(),
                        recoveryRequestedAtRuntime_,
@@ -1745,8 +1755,6 @@ void FirmwareApp::syncTask_() {
       lastRuntimeSnapshotAttemptAtMs_ = millis();
       flushRuntimeSnapshot_();
     }
-
-    flushPendingCommandAcks_();
 
     if (!realtimeConnected && millis() - lastCommandPollAtMs_ >= kFallbackCommandPollWhenNoRealtimeMs) {
       lastCommandPollAtMs_ = millis();

@@ -98,8 +98,19 @@ Recommended hostname targets:
   - the rolled-back release `fw-beta-20260326-02` should stay non-active because it reproduced the stack-canary failure on real hardware
   - current bench-only blocker after the stack fix is narrower but still unresolved:
     - an earlier March 27 validation run still proves `fw-beta-20260327-03` can reach `downloaded`, `verifying`, `staged`, `rebooting`, and provisional `2.0.0-beta.3` boot on real hardware
-    - a later raw-serial diagnostic rerun on `/dev/cu.usbserial-10` only reached backend-visible `requested` and `downloading`, then logged `Cloud RPC report_device_ota_progress -> HTTP -1`; the board resumed `2.0.0-beta.1` check-ins only after the raw serial port was released
-    - a follow-up retry with no serial attached delivered and applied `begin_firmware_update`, but produced no new OTA progress rows and the board stopped checking in after `2026-03-27T07:50:57Z` while still on `2.0.0-beta.1`
+    - the later March 27 revise-and-retry pass fixed the earlier "applied command but no first OTA progress" gap on real hardware by:
+      - keeping command-triggered release checks pending across transient failures
+      - retrying OTA progress writes
+      - flushing command acks before OTA work and falling back to the RPC ack path when MQTT ack publish fails
+    - on hardware, fresh commands now deliver and apply exactly once, then reach backend-visible `requested` and `downloading` with no serial monitor attached
+    - the remaining blocker is now later in the OTA path and better isolated:
+      - two no-serial retries reached backend-visible `failed_download` with `failure_detail = "Device restarted before OTA phase 'downloading' could complete (reset_reason=ESP_RST_TASK_WDT)."`
+      - the latest no-serial retry replaced that immediate reboot loop with a stable mid-stream failure:
+        - `failed_download`
+        - `failure_detail = "OTA artifact download stalled after 379900/1134144 bytes with a 45000 ms idle timeout."`
+        - the board stayed on `2.0.0-beta.1` and checked back in after the failure
+      - `downloaded`, `verifying`, `staged`, provisional `2.0.0-beta.3` boot, `pending_confirm`, and `succeeded` were still not observed in the final March 27 branch state
+    - the clean real-hardware `pending_confirm -> succeeded` proof for `fw-beta-20260327-03` is still missing
 
 ## Required Beta Secrets / Values
 

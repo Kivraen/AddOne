@@ -1,6 +1,6 @@
 # AddOne Main Plan
 
-Last locked: March 26, 2026
+Last locked: March 27, 2026
 
 This is the canonical master plan for AddOne.
 Use it to answer:
@@ -88,7 +88,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Current execution brief:
   `T-041` firmware OTA artifact hosting and hardware validation
 - Current execution task:
-  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, treat `T-039` as the accepted backend control-plane baseline, treat `T-040` as the accepted firmware OTA client baseline, then finish `T-041` by isolating the gap after an applied `begin_firmware_update` command and capturing one clean real-hardware `pending_confirm -> succeeded` pass for the active beta.3 OTA release
+  treat `T-035`, `T-036`, and `T-037` as the accepted hardened rollout baseline, treat `T-038` as the accepted OTA safety baseline, treat `T-039` as the accepted backend control-plane baseline, treat `T-040` as the accepted firmware OTA client baseline, then finish `T-041` by isolating the artifact-stream stall between backend-visible `downloading` and `downloaded` and capturing one clean real-hardware `pending_confirm -> succeeded` pass for the active beta.3 OTA release
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 

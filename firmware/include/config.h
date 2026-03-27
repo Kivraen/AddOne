@@ -4,7 +4,11 @@
 
 namespace Config {
 
-constexpr const char* kFirmwareVersion = "2.0.0-beta.3";
+#ifndef ADDONE_FIRMWARE_VERSION
+#define ADDONE_FIRMWARE_VERSION "2.0.0-beta.3"
+#endif
+
+constexpr const char* kFirmwareVersion = ADDONE_FIRMWARE_VERSION;
 constexpr const char* kHardwareProfile = "addone-v1";
 constexpr const char* kDefaultTimezonePosix = "PST8PDT,M3.2.0/2,M11.1.0/2";
 constexpr const char* kNtpServer = "pool.ntp.org";
