@@ -595,6 +595,7 @@ export function useFriends(demoScenario?: FriendsDemoScenario | null) {
     refreshSharing: refetchOwnerSharing,
     refreshViewerBoards: refetchViewerBoards,
     rejectRequest: rejectRequestMutation.mutateAsync,
+    resetRequestAccessState: requestAccessMutation.reset,
     revokeViewer: revokeViewerMutation.mutateAsync,
     requestAccess: requestAccessMutation.mutateAsync,
     requestAccessError: requestAccessMutation.error,

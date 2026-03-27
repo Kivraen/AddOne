@@ -15,7 +15,7 @@ Last updated: March 27, 2026
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Next brief: `T-045` publish blocker remediation and release-candidate rerun
-- Parallel note: `T-046` is accepted as a narrow UI-only cleanup slice and does not replace the blocked `T-045` artifact gate.
+- Parallel note: `T-046` and `T-047` are accepted side slices and do not replace the blocked `T-045` artifact gate.
 
 ## Stage Notes
 
@@ -51,6 +51,7 @@ Last updated: March 27, 2026
 - `T-044` is now accepted on `codex/s4-release-candidate-validation`: the release-candidate pass is complete and the blocker list is explicit.
 - `T-045` is now blocked on `codex/s4-release-candidate-remediation`: the active RC cohort is corrected and Android is deferred, but the branch still needs one finished installable iOS artifact for baseline `dce8541`.
 - `T-046` is now accepted on `codex/s4-rc-easy-ui-cleanup`: the temporary celebration-preview controls are removed from device settings and the branch stayed within the intended easy UI cleanup scope.
+- `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the Friends actions redesign, adjacent RC UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are preserved together as a bounded user-guided slice.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

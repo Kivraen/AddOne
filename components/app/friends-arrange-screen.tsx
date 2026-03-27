@@ -77,15 +77,7 @@ function ManageRow(
         </View>
 
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Pressable
-            disabled={isBusy || props.isArrangeMode}
-            onPress={() => {
-              if (!props.isArrangeMode) {
-                props.onOpenSettings(board);
-              }
-            }}
-            style={{ gap: 2 }}
-          >
+          <View style={{ gap: 2 }}>
             <Text
               numberOfLines={1}
               style={{
@@ -119,7 +111,7 @@ function ManageRow(
             >
               {board.celebrationEnabled ? transition.label : "Board reveal off"}
             </Text>
-          </Pressable>
+          </View>
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>

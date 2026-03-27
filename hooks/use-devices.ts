@@ -165,6 +165,8 @@ export function useDevices() {
   const demoActiveDeviceId = useAddOneStore((state) => state.activeDeviceId);
   const setDemoActiveDevice = useAddOneStore((state) => state.setActiveDevice);
   const cloudActiveDeviceId = useAppUiStore((state) => state.activeDeviceId);
+  const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
+  const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
   const clearConnectivityIssue = useAppUiStore((state) => state.clearConnectivityIssue);
   const connectivityIssueByDevice = useAppUiStore((state) => state.connectivityIssueByDevice);
   const clearRuntimeConflictRecovery = useAppUiStore((state) => state.clearRuntimeConflictRecovery);
@@ -293,6 +295,28 @@ export function useDevices() {
   }, [cloudActiveDeviceId, effectiveDevices, mode, setCloudActiveDeviceId]);
 
   const activeDevice = effectiveDevices.find((device) => device.id === activeDeviceId) ?? effectiveDevices[0] ?? null;
+
+  useEffect(() => {
+    for (const [deviceId, pendingState] of Object.entries(pendingTodayStateByDevice)) {
+      if (pendingState === undefined) {
+        continue;
+      }
+
+      const matchingDevice = effectiveDevices.find((device) => device.id === deviceId);
+      if (!matchingDevice) {
+        continue;
+      }
+
+      const localDate = matchingDevice.dateGrid?.[matchingDevice.today.weekIndex]?.[matchingDevice.today.dayIndex];
+      if (!localDate) {
+        continue;
+      }
+
+      if (getDayStateByLocalDate(matchingDevice, localDate) === pendingState) {
+        clearPendingTodayState(deviceId);
+      }
+    }
+  }, [clearPendingTodayState, effectiveDevices, pendingTodayStateByDevice]);
 
   return {
     activeDevice,
@@ -1089,8 +1113,10 @@ export function useDeviceActions() {
         const baseRevision = targetDevice.runtimeRevision;
         setPendingTodayState(targetDevice.id, desiredState);
 
+        let result: Awaited<ReturnType<typeof setDayStateMutation.mutateAsync>> | null = null;
+
         try {
-          const result = await setDayStateMutation.mutateAsync({
+          result = await setDayStateMutation.mutateAsync({
             baseRevision,
             clientEventId: makeClientEventId(),
             deviceId: targetDevice.id,
@@ -1104,7 +1130,7 @@ export function useDeviceActions() {
               baseRevision,
               commandId: result.command_id ?? null,
               errorMessage: "The device did not confirm today's state in time.",
-              requireRevisionAdvance: true,
+              requireRevisionAdvance: false,
             },
             (device) => getDayStateByLocalDate(device, localDate) === desiredState,
           );
@@ -1113,6 +1139,24 @@ export function useDeviceActions() {
           clearRuntimeConflictRecovery(targetDevice.id);
           void invalidateCloudDevices();
         } catch (error) {
+          const appliedCommand =
+            result?.command_id
+              ? await fetchDeviceCommandStatus(result.command_id).catch(() => null)
+              : null;
+
+          if (appliedCommand?.status === "applied") {
+            clearConnectivityIssue(targetDevice.id);
+            clearRuntimeConflictRecovery(targetDevice.id);
+            void invalidateCloudDevices();
+            void refreshRuntimeSnapshot(targetDevice.id, {
+              errorMessage: "The board changed, but the refreshed snapshot did not arrive in time.",
+              timeoutMs: 12_000,
+            }).catch((refreshError) => {
+              console.warn("Day-state command applied before the runtime snapshot caught up", refreshError);
+            });
+            return;
+          }
+
           clearPendingTodayState(targetDevice.id);
           const message = error instanceof Error ? error.message : "Failed to change today's state.";
           if (allowRetry && isRuntimeRevisionConflictError(message)) {

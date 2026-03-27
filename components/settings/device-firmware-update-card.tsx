@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import {
@@ -370,6 +372,7 @@ export function DeviceFirmwareUpdateCard({
   device: AddOneDevice;
   proofScenario?: DeviceFirmwareProofScenario | null;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const { error, isLoading, isStartingUpdate, startUpdate, summary } = useDeviceFirmwareUpdate(device, proofScenario);
   const copy = statusCopy(summary, device, isLoading, error instanceof Error ? error.message : null);
   const pill = pillState(summary, error instanceof Error, isLoading);
@@ -407,43 +410,69 @@ export function DeviceFirmwareUpdateCard({
 
   return (
     <SettingsSurface>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <View style={{ flex: 1, gap: SETTINGS_HEADER_GAP }}>
-          <SettingsFieldLabel>Current firmware</SettingsFieldLabel>
-          <Text
-            selectable
-            style={{
-              color: theme.colors.textPrimary,
-              fontFamily: theme.typography.title.fontFamily,
-              fontSize: theme.typography.title.fontSize,
-              lineHeight: theme.typography.title.lineHeight,
-            }}
-          >
-            {currentVersion}
-          </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setIsExpanded((current) => !current)}
+        style={{ gap: 12 }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <SettingsFieldLabel>Current firmware</SettingsFieldLabel>
+            <Text
+              selectable
+              style={{
+                color: theme.colors.textPrimary,
+                fontFamily: theme.typography.title.fontFamily,
+                fontSize: theme.typography.title.fontSize,
+                lineHeight: theme.typography.title.lineHeight,
+              }}
+            >
+              {currentVersion}
+            </Text>
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 10 }}>
+            <FirmwareStatusPill label={pill.label} tone={pill.tone} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                }}
+              >
+                {isExpanded ? "Hide" : "Details"}
+              </Text>
+              <Ionicons color={theme.colors.textSecondary} name={isExpanded ? "chevron-up" : "chevron-down"} size={16} />
+            </View>
+          </View>
         </View>
-        <FirmwareStatusPill label={pill.label} tone={pill.tone} />
-      </View>
+      </Pressable>
 
-      <View style={{ gap: SETTINGS_HEADER_GAP }}>
-        <SettingsFieldLabel>{copy.headline}</SettingsFieldLabel>
-        <SettingsNote tone={copy.tone === "error" ? "error" : "secondary"}>{copy.body}</SettingsNote>
-        {summary?.availableRelease && !summary.updateAvailable && !isInProgressState(summary.currentState) ? (
-          <SettingsNote>
-            Latest eligible target: {summary.availableRelease.firmwareVersion}
-          </SettingsNote>
-        ) : null}
-      </View>
+      {isExpanded ? (
+        <>
+          <View style={{ height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.08) }} />
+          <View style={{ gap: SETTINGS_HEADER_GAP }}>
+            <SettingsFieldLabel>{copy.headline}</SettingsFieldLabel>
+            <SettingsNote tone={copy.tone === "error" ? "error" : "secondary"}>{copy.body}</SettingsNote>
+            {summary?.availableRelease && !summary.updateAvailable && !isInProgressState(summary.currentState) ? (
+              <SettingsNote>
+                Latest eligible target: {summary.availableRelease.firmwareVersion}
+              </SettingsNote>
+            ) : null}
+          </View>
 
-      {copy.actionLabel ? (
-        <View style={{ gap: SETTINGS_FIELD_GAP }}>
-          <ActionButton
-            disabled={!summary?.canRequestUpdate}
-            label={copy.actionLabel}
-            loading={isStartingUpdate}
-            onPress={requestUpdate}
-          />
-        </View>
+          {copy.actionLabel ? (
+            <View style={{ gap: SETTINGS_FIELD_GAP }}>
+              <ActionButton
+                disabled={!summary?.canRequestUpdate}
+                label={copy.actionLabel}
+                loading={isStartingUpdate}
+                onPress={requestUpdate}
+              />
+            </View>
+          ) : null}
+        </>
       ) : null}
     </SettingsSurface>
   );

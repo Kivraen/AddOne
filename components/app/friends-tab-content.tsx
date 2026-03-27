@@ -6,7 +6,7 @@ import { Image } from "expo-image";
 import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActionSheetIOS, ActivityIndicator, Modal, Pressable, ScrollView, Share, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Share, Text, TextInput, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { captureRef } from "react-native-view-shot";
 
@@ -40,6 +40,13 @@ interface FriendsTabContentProps {
 
 type FeedbackTone = "error" | "success";
 type FriendsSheetKey = "controls" | "join" | "share" | "connections" | "boards" | null;
+type ControlsAnchor = { height: number; width: number; x: number; y: number };
+type FriendsProofSheet = Exclude<FriendsSheetKey, "connections" | "boards" | null>;
+
+function normalizeProofToggle(value: string | string[] | undefined) {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  return normalized === "1";
+}
 
 function SectionEyebrow({ children }: { children: string }) {
   return (
@@ -277,19 +284,29 @@ function formatRelativeTimestamp(value: string | null | undefined) {
 
 function formatShareCode(code: string | null) {
   if (!code) {
-    return "------";
+    return "-------";
   }
 
   const normalized = code.trim().toUpperCase();
-  if (normalized.length <= 3) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, 3)} ${normalized.slice(3)}`;
+  return normalized.match(/.{1,3}/g)?.join("-") ?? normalized;
 }
 
 function normalizeShareCodeInput(value: string) {
   return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
+}
+
+function formatShareCodeInput(value: string) {
+  const normalized = normalizeShareCodeInput(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const grouped = normalized.match(/.{1,3}/g)?.join("-") ?? normalized;
+  if (normalized.length < 12 && normalized.length % 3 === 0) {
+    return `${grouped}-`;
+  }
+
+  return grouped;
 }
 
 function normalizeDemoScenario(value: string | string[] | undefined): FriendsDemoScenario | null {
@@ -300,6 +317,18 @@ function normalizeDemoScenario(value: string | string[] | undefined): FriendsDem
     case "empty-boards":
     case "pending":
     case "connected":
+      return normalized;
+    default:
+      return null;
+  }
+}
+
+function normalizeProofSheet(value: string | string[] | undefined): FriendsProofSheet | null {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  switch (normalized) {
+    case "controls":
+    case "join":
+    case "share":
       return normalized;
     default:
       return null;
@@ -911,6 +940,169 @@ function IconButton(props: {
   );
 }
 
+function FriendsControlsTrigger(props: { onPress: () => void; pendingCount: number }) {
+  return (
+    <Pressable
+      accessibilityLabel={props.pendingCount > 0 ? `${props.pendingCount} pending requests. Open friends actions.` : "Open friends actions"}
+      accessibilityRole="button"
+      onPress={props.onPress}
+      style={{
+        minHeight: 42,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: theme.radius.full,
+        borderWidth: 1,
+        borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: withAlpha(theme.colors.bgElevated, 0.84),
+        paddingHorizontal: 14,
+        boxShadow: "0px 10px 28px rgba(0, 0, 0, 0.18)",
+      }}
+    >
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.label.fontFamily,
+          fontSize: 14,
+          lineHeight: 18,
+        }}
+      >
+        Actions
+      </Text>
+    </Pressable>
+  );
+}
+
+function ControlsQuickActionCard(props: {
+  accent?: boolean;
+  body: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={props.onPress}
+      style={{
+        flex: 1,
+        gap: 10,
+        borderRadius: theme.radius.card,
+        borderWidth: 1,
+        borderColor: props.accent ? withAlpha(theme.colors.accentAmber, 0.24) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: props.accent ? withAlpha(theme.colors.accentAmber, 0.14) : withAlpha(theme.colors.bgBase, 0.72),
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: props.accent ? withAlpha(theme.colors.bgBase, 0.18) : withAlpha(theme.colors.textPrimary, 0.06),
+        }}
+      >
+        <Ionicons color={props.accent ? theme.colors.accentAmber : theme.colors.textPrimary} name={props.icon} size={18} />
+      </View>
+      <View style={{ gap: 4 }}>
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: 15,
+            lineHeight: 20,
+          }}
+        >
+          {props.label}
+        </Text>
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 13,
+            lineHeight: 18,
+          }}
+        >
+          {props.body}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function ControlsMenuRow(props: {
+  badgeLabel?: string;
+  body: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  tone?: "default" | "warning";
+}) {
+  const tone = props.tone ?? "default";
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={props.onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        borderRadius: theme.radius.card,
+        borderWidth: 1,
+        borderColor:
+          tone === "warning" ? withAlpha(theme.colors.statusErrorMuted, 0.22) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor:
+          tone === "warning" ? withAlpha(theme.colors.statusErrorMuted, 0.1) : withAlpha(theme.colors.bgBase, 0.68),
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      <View
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 19,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor:
+            tone === "warning" ? withAlpha(theme.colors.statusErrorMuted, 0.14) : withAlpha(theme.colors.textPrimary, 0.06),
+        }}
+      >
+        <Ionicons color={tone === "warning" ? theme.colors.statusErrorMuted : theme.colors.textPrimary} name={props.icon} size={18} />
+      </View>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: 15,
+            lineHeight: 20,
+          }}
+        >
+          {props.label}
+        </Text>
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 13,
+            lineHeight: 18,
+          }}
+        >
+          {props.body}
+        </Text>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {props.badgeLabel ? <StatusPill label={props.badgeLabel} tone={tone === "warning" ? "warning" : "default"} /> : null}
+        <Ionicons color={theme.colors.textTertiary} name="chevron-forward" size={18} />
+      </View>
+    </Pressable>
+  );
+}
+
 function SheetUtilityActionButton(props: {
   disabled?: boolean;
   icon: keyof typeof Ionicons.glyphMap;
@@ -1032,14 +1224,18 @@ function SheetCloseButton({ onPress }: { onPress: () => void }) {
 export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }: FriendsTabContentProps) {
   const router = useRouter();
   const isMountedRef = useIsMountedRef();
-  const params = useLocalSearchParams<{ proofState?: string | string[] }>();
-  const { width } = useWindowDimensions();
+  const params = useLocalSearchParams<{ proof?: string | string[]; proofSheet?: string | string[]; proofState?: string | string[] }>();
+  const { height, width } = useWindowDimensions();
   const { activeDevice } = useDevices();
-  const demoScenario = normalizeDemoScenario(params.proofState);
+  const proofEnabled = normalizeProofToggle(params.proof);
+  const demoScenario = proofEnabled ? normalizeDemoScenario(params.proofState) : null;
+  const proofSheet = proofEnabled ? normalizeProofSheet(params.proofSheet) : null;
   const { isComplete, isLoading: isLoadingProfile } = useSocialProfile();
   const {
     approveRequest,
+    hasLoadedOwnerSharing,
     hasLoadedViewerBoards,
+    isFetchingOwnerSharing,
     isApprovingRequest,
     isFetchingViewerBoards,
     isLoadingSharedBoards,
@@ -1050,6 +1246,7 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     refreshOwnerSharing,
     refreshViewerBoards,
     rejectRequest,
+    resetRequestAccessState,
     requestAccess,
     requestAccessError,
     rotateShareCode,
@@ -1063,7 +1260,9 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
   const [ownerFeedback, setOwnerFeedback] = useState<{ message: string; tone: FeedbackTone } | null>(null);
   const [activeRequestActionId, setActiveRequestActionId] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<FriendsSheetKey>(null);
+  const [controlsAnchor, setControlsAnchor] = useState<ControlsAnchor | null>(null);
   const autoCodeDeviceIdRef = useRef<string | null>(null);
+  const controlsButtonRef = useRef<View>(null);
   const boardCardWidth = Math.max(320, Math.min(width - 40, 640));
   const isProofScenario = demoScenario !== null;
   const effectiveIsComplete = demoScenario === "profile-gate" ? false : isProofScenario ? true : isComplete;
@@ -1093,6 +1292,25 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
   const showSharedBoardsErrorBanner = !shouldHoldSharedBoardsEmptyState && sharedBoards.length > 0 && sharedBoardsError;
   const isBootstrappingCode =
     Boolean(activeDevice?.id) && !codeReady && !sharingError && !isLoadingSharing && (isRotatingCode || autoCodeDeviceIdRef.current === activeDevice?.id);
+  const shouldShowSharingError = Boolean(sharingError) && hasLoadedOwnerSharing && !isLoadingSharing && !isFetchingOwnerSharing;
+  const controlsMenuWidth = Math.min(340, Math.max(268, width - 24));
+  const controlsMenuLeft = useMemo(() => {
+    if (!controlsAnchor) {
+      return Math.max(16, width - controlsMenuWidth - 16);
+    }
+
+    const alignedLeft = controlsAnchor.x + controlsAnchor.width - controlsMenuWidth;
+    return Math.min(Math.max(16, alignedLeft), width - controlsMenuWidth - 16);
+  }, [controlsAnchor, controlsMenuWidth, width]);
+  const controlsMenuTop = useMemo(() => {
+    if (!controlsAnchor) {
+      return 78;
+    }
+
+    const preferredTop = controlsAnchor.y + controlsAnchor.height + 10;
+    const maxTop = Math.max(24, height - bottomInset - 304);
+    return Math.min(preferredTop, maxTop);
+  }, [bottomInset, controlsAnchor, height]);
   const dialogMaxHeight = useMemo(() => {
     switch (activeSheet) {
       case "controls":
@@ -1115,6 +1333,38 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     router.push("/profile?from=friends");
   };
 
+  const dismissSheet = () => {
+    setControlsAnchor(null);
+    setActiveSheet(null);
+  };
+
+  const openRequestsScreen = () => {
+    triggerNavigationHaptic();
+    dismissSheet();
+    router.push("/friends-requests");
+  };
+
+  const openBoardsScreen = () => {
+    triggerNavigationHaptic();
+    dismissSheet();
+    router.push("/friends-arrange");
+  };
+
+  const openJoinSheet = () => {
+    triggerNavigationHaptic();
+    setShareCodeFeedback(null);
+    resetRequestAccessState();
+    setControlsAnchor(null);
+    setActiveSheet("join");
+  };
+
+  const openShareSheet = () => {
+    triggerNavigationHaptic();
+    setOwnerFeedback(null);
+    setControlsAnchor(null);
+    setActiveSheet("share");
+  };
+
   useFocusEffect(
     useCallback(() => {
       if (isProofScenario || !effectiveIsComplete) {
@@ -1125,42 +1375,42 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
     }, [effectiveIsComplete, isProofScenario, refreshOwnerSharing, refreshViewerBoards]),
   );
 
-  const openControlsMenu = () => {
-    triggerNavigationHaptic();
-
-    if (process.env.EXPO_OS === "ios") {
-      const options = ["Requests", "Manage boards", "Connect by code", "Share your code", "Cancel"];
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          cancelButtonIndex: 4,
-          options,
-          userInterfaceStyle: "dark",
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 0) {
-            router.push("/friends-requests");
-            return;
-          }
-
-          if (buttonIndex === 1) {
-            router.push("/friends-arrange");
-            return;
-          }
-
-          if (buttonIndex === 2) {
-            setActiveSheet("join");
-            return;
-          }
-
-          if (buttonIndex === 3) {
-            setActiveSheet("share");
-          }
-        },
-      );
+  useEffect(() => {
+    if (!proofSheet) {
       return;
     }
 
-    setActiveSheet("controls");
+    setControlsAnchor(null);
+    setActiveSheet(proofSheet);
+  }, [proofSheet]);
+
+  const openControlsMenu = () => {
+    triggerNavigationHaptic();
+
+    const openAtDefaultPosition = () => {
+      setControlsAnchor(null);
+      setActiveSheet("controls");
+    };
+
+    if (!controlsButtonRef.current) {
+      openAtDefaultPosition();
+      return;
+    }
+
+    controlsButtonRef.current.measureInWindow((x, y, measuredWidth, measuredHeight) => {
+      if (![x, y, measuredWidth, measuredHeight].every(Number.isFinite)) {
+        openAtDefaultPosition();
+        return;
+      }
+
+      setControlsAnchor({
+        height: measuredHeight,
+        width: measuredWidth,
+        x,
+        y,
+      });
+      setActiveSheet("controls");
+    });
   };
 
   const handleCopyShareCode = async () => {
@@ -1399,6 +1649,7 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
         ? "Copy or share this code. Rotate only if it was exposed. Approved people keep access."
         : "Generate a code to start sharing."
       : null;
+  const formattedShareCodeInput = formatShareCodeInput(shareCodeInput);
 
   return (
     <View style={{ flex: 1 }}>
@@ -1434,10 +1685,17 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                       <View style={{ gap: 4 }}>
                         <SectionTitle>Growing together</SectionTitle>
+                        {pendingCount > 0 ? (
+                          <View style={{ paddingTop: 2, alignSelf: "flex-start" }}>
+                            <StatusPill label={`${pendingCount} waiting`} tone="warning" />
+                          </View>
+                        ) : null}
                       </View>
-                      <IconButton compact icon="ellipsis-horizontal" indicator={pendingCount > 0} onPress={openControlsMenu} title="More" />
+                      <View ref={controlsButtonRef} collapsable={false}>
+                        <FriendsControlsTrigger onPress={openControlsMenu} pendingCount={pendingCount} />
+                      </View>
                     </View>
-                    {sharingError ? (
+                    {shouldShowSharingError ? (
                       <BodyCopy tone="error">{formatFriendsError(sharingError, "We couldn't load sharing for this board.")}</BodyCopy>
                     ) : null}
                   </View>
@@ -1465,7 +1723,7 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
 
                   {!shouldHoldSharedBoardsEmptyState && !showSharedBoardsErrorCard && sharedBoards.length === 0 ? (
                     <EmptyMessage
-                      body="Use the menu to connect by code or share your board."
+                      body="Use Actions to connect by code or share your board."
                       title="No shared boards yet"
                     />
                   ) : null}
@@ -1481,143 +1739,198 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
       </ScreenScrollView>
 
       {activeSheet ? (
-        <Modal animationType="fade" transparent visible onRequestClose={() => setActiveSheet(null)}>
-          <View
-            style={{
-              alignItems: "center",
-              flex: 1,
-              justifyContent: "center",
-              paddingHorizontal: 16,
-              paddingTop: 24,
-              paddingBottom: bottomInset + 12,
-            }}
-          >
-            <BlurView
-              intensity={28}
-              tint="dark"
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                bottom: 0,
-                left: 0,
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                bottom: 0,
-                left: 0,
-                backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
-              }}
-            />
-            <GlassCard
-              style={{
-                width: "100%",
-                maxHeight: dialogMaxHeight,
-                gap: 0,
-                paddingHorizontal: 0,
-                paddingVertical: 0,
-                backgroundColor: withAlpha(theme.colors.bgElevated, 0.76),
-                borderColor: withAlpha(theme.colors.textPrimary, 0.12),
-                boxShadow: `0px 22px 64px ${withAlpha(theme.colors.bgBase, 0.34)}`,
-              }}
-            >
-              <View style={{ gap: 10, paddingHorizontal: 20, paddingBottom: activeSheet === "share" ? 18 : 14, paddingTop: 18 }}>
-                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                  <View style={{ flex: 1, gap: activeSheet === "share" ? 10 : 8 }}>
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontFamily: theme.typography.title.fontFamily,
-                        fontSize: theme.typography.title.fontSize,
-                        lineHeight: theme.typography.title.lineHeight,
-                      }}
-                    >
-                      {currentSheetTitle}
-                    </Text>
-                    {currentSheetSubtitle ? (
-                      <Text
-                        style={{
-                          color: theme.colors.textSecondary,
-                          fontFamily: theme.typography.label.fontFamily,
-                          fontSize: theme.typography.label.fontSize,
-                          lineHeight: theme.typography.label.lineHeight,
-                        }}
-                        >
-                          {currentSheetSubtitle}
-                        </Text>
-                      ) : null}
-                      {currentSheetNote ? (
+        <Modal animationType="fade" transparent visible onRequestClose={dismissSheet}>
+          {activeSheet === "controls" ? (
+            <View style={{ flex: 1 }}>
+              <BlurView
+                intensity={20}
+                tint="dark"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                }}
+              />
+              <Pressable
+                onPress={dismissSheet}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  backgroundColor: withAlpha(theme.colors.bgBase, 0.28),
+                }}
+              />
+              <Animated.View
+                entering={FadeIn.duration(160)}
+                exiting={FadeOut.duration(120)}
+                style={{
+                  position: "absolute",
+                  top: controlsMenuTop,
+                  left: controlsMenuLeft,
+                  width: controlsMenuWidth,
+                }}
+              >
+                <GlassCard
+                  style={{
+                    gap: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 14,
+                    backgroundColor: withAlpha(theme.colors.bgElevated, 0.9),
+                    borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+                    boxShadow: theme.shadows.floating,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <ControlsQuickActionCard
+                      accent
+                      body="Copy, share, or rotate your code."
+                      icon="share-social-outline"
+                      label="Share your code"
+                      onPress={openShareSheet}
+                    />
+                  <ControlsQuickActionCard
+                    body="Enter a code to request access."
+                    icon="link-outline"
+                    label="Connect by code"
+                    onPress={openJoinSheet}
+                  />
+                  </View>
+                  <View style={{ height: 1, backgroundColor: withAlpha(theme.colors.textPrimary, 0.08) }} />
+                  <View style={{ gap: 10 }}>
+                    <ControlsMenuRow
+                      badgeLabel={pendingCount > 0 ? `${pendingCount} waiting` : undefined}
+                      body={pendingCount > 0 ? "Approve or reject waiting requests." : "Review incoming access requests."}
+                      icon="person-add-outline"
+                      label="Requests"
+                      onPress={openRequestsScreen}
+                      tone={pendingCount > 0 ? "warning" : "default"}
+                    />
+                    <ControlsMenuRow
+                      badgeLabel={sharedCount > 0 ? `${sharedCount} board${sharedCount === 1 ? "" : "s"}` : undefined}
+                      body={sharedCount > 0 ? "Reorder or remove boards you follow." : "Boards you follow stay organized here."}
+                      icon="grid-outline"
+                      label="Manage boards"
+                      onPress={openBoardsScreen}
+                    />
+                  </View>
+                </GlassCard>
+              </Animated.View>
+            </View>
+          ) : (
+            <>
+              <BlurView
+                intensity={28}
+                tint="dark"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                }}
+              />
+              <Pressable
+                onPress={dismissSheet}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
+                }}
+              />
+              <View
+                style={{
+                  alignItems: "center",
+                  flex: 1,
+                  justifyContent: "center",
+                  paddingHorizontal: 16,
+                  paddingTop: 24,
+                  paddingBottom: bottomInset + 12,
+                }}
+              >
+                <GlassCard
+                  style={{
+                    width: "100%",
+                    maxHeight: dialogMaxHeight,
+                    gap: 0,
+                    paddingHorizontal: 0,
+                    paddingVertical: 0,
+                    backgroundColor: withAlpha(theme.colors.bgElevated, 0.76),
+                    borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+                    boxShadow: `0px 22px 64px ${withAlpha(theme.colors.bgBase, 0.34)}`,
+                  }}
+                >
+                  <View style={{ gap: 10, paddingHorizontal: 20, paddingBottom: activeSheet === "share" ? 18 : 14, paddingTop: 18 }}>
+                    <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                      <View style={{ flex: 1, gap: activeSheet === "share" ? 10 : 8 }}>
                         <Text
                           style={{
-                            color: theme.colors.textSecondary,
-                            fontFamily: theme.typography.body.fontFamily,
-                            fontSize: 15,
-                            lineHeight: 22,
-                            maxWidth: "92%",
+                            color: theme.colors.textPrimary,
+                            fontFamily: theme.typography.title.fontFamily,
+                            fontSize: theme.typography.title.fontSize,
+                            lineHeight: theme.typography.title.lineHeight,
                           }}
                         >
-                          {currentSheetNote}
+                          {currentSheetTitle}
                         </Text>
-                      ) : null}
+                        {currentSheetSubtitle ? (
+                          <Text
+                            style={{
+                              color: theme.colors.textSecondary,
+                              fontFamily: theme.typography.label.fontFamily,
+                              fontSize: theme.typography.label.fontSize,
+                              lineHeight: theme.typography.label.lineHeight,
+                            }}
+                          >
+                            {currentSheetSubtitle}
+                          </Text>
+                        ) : null}
+                        {currentSheetNote ? (
+                          <Text
+                            style={{
+                              color: theme.colors.textSecondary,
+                              fontFamily: theme.typography.body.fontFamily,
+                              fontSize: 15,
+                              lineHeight: 22,
+                              maxWidth: "92%",
+                            }}
+                          >
+                            {currentSheetNote}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <SheetCloseButton onPress={dismissSheet} />
+                    </View>
                   </View>
-                  <SheetCloseButton onPress={() => setActiveSheet(null)} />
-                </View>
-              </View>
-
-              <ScrollView contentContainerStyle={{ gap: activeSheet === "share" ? 22 : 18, paddingBottom: 22, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
-              {activeSheet === "controls" ? (
-                <View style={{ gap: 12 }}>
-                  <ActionButton
-                    label={pendingCount > 0 ? `Requests (${pendingCount})` : "Requests"}
-                    onPress={() => {
-                      setActiveSheet(null);
-                      router.push("/friends-requests");
-                    }}
-                    secondary
-                  />
-                  <ActionButton
-                    label="Manage boards"
-                    onPress={() => {
-                      setActiveSheet(null);
-                      router.push("/friends-arrange");
-                    }}
-                    secondary
-                  />
-                  <ActionButton
-                    label="Connect by code"
-                    onPress={() => {
-                      setShareCodeFeedback(null);
-                      setActiveSheet("join");
-                    }}
-                    secondary
-                  />
-                  <ActionButton
-                    label="Share your code"
-                    onPress={() => {
-                      setOwnerFeedback(null);
-                      setActiveSheet("share");
-                    }}
-                  />
-                </View>
-              ) : null}
-
+                  <ScrollView contentContainerStyle={{ gap: activeSheet === "share" ? 22 : 18, paddingBottom: 22, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
               {activeSheet === "join" ? (
                 <View style={{ gap: 14 }}>
                   <TextInput
                     autoCapitalize="characters"
                     autoCorrect={false}
                     keyboardType="ascii-capable"
-                    maxLength={12}
+                    maxLength={15}
                     onChangeText={(value) => {
                       setShareCodeFeedback(null);
-                      setShareCodeInput(normalizeShareCodeInput(value));
+                      const normalizedValue = normalizeShareCodeInput(value);
+                      if (
+                        formattedShareCodeInput.endsWith("-") &&
+                        value.length === formattedShareCodeInput.length - 1 &&
+                        normalizedValue.length === shareCodeInput.length
+                      ) {
+                        setShareCodeInput((current) => current.slice(0, -1));
+                        return;
+                      }
+
+                      setShareCodeInput(normalizedValue);
                     }}
-                    placeholder="ABC123"
+                    placeholder="ABC-123"
                     placeholderTextColor={theme.colors.textMuted}
                     style={{
                       borderRadius: theme.radius.sheet,
@@ -1633,11 +1946,11 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                       paddingVertical: 15,
                       textAlign: "center",
                     }}
-                    value={shareCodeInput}
+                    value={formattedShareCodeInput}
                   />
 
                   {shareCodeFeedback ? <BodyCopy tone={shareCodeFeedback.tone}>{shareCodeFeedback.message}</BodyCopy> : null}
-                  {!shareCodeFeedback && requestAccessError ? (
+                  {!shareCodeFeedback && !isRequestingAccess && requestAccessError ? (
                     <BodyCopy tone="error">{formatFriendsError(requestAccessError, "We couldn't send that share request.")}</BodyCopy>
                   ) : null}
 
@@ -1687,7 +2000,7 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                       ) : null}
 
                       {ownerFeedback ? <BodyCopy tone={ownerFeedback.tone}>{ownerFeedback.message}</BodyCopy> : null}
-                      {!ownerFeedback && sharingError ? (
+                      {!ownerFeedback && shouldShowSharingError ? (
                         <BodyCopy tone="error">{formatFriendsError(sharingError, "We couldn't load sharing for this board.")}</BodyCopy>
                       ) : null}
 
@@ -1818,9 +2131,11 @@ export function FriendsTabContent({ bottomInset = theme.layout.tabScrollBottom }
                     : null}
                 </View>
               ) : null}
-              </ScrollView>
-            </GlassCard>
-          </View>
+                  </ScrollView>
+                </GlassCard>
+              </View>
+            </>
+          )}
         </Modal>
       ) : null}
     </View>

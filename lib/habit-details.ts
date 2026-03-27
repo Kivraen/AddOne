@@ -34,5 +34,5 @@ export function resolveMinimumGoalDraft(value?: string | null) {
 
 export function homeMinimumGoalLabel(value?: string | null) {
   const trimmed = normalizeMinimumGoalForSave(value);
-  return trimmed ? `Minimum: ${trimmed}` : null;
+  return trimmed || null;
 }

@@ -65,7 +65,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
 - Next brief: `T-045` publish blocker remediation and release-candidate rerun
 - Current execution task: finish the iOS artifact portion of `T-045` on `codex/s4-release-candidate-remediation`, then rerun the release-candidate validation matrix on the corrected baseline
-- Accepted parallel slice: `T-046` is now closed as a narrow UI-only cleanup and does not reopen weekly-minimum semantics, offline-sync work, or broader Friends-controls redesign
+- Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, and `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice. Neither one reopens weekly-minimum semantics or offline-sync work, and `T-045` remains the blocked release gate.
 
 ## Current Blockers
 
@@ -98,6 +98,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-044` is now accepted on `codex/s4-release-candidate-validation`: the internal release-candidate pass reduced submission readiness to a finite blocker list. The current iOS launch blockers are a non-OTA-capable board still in the active cohort and stale installable build artifacts for the accepted March 27 baseline. Android is currently a deferred follow-up track unless the user explicitly reopens it as part of the same submission wave.
 - `T-045` is now blocked on `codex/s4-release-candidate-remediation`: `AO_A4F00F767008` is explicitly out of the active `fw-beta-20260327-05` cohort, Android is explicitly deferred, and the remaining P0 is one finished installable iOS artifact for baseline `dce8541`.
 - `T-046` is now accepted on `codex/s4-rc-easy-ui-cleanup`: the temporary celebration-preview controls were removed from the device settings overview, and the slice stayed within the intended UI-only scope.
+- `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the user-guided Friends controls redesign, the adjacent Home and settings UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are now checkpointed together as a bounded RC UI iteration slice.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.

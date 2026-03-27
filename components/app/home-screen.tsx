@@ -1,7 +1,17 @@
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, RefreshControl, Text, View, useWindowDimensions } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -32,7 +42,7 @@ import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { homeMinimumGoalLabel } from "@/lib/habit-details";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
-import { formatWeekdayFromLocalDate } from "@/lib/runtime-board-projection";
+import { formatWeekdayFromLocalDate, startOfWeek } from "@/lib/runtime-board-projection";
 import { useAppUiStore } from "@/store/app-ui-store";
 import { AddOneDevice } from "@/types/addone";
 
@@ -42,6 +52,11 @@ const HOME_INSIGHT_TRANSITION_DURATION = 360;
 const HOME_INSIGHT_ENTRY_OFFSET = 16;
 const HOME_INSIGHT_EXIT_OFFSET = 10;
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15_000;
+const HOME_PRIMARY_ACTION_SIZE = 156;
+const HOME_PRIMARY_ACTION_ANCHOR_RATIO = 0.5;
+const HOME_PRIMARY_ACTION_BOTTOM_GAP = 16;
+const HOME_PRIMARY_ACTION_TOP_GAP = 72;
+const HOME_PULL_REFRESH_TRIGGER = 84;
 
 type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline" | "removing";
 type HomeInsight = { eyebrow: string; message: string };
@@ -137,6 +152,18 @@ function visibleBoardStats(device: AddOneDevice) {
   return {
     fillPercentage: visibleDays === 0 ? 0 : Math.round((visibleCompleted / visibleDays) * 100),
   };
+}
+
+function totalHabitWeeks(device: AddOneDevice) {
+  if (!device.habitStartedOnLocal) {
+    return null;
+  }
+
+  const habitStartWeek = startOfWeek(device.habitStartedOnLocal, device.weekStart);
+  const currentWeek = startOfWeek(device.logicalToday, device.weekStart);
+  const daysBetween = Math.round((new Date(`${currentWeek}T00:00:00.000Z`).getTime() - new Date(`${habitStartWeek}T00:00:00.000Z`).getTime()) / 86_400_000);
+  const elapsedWeeks = Math.floor(Math.max(daysBetween, 0) / 7) + 1;
+  return Math.max(elapsedWeeks, device.successfulWeeksTotal);
 }
 
 function boardInsight(device: AddOneDevice, stats: { fillPercentage: number }, currentWeekCompleted: number): HomeInsight {
@@ -263,6 +290,69 @@ function HomeInsightCopy({ insight }: { insight: HomeInsight }) {
         {insight.message}
       </Text>
     </>
+  );
+}
+
+function HomePrimaryActionOverlay(props: {
+  activeColor: string;
+  bottomPadding: number;
+  onPress: () => void;
+  state: PrimaryActionState;
+}) {
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{
+        alignItems: "center",
+        paddingBottom: props.bottomPadding,
+      }}
+    >
+      <PrimaryActionButton activeColor={props.activeColor} onPress={props.onPress} size={HOME_PRIMARY_ACTION_SIZE} state={props.state} />
+    </View>
+  );
+}
+
+function HomeBoardRefreshOverlay({ activeColor }: { activeColor: string }) {
+  return (
+    <BlurView
+      intensity={26}
+      pointerEvents="none"
+      tint="dark"
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        overflow: "hidden",
+        borderRadius: 26,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          gap: 10,
+          borderRadius: theme.radius.hero,
+          backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
+          paddingHorizontal: 20,
+          paddingVertical: 14,
+        }}
+      >
+        <ActivityIndicator color={activeColor} />
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.label.fontFamily,
+            fontSize: theme.typography.label.fontSize,
+            lineHeight: theme.typography.label.lineHeight,
+          }}
+        >
+          Refreshing board
+        </Text>
+      </View>
+    </BlurView>
   );
 }
 
@@ -536,6 +626,9 @@ export function HomeScreen() {
   const [manualRefreshInFlight, setManualRefreshInFlight] = useState(false);
   const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
   const staleRefreshKeyRef = useRef<string | null>(null);
+  const pullRefreshDistanceRef = useRef(0);
+  const weeklyTargetAnchorRef = useRef<View>(null);
+  const [weeklyTargetBottom, setWeeklyTargetBottom] = useState<number | null>(null);
 
   useEffect(() => {
     if (!pendingBoardEditorOpen || !activeDevice || !isDeviceControlReady(activeDevice)) {
@@ -570,6 +663,45 @@ export function HomeScreen() {
         : null
       : null;
   const pendingSetupCopy = pendingOnboardingStatus ? resolvePendingSetupCopy(pendingOnboardingStatus) : null;
+  const measureWeeklyTargetAnchor = () => {
+    if (!weeklyTargetAnchorRef.current) {
+      return;
+    }
+
+    weeklyTargetAnchorRef.current.measureInWindow((_x, y) => {
+      if (!Number.isFinite(y)) {
+        return;
+      }
+
+      setWeeklyTargetBottom((currentBottom) => {
+        if (currentBottom !== null && Math.abs(currentBottom - y) < 1) {
+          return currentBottom;
+        }
+
+        return y;
+      });
+    });
+  };
+  const safeAreaHeight = height - insets.top - insets.bottom;
+  const fallbackBottomPadding = 32;
+  const tabBarTop = safeAreaHeight - Math.max(theme.layout.tabScrollBottom - insets.bottom, 0);
+  const primaryActionBottomPadding =
+    weeklyTargetBottom === null
+      ? fallbackBottomPadding
+      : (() => {
+          const weeklyTargetBottomWithinSafeArea = weeklyTargetBottom - insets.top;
+          const minTop = weeklyTargetBottomWithinSafeArea + HOME_PRIMARY_ACTION_TOP_GAP;
+          const maxTop = tabBarTop - HOME_PRIMARY_ACTION_SIZE - HOME_PRIMARY_ACTION_BOTTOM_GAP;
+
+          if (maxTop <= minTop) {
+            return Math.max(safeAreaHeight - (minTop + HOME_PRIMARY_ACTION_SIZE), fallbackBottomPadding);
+          }
+
+          const buttonTop = minTop + (maxTop - minTop) * HOME_PRIMARY_ACTION_ANCHOR_RATIO;
+          return Math.max(safeAreaHeight - (buttonTop + HOME_PRIMARY_ACTION_SIZE), fallbackBottomPadding);
+        })();
+  const homeBottomInset = HOME_PRIMARY_ACTION_SIZE + primaryActionBottomPadding + HOME_PRIMARY_ACTION_TOP_GAP;
+  const contentMinHeight = Math.max(0, height - insets.top - homeBottomInset - theme.layout.scrollTop);
 
   useEffect(() => {
     if (effectiveDevice || onboardingSession?.status !== "claimed" || claimedSessionIsFresh) {
@@ -605,6 +737,21 @@ export function HomeScreen() {
     activeDevice,
     refreshRuntimeSnapshot,
   ]);
+
+  useEffect(() => {
+    if (!effectiveDevice) {
+      setWeeklyTargetBottom(null);
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      measureWeeklyTargetAnchor();
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [effectiveDevice, height]);
 
   const palette = useMemo(
     () => (effectiveDevice ? getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette) : null),
@@ -646,12 +793,28 @@ export function HomeScreen() {
     }
   }
 
+  const handleHomeScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    pullRefreshDistanceRef.current = Math.max(-event.nativeEvent.contentOffset.y, 0);
+  };
+
+  const handleHomeScrollEndDrag = () => {
+    const shouldRefresh = pullRefreshDistanceRef.current >= HOME_PULL_REFRESH_TRIGGER;
+    pullRefreshDistanceRef.current = 0;
+
+    if (shouldRefresh) {
+      void handleManualRefresh();
+    }
+  };
+
   if (isLoading || (!effectiveDevice && isOnboardingLoading)) {
     return (
       <ScreenScrollView
+        alwaysBounceVertical
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-        refreshControl={<RefreshControl onRefresh={() => void handleManualRefresh()} refreshing={manualRefreshInFlight} tintColor={theme.colors.textSecondary} />}
+        onScroll={handleHomeScroll}
+        onScrollEndDrag={handleHomeScrollEndDrag}
+        scrollEventThrottle={16}
       >
         <View style={{ alignItems: "center", gap: 14, paddingVertical: 36 }}>
           <ActivityIndicator color={theme.colors.textPrimary} />
@@ -673,10 +836,13 @@ export function HomeScreen() {
   if (!effectiveDevice || !palette) {
     return (
       <ScreenScrollView
+        alwaysBounceVertical
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         contentMaxWidth={theme.layout.narrowContentWidth}
-        refreshControl={<RefreshControl onRefresh={() => void handleManualRefresh()} refreshing={manualRefreshInFlight} tintColor={theme.colors.textSecondary} />}
+        onScroll={handleHomeScroll}
+        onScrollEndDrag={handleHomeScrollEndDrag}
+        scrollEventThrottle={16}
       >
         <View style={{ alignItems: "center", gap: 28, paddingVertical: 24 }}>
           {pendingSetupCopy ? (
@@ -792,8 +958,7 @@ export function HomeScreen() {
   const currentWeekCompleted = device.days[device.today.weekIndex]
     .slice(0, device.today.dayIndex + 1)
     .filter(Boolean).length;
-  const homeBottomInset = theme.layout.tabScrollBottom;
-  const contentMinHeight = Math.max(0, height - insets.top - homeBottomInset - theme.layout.scrollTop);
+  const habitWeeksTotal = totalHabitWeeks(device);
   const isTodayToggleLocked = staleRefreshInFlight || todayActionInFlight || activePendingTodayState !== undefined;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
   const todayState = boardButtonState(device, buttonIsApplying, isTodayToggleLocked);
@@ -819,13 +984,47 @@ export function HomeScreen() {
           ? "Board looks offline. Open Recovery to reconnect Wi-Fi."
           : homeMinimumGoalLabel(device.dailyMinimum);
   const headerContextKey = `${headerStatusState}:${headerContextMessage ?? "empty"}`;
+  const handlePrimaryActionPress = () => {
+    if (todayActionLockRef.current || isTodayToggleLocked) {
+      return;
+    }
+
+    todayActionLockRef.current = true;
+    setTodayActionInFlight(true);
+
+    void toggleToday(device.id)
+      .then(() => {
+        triggerPrimaryActionSuccessHaptic();
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to update the device.";
+        triggerPrimaryActionFailureHaptic();
+        Alert.alert("Couldn’t update the device", message);
+        console.warn("Failed to toggle today from app", error);
+      })
+      .finally(() => {
+        todayActionLockRef.current = false;
+        setTodayActionInFlight(false);
+      });
+  };
 
   return (
     <ScreenScrollView
+      alwaysBounceVertical
       bottomInset={homeBottomInset}
+      bottomOverlay={
+        <HomePrimaryActionOverlay
+          activeColor={deviceAccentColor}
+          bottomPadding={primaryActionBottomPadding}
+          onPress={handlePrimaryActionPress}
+          state={todayState}
+        />
+      }
       contentContainerStyle={{ flexGrow: 1 }}
       contentMaxWidth={theme.layout.maxContentWidth}
-      refreshControl={<RefreshControl onRefresh={() => void handleManualRefresh()} refreshing={manualRefreshInFlight} tintColor={theme.colors.textSecondary} />}
+      onScroll={handleHomeScroll}
+      onScrollEndDrag={handleHomeScrollEndDrag}
+      scrollEventThrottle={16}
     >
       <View style={{ minHeight: contentMinHeight, gap: 16 }}>
         <View style={{ gap: 8 }}>
@@ -903,26 +1102,29 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <DeviceBoardStage
-          accentColor={theme.colors.accentAmber}
-          cells={cells}
-          palette={palette}
-          pendingPulse={
-            activePendingTodayState !== undefined
-              ? {
-                  col: device.today.weekIndex,
-                  row: device.today.dayIndex,
-                }
-              : null
-          }
-        />
+        <View style={{ position: "relative" }}>
+          <DeviceBoardStage
+            accentColor={theme.colors.accentAmber}
+            cells={cells}
+            palette={palette}
+            pendingPulse={
+              activePendingTodayState !== undefined
+                ? {
+                    col: device.today.weekIndex,
+                    row: device.today.dayIndex,
+                  }
+                : null
+            }
+          />
+          {manualRefreshInFlight ? <HomeBoardRefreshOverlay activeColor={deviceAccentColor} /> : null}
+        </View>
 
         <View style={{ gap: 14 }}>
           <View style={{ height: 1, backgroundColor: dividerColor }} />
           <View style={{ alignItems: "stretch", flexDirection: "row" }}>
             <MetricTile label="This week" value={`${currentWeekCompleted}/${device.weeklyTarget}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
-            <MetricTile label="Weeks" value={`${device.successfulWeeksTotal}`} />
+            <MetricTile label="Weeks" value={habitWeeksTotal ? `${device.successfulWeeksTotal}/${habitWeeksTotal}` : `${device.successfulWeeksTotal}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
             <MetricTile label="Recorded" value={`${device.recordedDaysTotal}d`} />
           </View>
@@ -931,36 +1133,16 @@ export function HomeScreen() {
         <View style={{ gap: 12 }}>
           <View style={{ height: 1, backgroundColor: dividerColor }} />
           <HomeInsightPanel insight={insight} />
-        </View>
-
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 20 }}>
-          <PrimaryActionButton
-            activeColor={deviceAccentColor}
-            onPress={() => {
-              if (todayActionLockRef.current || isTodayToggleLocked) {
-                return;
-              }
-
-              todayActionLockRef.current = true;
-              setTodayActionInFlight(true);
-
-              void toggleToday(device.id)
-                .then(() => {
-                  triggerPrimaryActionSuccessHaptic();
-                })
-                .catch((error) => {
-                  const message = error instanceof Error ? error.message : "Failed to update the device.";
-                  triggerPrimaryActionFailureHaptic();
-                  Alert.alert("Couldn’t update the device", message);
-                  console.warn("Failed to toggle today from app", error);
-                })
-                .finally(() => {
-                  todayActionLockRef.current = false;
-                  setTodayActionInFlight(false);
-                });
+          <View
+            ref={weeklyTargetAnchorRef}
+            collapsable={false}
+            onLayout={() => {
+              requestAnimationFrame(() => {
+                measureWeeklyTargetAnchor();
+              });
             }}
-            size={156}
-            state={todayState}
+            pointerEvents="none"
+            style={{ height: 1, opacity: 0 }}
           />
         </View>
       </View>

@@ -77,7 +77,9 @@ export function ScreenView({
   safeAreaEdges,
   style,
 }: ScreenViewProps) {
-  const contentBottomInset = bottomOverlay ? theme.layout.tabScrollBottom : bottomInset ?? theme.layout.scrollBottom;
+  const contentBottomInset = bottomOverlay
+    ? Math.max(bottomInset ?? 0, theme.layout.tabScrollBottom)
+    : bottomInset ?? theme.layout.scrollBottom;
 
   return (
     <ScreenShell safeAreaEdges={safeAreaEdges}>
@@ -139,7 +141,9 @@ export function ScreenScrollView({
   showsVerticalScrollIndicator = false,
   ...scrollViewProps
 }: ScreenScrollViewProps) {
-  const contentBottomInset = bottomOverlay ? theme.layout.tabScrollBottom : bottomInset ?? theme.layout.scrollBottom;
+  const contentBottomInset = bottomOverlay
+    ? Math.max(bottomInset ?? 0, theme.layout.tabScrollBottom)
+    : bottomInset ?? theme.layout.scrollBottom;
 
   return (
     <ScreenShell safeAreaEdges={safeAreaEdges}>
