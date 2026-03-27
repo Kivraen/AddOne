@@ -28,6 +28,24 @@ export type SetupFlowFailureCode =
   | "restore_failed"
   | "session_stale";
 export type SetupFlowProgressState = "active" | "complete" | "pending";
+export type DeviceFirmwareOtaState =
+  | "requested"
+  | "downloading"
+  | "downloaded"
+  | "verifying"
+  | "staged"
+  | "rebooting"
+  | "pending_confirm"
+  | "succeeded"
+  | "failed_download"
+  | "failed_verify"
+  | "failed_stage"
+  | "failed_boot"
+  | "rolled_back"
+  | "recovery_needed"
+  | "blocked";
+export type DeviceFirmwareInstallPolicy = "user_triggered" | "auto_apply";
+export type DeviceFirmwareProofScenario = "no-update" | "available" | "in-progress" | "failed" | "succeeded";
 
 export interface DeviceApScannedNetwork {
   authMode?: string | null;
@@ -190,6 +208,34 @@ export interface SharedBoard {
   dateGrid?: string[][];
   logicalToday: string;
   today: TodayPointer;
+}
+
+export interface DeviceFirmwareReleaseSummary {
+  firmwareVersion: string;
+  installPolicy: DeviceFirmwareInstallPolicy;
+  minimumAppVersion: string | null;
+  minimumConfirmedFirmwareVersion: string | null;
+  releaseId: string;
+}
+
+export interface DeviceFirmwareUpdateSummary {
+  availabilityReason: string;
+  availableRelease: DeviceFirmwareReleaseSummary | null;
+  canRequestUpdate: boolean;
+  confirmedReleaseId: string | null;
+  currentFirmwareChannel: string | null;
+  currentFirmwareVersion: string;
+  currentState: DeviceFirmwareOtaState | null;
+  deviceId: string;
+  lastFailureCode: string | null;
+  lastFailureDetail: string | null;
+  lastReportedAt: string | null;
+  lastRequestedAt: string | null;
+  otaCompletedAt: string | null;
+  otaStartedAt: string | null;
+  reportedFirmwareVersion: string | null;
+  targetReleaseId: string | null;
+  updateAvailable: boolean;
 }
 
 export interface DeviceViewer {

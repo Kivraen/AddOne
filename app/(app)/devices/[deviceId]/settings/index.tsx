@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
+import { DeviceFirmwareUpdateCard } from "@/components/settings/device-firmware-update-card";
 import {
   DeviceSettingsScaffold,
   SettingsDivider,
@@ -18,13 +19,14 @@ import {
   SettingsSwatchStrip,
 } from "@/components/settings/device-settings-scaffold";
 import { theme } from "@/constants/theme";
+import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions } from "@/hooks/use-devices";
 import { CELEBRATION_TRANSITION_OPTIONS } from "@/lib/celebration-transitions";
 import { withAlpha } from "@/lib/color";
 import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceResetHistoryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
-import { CelebrationTransitionStyle } from "@/types/addone";
+import { CelebrationTransitionStyle, DeviceFirmwareProofScenario } from "@/types/addone";
 
 const OVERVIEW_SECTION_GAP = 12;
 
@@ -72,9 +74,26 @@ function DraftActionButton({
   );
 }
 
+function normalizeFirmwareProofState(value: string | string[] | undefined): DeviceFirmwareProofScenario | null {
+  const normalized = Array.isArray(value) ? value[0] : value;
+
+  switch (normalized) {
+    case "available":
+    case "failed":
+    case "in-progress":
+    case "no-update":
+    case "succeeded":
+      return normalized;
+    default:
+      return null;
+  }
+}
+
 export default function DeviceSettingsOverviewRoute() {
   const device = useRoutedDevice();
   const router = useRouter();
+  const params = useLocalSearchParams<{ proofState?: string | string[] }>();
+  const { mode } = useAuth();
   const [activePreviewTransition, setActivePreviewTransition] = useState<CelebrationTransitionStyle | null>(null);
   const {
     factoryResetAndRemove,
@@ -84,6 +103,7 @@ export default function DeviceSettingsOverviewRoute() {
     previewCelebration,
     removalPhase,
   } = useDeviceActions();
+  const firmwareProofState = __DEV__ || mode === "demo" ? normalizeFirmwareProofState(params.proofState) : null;
   const controlReady = isDeviceControlReady(device);
   const devicePendingRemoval = isDevicePendingRemoval(device);
   const removeActionDisabled = devicePendingRemoval || isRemovingDeviceFromApp;
@@ -201,6 +221,11 @@ export default function DeviceSettingsOverviewRoute() {
               </View>
             </SettingsSurface>
           ) : null}
+
+          <View style={{ gap: OVERVIEW_SECTION_GAP }}>
+            <SettingsSectionTitle>Firmware</SettingsSectionTitle>
+            <DeviceFirmwareUpdateCard device={device} proofScenario={firmwareProofState} />
+          </View>
 
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>
             <SettingsSectionTitle>Configuration</SettingsSectionTitle>

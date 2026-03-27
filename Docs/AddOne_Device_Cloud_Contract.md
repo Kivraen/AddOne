@@ -210,6 +210,32 @@ Purpose:
   - explicit previous-stable rollback only when the current confirmed release is marked `rolled_back`
   - no second OTA target while a different OTA is already in progress
 
+#### `get_device_firmware_update_summary(...)`
+Called by:
+- authenticated device owner app
+
+Payload:
+- `device_id`
+- optional current app `version`
+
+Purpose:
+- returns one owner-readable OTA summary row without exposing the device auth secret
+- gives the app the current firmware version, current OTA state, any eligible user-facing release target, and whether the owner can intentionally request the update right now
+- keeps rollout percentage or allowlist checks, version ordering, and active-release selection in the backend instead of recreating them in the app
+- currently assumes the accepted beta OTA layout `addone-dual-ota-v1` for the owner-facing update surface because per-device partition layout is not yet projected into owner-readable device metadata
+
+Return:
+- current device firmware version plus firmware channel
+- latest OTA state from `device_firmware_ota_statuses`
+- optional available release summary:
+  - `release_id`
+  - `firmware_version`
+  - `install_policy`
+  - optional minimum app or confirmed firmware versions
+- `availability_reason`
+- `update_available`
+- `can_request_update`
+
 #### `report_device_ota_progress(...)`
 Called by:
 - device firmware

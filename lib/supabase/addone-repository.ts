@@ -12,6 +12,9 @@ import {
   BoardPalette,
   CelebrationTransitionSpeed,
   CelebrationTransitionStyle,
+  DeviceFirmwareInstallPolicy,
+  DeviceFirmwareOtaState,
+  DeviceFirmwareUpdateSummary,
   DeviceSettingsPatch,
   DeviceOnboardingSession,
   DeviceRecoveryState,
@@ -60,6 +63,37 @@ type DeviceHistoryMetricRow = {
   history_era_started_at: string | null;
   recorded_days_total: number | null;
   successful_weeks_total: number | null;
+};
+type DeviceFirmwareUpdateSummaryRow = {
+  availability_reason: string | null;
+  available_firmware_version: string | null;
+  available_install_policy: DeviceFirmwareInstallPolicy | null;
+  available_release_id: string | null;
+  can_request_update: boolean | null;
+  confirmed_release_id: string | null;
+  current_firmware_channel: string | null;
+  current_firmware_version: string;
+  current_state: DeviceFirmwareOtaState | null;
+  device_id: string;
+  last_failure_code: string | null;
+  last_failure_detail: string | null;
+  last_reported_at: string | null;
+  last_requested_at: string | null;
+  minimum_app_version: string | null;
+  minimum_confirmed_firmware_version: string | null;
+  ota_completed_at: string | null;
+  ota_started_at: string | null;
+  reported_firmware_version: string | null;
+  target_release_id: string | null;
+  update_available: boolean | null;
+};
+type BeginFirmwareUpdateRow = {
+  command_id: string | null;
+  command_status: string;
+  release_id: string;
+  request_id: string;
+  request_status: string;
+  requested_at: string;
 };
 
 type MembershipWithDevice = Pick<MembershipRow, "device_id" | "reminder_enabled" | "reminder_time"> & {
@@ -1165,6 +1199,37 @@ function mapRestoreCandidateRow(row: RestoreCandidateRow): RestoreCandidate {
   };
 }
 
+function mapDeviceFirmwareUpdateSummaryRow(row: DeviceFirmwareUpdateSummaryRow): DeviceFirmwareUpdateSummary {
+  return {
+    availabilityReason: row.availability_reason ?? "no_active_release",
+    availableRelease:
+      row.available_release_id && row.available_firmware_version && row.available_install_policy
+        ? {
+            firmwareVersion: row.available_firmware_version,
+            installPolicy: row.available_install_policy,
+            minimumAppVersion: row.minimum_app_version ?? null,
+            minimumConfirmedFirmwareVersion: row.minimum_confirmed_firmware_version ?? null,
+            releaseId: row.available_release_id,
+          }
+        : null,
+    canRequestUpdate: row.can_request_update ?? false,
+    confirmedReleaseId: row.confirmed_release_id ?? null,
+    currentFirmwareChannel: row.current_firmware_channel ?? null,
+    currentFirmwareVersion: row.current_firmware_version,
+    currentState: row.current_state ?? null,
+    deviceId: row.device_id,
+    lastFailureCode: row.last_failure_code ?? null,
+    lastFailureDetail: row.last_failure_detail ?? null,
+    lastReportedAt: row.last_reported_at ?? null,
+    lastRequestedAt: row.last_requested_at ?? null,
+    otaCompletedAt: row.ota_completed_at ?? null,
+    otaStartedAt: row.ota_started_at ?? null,
+    reportedFirmwareVersion: row.reported_firmware_version ?? null,
+    targetReleaseId: row.target_release_id ?? null,
+    updateAvailable: row.update_available ?? false,
+  };
+}
+
 export async function fetchRestorableBoardBackupsForUser(deviceId: string) {
   const supabase = ensureSupabase();
   const { data, error } = await (supabase.rpc as any)("list_restorable_board_backups_for_user", {
@@ -1214,6 +1279,54 @@ export async function fetchDeviceCommandStatus(commandId: string) {
     data as Pick<CommandRow, "applied_at" | "failed_at" | "id" | "last_error" | "status">,
     "Failed to load command status.",
   );
+}
+
+export async function fetchDeviceFirmwareUpdateSummary(params: {
+  appVersion?: string | null;
+  deviceId: string;
+}) {
+  const supabase = ensureSupabase();
+  return withTransientNetworkRetry(async () => {
+    const { data, error } = await (supabase.rpc as any)("get_device_firmware_update_summary", {
+      p_app_version: params.appVersion ?? null,
+      p_device_id: params.deviceId,
+    });
+
+    const row = assertData(
+      error,
+      ((data ?? []) as DeviceFirmwareUpdateSummaryRow[])[0] ?? null,
+      "Failed to load firmware update status.",
+    );
+
+    if (!row) {
+      throw new Error("Firmware update status is unavailable for this device.");
+    }
+
+    return mapDeviceFirmwareUpdateSummaryRow(row);
+  });
+}
+
+export async function beginFirmwareUpdate(params: {
+  deviceId: string;
+  releaseId: string;
+}) {
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("begin_firmware_update", {
+    p_device_id: params.deviceId,
+    p_release_id: params.releaseId,
+  });
+
+  const row = assertData(
+    error,
+    ((data ?? []) as BeginFirmwareUpdateRow[])[0] ?? null,
+    "Failed to request the firmware update.",
+  );
+
+  if (!row) {
+    throw new Error("The firmware update request did not return a status row.");
+  }
+
+  return row;
 }
 
 export async function queueFriendCelebrationPreviewFromApp(params: {

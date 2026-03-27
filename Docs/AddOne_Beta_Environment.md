@@ -97,6 +97,8 @@ Recommended hostname targets:
     - current active beta.3 validation artifact:
       - `https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin`
   - the OTA control-plane migration is now applied on the hosted beta project, and the live REST schema now exposes `devices.firmware_channel`, `firmware_releases`, and `check_device_firmware_release(...)`
+  - the owner-facing firmware card in the beta app now also depends on `get_device_firmware_update_summary(...)` plus `begin_firmware_update(...)`
+  - that owner-facing summary currently assumes beta user devices on the shipped OTA path already use `addone-dual-ota-v1`; per-device partition layout is still not projected into an owner-readable device field
   - the original `addone_sync` OTA crash on `AO_B0CBD8CFABB0` is fixed by increasing the sync-task stack headroom in firmware
   - the rolled-back release `fw-beta-20260326-02` should stay non-active because it reproduced the stack-canary failure on real hardware
   - current March 27, 2026 OTA validation status on `AO_B0CBD8CFABB0`:
@@ -148,7 +150,7 @@ Current beta backend values live locally in:
 9. Create a beta app build with EAS internal distribution.
 10. Flash the beta firmware profile with the current Supabase CA chain and current broker CA PEM in `cloud_config.beta.h`.
 11. Only if MQTT DNS regresses back to a raw IP target, set `ADDONE_MQTT_BROKER_TLS_SERVER_NAME` to the DNS SAN carried by the broker certificate before flashing.
-12. Apply the OTA control-plane migration so `firmware_releases`, `device_firmware_update_requests`, and `device_firmware_ota_statuses` exist before OTA validation, then verify the hosted schema exposes `devices.firmware_channel` plus `check_device_firmware_release(...)` before flashing a bench OTA candidate.
+12. Apply the OTA control-plane migration so `firmware_releases`, `device_firmware_update_requests`, and `device_firmware_ota_statuses` exist before OTA validation, then verify the hosted schema exposes `devices.firmware_channel`, `check_device_firmware_release(...)`, and `get_device_firmware_update_summary(...)` before flashing a bench OTA candidate.
 13. Load release-registry rows that match the immutable HTTPS artifact metadata in [ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json).
 14. Validate onboarding, today toggle, edit/save, settings, Wi-Fi recovery, reconnect, and the OTA control-plane RPCs without the laptop.
 
@@ -168,6 +170,7 @@ Current beta backend values live locally in:
 - the published artifact URL returns `HTTP 200` over CA-validated HTTPS and the downloaded bytes match the recorded SHA-256 before a release row is inserted
 - `check_device_firmware_release(...)` returns a real decision row for the beta device
 - `begin_firmware_update(...)` creates a persisted install request plus one queued `begin_firmware_update` command
+- `get_device_firmware_update_summary(...)` returns the owner-facing firmware card state for an authenticated owner without exposing the device auth token
 - `report_device_ota_progress(...)` writes both `device_firmware_ota_events` and `device_firmware_ota_statuses`
 - the original March 27, 2026 stack-canary loop is cleared; `fw-beta-20260327-05` reached `downloaded`, `verifying`, `staged`, `rebooting`, provisional `2.0.0-beta.3` boot, `pending_confirm`, and `succeeded` on real hardware
 - avoid reset-toggling serial monitors during provisional OTA boots; the accepted March 27 proof run kept serial detached during the real OTA request and still completed a clean backend-visible `pending_confirm -> succeeded` pass
