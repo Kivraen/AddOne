@@ -15,6 +15,7 @@ Last updated: March 27, 2026
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Next brief: `T-045` publish blocker remediation and release-candidate rerun
+- Parallel brief exception: `T-046` release-candidate easy UI cleanup may run while `T-045` is blocked.
 
 ## Stage Notes
 
@@ -49,6 +50,7 @@ Last updated: March 27, 2026
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the minimum operator rollout and rollback path is real.
 - `T-044` is now accepted on `codex/s4-release-candidate-validation`: the release-candidate pass is complete and the blocker list is explicit.
 - `T-045` is now blocked on `codex/s4-release-candidate-remediation`: the active RC cohort is corrected and Android is deferred, but the branch still needs one finished installable iOS artifact for baseline `dce8541` before the validation matrix can close.
+- `T-046` is a user-approved parallel slice for easy UI cleanup only. Keep it UI-only and do not mix in weekly-minimum semantics or offline-sync work.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
