@@ -200,13 +200,20 @@ Operator notes:
 Validation date:
 - March 27, 2026
 
-Exact matrix used on the accepted `T-043` baseline:
+Most recent rerun scope:
+- `T-045` publish blocker remediation and release-candidate rerun on corrected baseline `dce8541` from `codex/s4-release-candidate-remediation`
+- iOS remains the launch-critical path
+- Android remains an explicit deferred follow-up track and was not reopened in this rerun
+
+Exact matrix used on the corrected baseline:
 - installable app path:
   - `eas build:list --platform ios --limit 10 --json --non-interactive`
   - `eas build:list --platform android --limit 10 --json --non-interactive`
+  - local fallback attempt for a fresh internal IPA:
+    - `EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform ios --profile beta --local --non-interactive --output /tmp/addone-beta-dce8541.ipa`
   - config audit in [eas.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/eas.json) and [app.config.js](/Users/viktor/Desktop/DevProjects/Codex/AddOne/app.config.js)
 - active OTA release and artifact:
-  - `node services/firmware-rollout-operator/index.mjs inspect --release fw-beta-20260327-05 --env-file .codex-tmp/realtime-gateway.env --json`
+  - read-only `firmware_releases` and `firmware_release_rollout_allowlist` queries for `fw-beta-20260327-05`
   - `curl -I https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260327-05/firmware-2c84953dc3c58d26.bin`
 - live beta cohort:
   - read-only `devices`, `device_firmware_ota_statuses`, `device_firmware_update_requests`, `device_commands`, and `device_runtime_snapshots` queries for `AO_B0CBD8CFABB0` and `AO_A4F00F767008`
@@ -218,10 +225,30 @@ Exact matrix used on the accepted `T-043` baseline:
 Current result:
 - passed:
   - `fw-beta-20260327-05` remains the active beta release and its immutable artifact still returns `HTTP 200`
-  - `AO_B0CBD8CFABB0` remains on `2.0.0-beta.3` with backend-visible `succeeded` OTA state on `fw-beta-20260327-05`
+  - the active `fw-beta-20260327-05` allowlist was remediated at `2026-03-27T18:58:03.058342+00:00` and now contains only `AO_B0CBD8CFABB0`
+  - `AO_B0CBD8CFABB0` remains on `2.0.0-beta.3` with backend-visible `succeeded` OTA state on `fw-beta-20260327-05` and `availability_reason = up_to_date`
+  - `AO_A4F00F767008` remains online on `2.0.0-beta.1`, but it is now explicitly outside the release-candidate cohort:
+    - `get_device_firmware_update_summary(...)` now returns `availability_reason = not_in_rollout`
+    - `update_available = false`
+    - `can_request_update = false`
   - both beta boards still have per-device MQTT credential rows and recent `last_seen_at` heartbeats in the hosted beta backend
+  - Android remains explicitly deferred as a follow-up track for this iOS-first gate
 - failed and blocking:
-  - `AO_A4F00F767008` is still on `2.0.0-beta.1` and still rejects `begin_firmware_update` with `Unsupported command kind.`
-  - no finished installable build exists for the accepted March 27, 2026 release-candidate baseline; the latest finished iOS internal build is from March 18, 2026, the latest finished iOS store build is from March 20, 2026, and there are still no finished Android builds
+  - no fresh finished iOS artifact exists yet for baseline `dce8541`
+  - fresh remote iOS builds were created from `dce8541`, but neither is finished yet:
+    - internal `beta` build `eeaf522a-4cd8-41a2-b77d-338354af7689`
+      - status: `NEW`
+      - build version: `7`
+      - created at: `2026-03-27T19:07:04.657Z`
+    - store `testflight` build `7d230430-ddb5-43df-b700-2b2c05a31fc8`
+      - status: `IN_QUEUE`
+      - build version: `7`
+      - created at: `2026-03-27T19:07:04.363Z`
+      - queue position at rerun time: `1033`
+      - estimated wait remaining at rerun time: `10694` seconds
+  - the local IPA fallback is still blocked on the host Xcode installation:
+    - the local `beta` build reached `xcodebuild archive`
+    - `xcodebuild` failed because `iOS 26.4 is not installed`
+    - no `/tmp/addone-beta-dce8541.ipa` artifact was produced
 - non-blocking operational risk:
   - `https://gateway-beta.addone.studio/health` still is not a usable public health target because it returns `HTTP 404`; keep on-host checks until that route is repaired
