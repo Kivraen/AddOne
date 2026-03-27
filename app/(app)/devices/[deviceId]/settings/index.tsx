@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
@@ -21,12 +20,11 @@ import {
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeviceActions } from "@/hooks/use-devices";
-import { CELEBRATION_TRANSITION_OPTIONS } from "@/lib/celebration-transitions";
 import { withAlpha } from "@/lib/color";
 import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceResetHistoryPath, deviceSettingsSectionPath } from "@/lib/device-routes";
-import { CelebrationTransitionStyle, DeviceFirmwareProofScenario } from "@/types/addone";
+import { DeviceFirmwareProofScenario } from "@/types/addone";
 
 const OVERVIEW_SECTION_GAP = 12;
 
@@ -94,13 +92,10 @@ export default function DeviceSettingsOverviewRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{ proofState?: string | string[] }>();
   const { mode } = useAuth();
-  const [activePreviewTransition, setActivePreviewTransition] = useState<CelebrationTransitionStyle | null>(null);
   const {
     factoryResetAndRemove,
     isRemovingDeviceFromApp,
-    isPreviewingCelebration,
     isResettingHistory,
-    previewCelebration,
     removalPhase,
   } = useDeviceActions();
   const firmwareProofState = __DEV__ || mode === "demo" ? normalizeFirmwareProofState(params.proofState) : null;
@@ -110,21 +105,6 @@ export default function DeviceSettingsOverviewRoute() {
 
   function handleResetHistory() {
     router.push(deviceResetHistoryPath(device.id));
-  }
-
-  function handlePreviewCelebration(transitionStyle: CelebrationTransitionStyle) {
-    setActivePreviewTransition(transitionStyle);
-    void previewCelebration({
-      deviceId: device.id,
-      transitionStyle,
-    }).catch((error: unknown) => {
-      Alert.alert(
-        "Preview failed",
-        error instanceof Error ? error.message : "The celebration preview could not be started.",
-      );
-    }).finally(() => {
-      setActivePreviewTransition((current) => (current === transitionStyle ? null : current));
-    });
   }
 
   function handleFactoryResetAndRemove() {
@@ -248,27 +228,6 @@ export default function DeviceSettingsOverviewRoute() {
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>
             <SettingsSectionTitle>Tools</SettingsSectionTitle>
             <SettingsListSurface>
-              {CELEBRATION_TRANSITION_OPTIONS.map((option, index) => (
-                <View key={option.id}>
-                  <SettingsRow
-                    detail={
-                      controlReady
-                        ? isPreviewingCelebration && activePreviewTransition === option.id
-                          ? `Starting ${option.label.toLowerCase()}…`
-                          : index === 0
-                            ? "Temporary test controls for celebration transitions."
-                            : undefined
-                        : index === 0
-                          ? "Celebration previews are only available while the board is online and ready."
-                          : undefined
-                    }
-                    onPress={controlReady && !isPreviewingCelebration ? () => handlePreviewCelebration(option.id) : undefined}
-                    title={option.label}
-                  />
-                  {index < CELEBRATION_TRANSITION_OPTIONS.length - 1 ? <SettingsDivider /> : null}
-                </View>
-              ))}
-              <SettingsDivider />
               <SettingsRow
                 detail={
                   needsDeviceRecovery(device)
