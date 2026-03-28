@@ -92,7 +92,7 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Parallel exception:
   `T-046` is now accepted as a narrow UI-only cleanup slice and does not change the current release gate; weekly-minimum semantics, offline-sync reliability, and broader Friends-controls redesign remain later follow-up work
   `T-047` is now also accepted as a bounded user-guided RC UI iteration slice on top of `T-046`; it improves the Friends actions surface plus adjacent Home and settings UI, carries one small confirmation-path stabilization in `hooks/use-devices.ts`, and still does not change the blocked `T-045` iOS-artifact gate
-  `T-048` is now checkpointed as a narrow Home confirmation-latency follow-up on top of `T-047`; the main sync path is materially better, but one unplug-and-pull-to-refresh proof is still required before the slice can be accepted
+  `T-048` is now accepted as a narrow Home confirmation-latency follow-up on top of `T-047`; the main sync path is materially better, stale reload truth is fixed, and the unplug-and-pull-to-refresh proof is complete without changing the blocked `T-045` iOS-artifact gate
 - Git durability note:
   `main` now includes the accepted T-027 celebration slice plus the accepted T-033 Profile polish slice, `origin/main` matches it, and `S4` should start from this merged baseline while remaining `S3` polish stays deferred.
 

@@ -4,7 +4,7 @@ S4: Beta Hardening And Durable Release Memory
 Status
 Implemented on `codex/s4-home-confirmation-latency`.
 
-The original Home command-confirmation and stale-refresh truth issues are fixed, and manual user feedback reported that the main sync path was working well after the changes. The latest manual-refresh offline probe change is implemented and typechecked, but it still needs one fresh unplug test on the device to fully confirm the new behavior.
+The original Home command-confirmation and stale-refresh truth issues are fixed. The final unplug-and-pull-to-refresh proof has now also been completed successfully, so the Home-only offline refresh contract is considered validated for this slice.
 
 Changes made
 - Tightened the Home toggle confirmation path in [hooks/use-devices.ts](/Users/viktor/Desktop/DevProjects/Codex/AddOne/hooks/use-devices.ts) so it no longer waits only on mirrored runtime state first. It now races mirror visibility against `device_commands.status = applied`, logs a `home-toggle-trace`, and completes on the first truthful confirmation.
@@ -49,16 +49,12 @@ Evidence
   - `Acked command ... as applied`
   - additional toggles also succeeded with revisions `126`, `127`, and `128`
 - Manual proof from the user side: after the sync or reload fix, the updated path was reported as “working well now.”
-- The latest explicit refresh or offline behavior change is code-complete and typecheck clean, but not yet re-verified with one fresh unplug-and-pull-to-refresh pass after that last patch.
+- Final manual proof from the user side:
+  - unplug-and-pull-to-refresh behavior is now confirmed good
+  - the slice no longer has an outstanding proof gap on the Home-only offline refresh path
 
 Open risks / blockers
-- The newest manual-refresh offline change still needs one live unplug retest to confirm the new contract end to end.
 - The broader connection model still depends on heartbeat and presence timestamps; this pass tightened Home specifically, not every screen in the app.
 
 Recommendation
-Checkpoint this branch as a narrow `S4` candidate slice and run one final targeted proof set:
-- online board: pull to refresh and confirm it stays healthy
-- unplugged board: pull to refresh and confirm it transitions to offline or recovery after the explicit probe window
-- toggled board: kill and relaunch the app, then confirm today’s pixel remains truthful
-
-If those pass, return this branch for coordinator acceptance. If the unplug refresh still misbehaves, inspect the backend presence path for `devices.last_seen_at`, `last_sync_at`, and snapshot request or ack visibility rather than reopening the Home UI state machine.
+Accept this branch as the narrow `S4` Home confirmation-latency slice. The command-confirmation path is materially tighter, reload truth is fixed, and the unplug-and-pull-to-refresh behavior is now manually validated.
