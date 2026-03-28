@@ -9,6 +9,7 @@ module.exports = {
     version: "0.2.0",
     orientation: "default",
     userInterfaceStyle: "dark",
+    icon: "./assets/branding/app-icon.png",
     assetBundlePatterns: ["**/*"],
     experiments: {
       typedRoutes: true,
@@ -36,6 +37,10 @@ module.exports = {
       },
     },
     android: {
+      adaptiveIcon: {
+        backgroundColor: "#000000",
+        foregroundImage: "./assets/branding/android-adaptive-foreground.png",
+      },
       package: isBeta ? "studio.addone.beta" : "studio.addone.dev",
     },
     extra: {
