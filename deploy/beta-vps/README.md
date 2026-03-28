@@ -37,6 +37,7 @@ The current hosted beta fallback is different: it still uses a self-signed broke
 ## What runs on the VPS
 - `caddy`: HTTPS for the gateway
 - `realtime-gateway`: bridges Supabase commands and MQTT
+- `broker-password-sync`: watches the live credential source of truth and refreshes broker passwords automatically
 - `mosquitto`: beta MQTT broker
 
 ## Current hosted bootstrap path
@@ -51,31 +52,39 @@ Use this path for the current VPS until public DNS and CA-signed broker hosting 
 docker compose -f docker-compose.bootstrap.yml up -d --build
 ```
 
-4. Render and install broker passwords from the transport-credential source of truth:
+4. Start or rebuild the hosted stack:
+
+```bash
+docker compose -f docker-compose.bootstrap.yml up -d --build
+```
+
+That compose stack now includes the `broker-password-sync` sidecar. On startup it:
+- calls `list_active_device_mqtt_credentials()` through `mosquitto/watch-passwords.mjs`
+- rewrites `mosquitto/passwords.txt`
+- restarts the `mosquitto` container automatically so fresh credentials become active without a manual VPS step
+
+5. Manual fallback only if you need an immediate one-shot repair or the sidecar is not healthy:
 
 ```bash
 ./sync-passwords.sh --compose-file ./docker-compose.bootstrap.yml
 ```
 
-That command:
-- calls `list_active_device_mqtt_credentials()` through `mosquitto/render-passwords.mjs`
-- rewrites `mosquitto/passwords.txt`
-- recreates or restarts the `mosquitto` service under the selected compose file
+That helper uses the same credential source of truth and is now the operator fallback rather than the normal steady-state workflow.
 
-5. Flash the beta firmware profile with:
+6. Flash the beta firmware profile with:
 - the current Supabase CA chain in `kSupabaseRootCaPem`
 - the current broker CA in `kMqttBrokerCaPem`
 - `kMqttBrokerHost = "mqtt-beta.addone.studio"`
 - `kMqttUseTls = true`
 - `kMqttAllowInsecureTls = false`
 
-6. After each credential issuance or revocation event, rerun:
+7. After each credential issuance or revocation event, the sidecar should reconcile the broker automatically. Check its logs if a device does not reconnect:
 
 ```bash
-./sync-passwords.sh --compose-file ./docker-compose.bootstrap.yml
+docker logs addone-beta-broker-password-sync-1 --since 10m
 ```
 
-7. Verify the fleet-shared bootstrap credential is gone:
+8. Verify the fleet-shared bootstrap credential is gone:
 
 ```bash
 rg -n "device-fleet-beta" ./mosquitto/passwords.txt
@@ -98,8 +107,7 @@ Both should point to the VPS public IP.
 1. Install Docker and Docker Compose plugin.
 2. Copy this folder to the VPS.
 3. Copy `.env.example` to `.env` and fill in real values.
-4. Render `mosquitto/passwords.txt` from live broker credentials.
-5. Obtain a certificate for `mqtt-beta.addone.studio`.
+4. Obtain a certificate for `mqtt-beta.addone.studio`.
 
 Example certificate command on the VPS:
 
@@ -116,9 +124,10 @@ That creates:
 ## Start the DNS-backed path
 
 ```bash
-./sync-passwords.sh --compose-file ./docker-compose.yml
 docker compose up -d --build
 ```
+
+That stack also includes `broker-password-sync`, so broker password reconciliation stays automatic after the first deploy. Keep `./sync-passwords.sh --compose-file ./docker-compose.yml` as the manual fallback only.
 
 ## Health checks
 - Gateway:
@@ -127,6 +136,8 @@ docker compose up -d --build
 - Broker:
   - current hosted path: `openssl s_client -connect mqtt-beta.addone.studio:8883 -servername mqtt-beta.addone.studio`
   - raw-IP fallback path: `openssl s_client -connect 72.62.200.12:8883 -servername 72.62.200.12`
+- Broker credential automation:
+  - `docker logs addone-beta-broker-password-sync-1 --since 10m`
 
 ## Firmware beta config
 Prefer the current live MQTT hostname:

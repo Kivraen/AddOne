@@ -145,8 +145,8 @@ Current beta backend values live locally in:
 3. Ensure `device_runtime_snapshots` is added to `supabase_realtime`.
 4. If the current hosted broker is still the raw VPS host, use `deploy/beta-vps/.env.bootstrap.example` plus `docker-compose.bootstrap.yml` instead of pretending the DNS-backed path already exists.
 5. Install the current broker certificate chain, private key, and broker CA under `deploy/beta-vps/certs/`.
-6. Render and install the broker password file from active device MQTT credentials and the dedicated gateway account with `deploy/beta-vps/sync-passwords.sh --compose-file ./docker-compose.bootstrap.yml`.
-7. Deploy or rebuild the realtime gateway and broker with the selected compose file.
+6. Deploy or rebuild the selected VPS compose stack. It now includes `broker-password-sync`, which runs `deploy/beta-vps/mosquitto/watch-passwords.mjs` on startup and then keeps `mosquitto/passwords.txt` reconciled against `list_active_device_mqtt_credentials()` automatically.
+7. Treat `deploy/beta-vps/sync-passwords.sh --compose-file ./docker-compose.bootstrap.yml` as the manual one-shot fallback, not the normal operating step after claim/reset churn.
 8. Prefer `mqtt-beta.addone.studio` for firmware MQTT now that DNS resolves. Keep gateway validation on-host until `https://gateway-beta.addone.studio/health` is healthy.
 9. Create a beta app build with EAS internal distribution.
 10. Flash the beta firmware profile with the current Supabase CA chain and current broker CA PEM in `cloud_config.beta.h`.
@@ -181,6 +181,7 @@ Operator notes:
 - `list_active_device_mqtt_credentials()` returns rows for flashed hardened devices
 - device connects to hosted broker with its own broker account
 - broker password file no longer contains `device-fleet-beta`
+- credential issuance or revocation causes `broker-password-sync` to refresh `mosquitto/passwords.txt` and restart the broker automatically
 - gateway mirrors runtime snapshots into beta Supabase
 - app receives live snapshot updates
 - device and app recover cleanly after Wi-Fi loss/rejoin

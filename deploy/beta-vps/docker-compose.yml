@@ -30,6 +30,23 @@ services:
     expose:
       - "8787"
 
+  broker-password-sync:
+    build:
+      context: .
+      dockerfile: ./broker-password-sync.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MQTT_BROKER_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME}-mosquitto-1
+      MQTT_PASSWORD_SYNC_INTERVAL_MS: ${MQTT_PASSWORD_SYNC_INTERVAL_MS:-5000}
+      MQTT_PASSWORD_SYNC_OUTPUT_PATH: /work/mosquitto/passwords.txt
+    depends_on:
+      - mosquitto
+    volumes:
+      - ./mosquitto:/work/mosquitto
+      - /var/run/docker.sock:/var/run/docker.sock
+
   mosquitto:
     image: eclipse-mosquitto:2
     restart: unless-stopped

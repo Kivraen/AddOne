@@ -1,38 +1,13 @@
-import { readFileSync } from "node:fs";
 import { mkdtemp, copyFile, chmod, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { fetchDeviceCredentials, loadEnvFile, requireEnv } from "./password-sync-lib.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const betaRoot = path.resolve(__dirname, "..");
-
-function loadEnvFile(filePath) {
-  const env = {};
-  try {
-    const contents = readFileSync(filePath, "utf8");
-    for (const line of contents.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) {
-        continue;
-      }
-
-      const separatorIndex = trimmed.indexOf("=");
-      if (separatorIndex <= 0) {
-        continue;
-      }
-
-      const key = trimmed.slice(0, separatorIndex).trim();
-      const value = trimmed.slice(separatorIndex + 1).trim();
-      env[key] = value;
-    }
-  } catch {
-    return env;
-  }
-
-  return env;
-}
 
 function parseArgs(argv) {
   const args = {
@@ -61,15 +36,6 @@ function parseArgs(argv) {
   return args;
 }
 
-function requireEnv(env, name) {
-  const value = env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
-}
-
 function runOrThrow(command, args, options = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -82,39 +48,41 @@ function runOrThrow(command, args, options = {}) {
   }
 }
 
-async function fetchDeviceCredentials(env, args) {
-  if (args.credentialsFile) {
-    const raw = readFileSync(args.credentialsFile, "utf8");
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) {
-      throw new Error("Fixture credentials file must contain a JSON array.");
-    }
-
-    return data;
-  }
-
-  const supabaseUrl = requireEnv(env, "SUPABASE_URL");
-  const serviceRoleKey = requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/list_active_device_mqtt_credentials`, {
-    method: "POST",
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      "Content-Type": "application/json",
-    },
-    body: "{}",
+function hasLocalMosquittoPasswd() {
+  const result = spawnSync("mosquitto_passwd", ["-h"], {
+    encoding: "utf8",
+    stdio: "ignore",
   });
 
-  if (!response.ok) {
-    throw new Error(`Credential fetch failed: ${response.status} ${await response.text()}`);
+  if (result.error?.code === "ENOENT") {
+    return false;
   }
 
-  const data = await response.json();
-  if (!Array.isArray(data)) {
-    throw new Error("Credential fetch returned a non-array payload.");
+  return true;
+}
+
+function runMosquittoPasswd(tempDir, tempPasswordPath, username, password, createFile) {
+  const passwdArgs = ["-b"];
+  if (createFile) {
+    passwdArgs.push("-c");
   }
 
-  return data;
+  passwdArgs.push(tempPasswordPath, username, password);
+
+  if (hasLocalMosquittoPasswd()) {
+    runOrThrow("mosquitto_passwd", passwdArgs);
+    return;
+  }
+
+  runOrThrow("docker", [
+    "run",
+    "--rm",
+    "-v",
+    `${tempDir}:/work`,
+    "eclipse-mosquitto:2",
+    "mosquitto_passwd",
+    ...passwdArgs.map((value) => (value === tempPasswordPath ? "/work/passwords.txt" : value)),
+  ]);
 }
 
 async function main() {
@@ -126,7 +94,9 @@ async function main() {
 
   const gatewayUsername = requireEnv(env, "MQTT_GATEWAY_USERNAME");
   const gatewayPassword = requireEnv(env, "MQTT_GATEWAY_PASSWORD");
-  const deviceCredentials = await fetchDeviceCredentials(env, args);
+  const deviceCredentials = await fetchDeviceCredentials(env, {
+    credentialsFile: args.credentialsFile,
+  });
 
   if (args.dryRun) {
     console.log(`[mosquitto-sync] gateway user: ${gatewayUsername}`);
@@ -137,37 +107,14 @@ async function main() {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "addone-mosquitto-"));
   const tempPasswordPath = path.join(tempDir, "passwords.txt");
   try {
-    runOrThrow("docker", [
-      "run",
-      "--rm",
-      "-v",
-      `${tempDir}:/work`,
-      "eclipse-mosquitto:2",
-      "mosquitto_passwd",
-      "-b",
-      "-c",
-      "/work/passwords.txt",
-      gatewayUsername,
-      gatewayPassword,
-    ]);
+    runMosquittoPasswd(tempDir, tempPasswordPath, gatewayUsername, gatewayPassword, true);
 
     for (const credential of deviceCredentials) {
       if (!credential?.mqtt_username || !credential?.mqtt_password) {
         throw new Error("Encountered an incomplete device MQTT credential row.");
       }
 
-      runOrThrow("docker", [
-        "run",
-        "--rm",
-        "-v",
-        `${tempDir}:/work`,
-        "eclipse-mosquitto:2",
-        "mosquitto_passwd",
-        "-b",
-        "/work/passwords.txt",
-        credential.mqtt_username,
-        credential.mqtt_password,
-      ]);
+      runMosquittoPasswd(tempDir, tempPasswordPath, credential.mqtt_username, credential.mqtt_password, false);
     }
 
     await copyFile(tempPasswordPath, args.output);
