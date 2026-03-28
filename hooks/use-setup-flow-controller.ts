@@ -122,10 +122,14 @@ export function useSetupFlowController({
     !session.isExpired &&
     (session.status === "awaiting_ap" || session.status === "awaiting_cloud" || session.status === "claimed");
   const sessionMissingClaimContext = !!session && !session.isExpired && session.status !== "claimed" && !claimToken;
-  const reconnectStartedAtMs =
+  const sessionReconnectStartedAtMs =
     session?.waitingForDeviceAt && Number.isFinite(new Date(session.waitingForDeviceAt).getTime())
       ? new Date(session.waitingForDeviceAt).getTime()
-      : localReconnectStartedAtMs;
+      : null;
+  const reconnectStartedAtMs =
+    sessionReconnectStartedAtMs !== null && localReconnectStartedAtMs !== null
+      ? Math.max(sessionReconnectStartedAtMs, localReconnectStartedAtMs)
+      : sessionReconnectStartedAtMs ?? localReconnectStartedAtMs;
   const effectiveSessionStatus = localSessionStatusOverride ?? session?.status ?? null;
   const shouldRetryCredentials = retryFromReconnect && effectiveSessionStatus === "awaiting_ap";
   const stage: SetupFlowStage = useMemo(() => {
@@ -396,45 +400,15 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
       return;
     }
 
-    if (retryFromReconnect) {
-      setIsCheckingAp(true);
-      try {
-        await checkAp();
-        setHasValidatedAp(true);
-      } catch (error) {
-        const nextFailure =
-          error instanceof DeviceApClientError && error.code === "ap_not_joined"
-            ? buildSetupFailureState("ap_not_joined")
-            : buildSetupFailureState("ap_not_joined", {
-                message: error instanceof Error ? error.message : "Failed to reach the AddOne network.",
-              });
-        setHasValidatedAp(false);
-        setFailureState(nextFailure);
-        setNetworkScanComplete(false);
-        setNetworks([]);
-        setManualWifiEntry(false);
-        setPickerVisible(false);
-        setRetryFromReconnect(false);
-        presentOverlay(nextFailure);
-        logSetupFlowEvent(flow, "retry_submit_ap_missing", {
-          code: nextFailure.code,
-          message: nextFailure.message,
-        });
-        return;
-      } finally {
-        setIsCheckingAp(false);
-      }
-    }
-
+    const optimisticReconnectStartedAt = Date.now();
     setIsSubmittingProvisioning(true);
     setFailureState(null);
     setOverlay(null);
     setRetryFromReconnect(false);
     setTerminalFailure(null);
-    const optimisticReconnectStartedAt = Date.now();
     setLocalReconnectStartedAtMs(optimisticReconnectStartedAt);
     setLastProvisioningSubmitAtMs(optimisticReconnectStartedAt);
-    setLocalSessionStatusOverride(null);
+    setLocalSessionStatusOverride("awaiting_cloud");
     setHasSeenActiveProvisioningSinceSubmit(false);
     logSetupFlowEvent(flow, "submit_wifi_start", {
       sessionId: session.id,
@@ -444,12 +418,10 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
     try {
       const response = await submitProvisioning(preparedRequest);
       if (!response.accepted) {
-        setLocalReconnectStartedAtMs(null);
-        setLastProvisioningSubmitAtMs(null);
         const nextFailure = buildSetupFailureState("wifi_join_failed", {
           message: response.message ?? "The board did not accept those Wi‑Fi details.",
         });
-        setFailureState(nextFailure);
+        handleRetryableFailure(nextFailure);
         presentOverlay(nextFailure);
         logSetupFlowEvent(flow, "submit_wifi_rejected", { message: nextFailure.message });
         return;
@@ -466,15 +438,13 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
         });
       });
     } catch (error) {
-      setLocalReconnectStartedAtMs(null);
-      setLastProvisioningSubmitAtMs(null);
       const nextFailure =
         error instanceof DeviceApClientError
           ? buildSetupFailureState(error.code, { message: error.message })
           : buildSetupFailureState("wifi_join_failed", {
               message: error instanceof Error ? error.message : "Failed to continue setup.",
             });
-      setFailureState(nextFailure);
+      handleRetryableFailure(nextFailure);
       presentOverlay(nextFailure);
       logSetupFlowEvent(flow, "submit_wifi_error", { code: nextFailure.code, message: nextFailure.message });
     } finally {

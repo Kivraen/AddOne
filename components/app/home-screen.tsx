@@ -62,30 +62,6 @@ const HOME_PULL_REFRESH_TRIGGER = 84;
 type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline" | "removing";
 type HomeInsight = { eyebrow: string; message: string };
 
-function resolvePendingSetupCopy(status: "awaiting_ap" | "awaiting_cloud" | "claimed") {
-  if (status === "awaiting_ap") {
-    return {
-      body: "Setup already started. Join the AddOne Wi‑Fi on this phone and continue from the setup flow.",
-      buttonLabel: "Resume setup",
-      title: "Board setup in progress",
-    };
-  }
-
-  if (status === "awaiting_cloud") {
-    return {
-      body: "The board is trying your home Wi‑Fi and finishing its first cloud claim.",
-      buttonLabel: "Open setup",
-      title: "Connecting your board",
-    };
-  }
-
-  return {
-    body: "The board is claimed. Open setup to finish the last details and load the first full snapshot.",
-    buttonLabel: "Finish setup",
-    title: "Almost ready",
-  };
-}
-
 function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState {
   if (isDevicePendingRemoval(device)) {
     return "removing";
@@ -680,15 +656,6 @@ export function HomeScreen() {
     const claimedAtMs = new Date(onboardingSession.claimedAt).getTime();
     return Number.isFinite(claimedAtMs) && Date.now() - claimedAtMs < CLAIMED_SESSION_DEVICE_GRACE_MS;
   }, [onboardingSession?.claimedAt, onboardingSession?.status]);
-  const pendingOnboardingStatus =
-    !effectiveDevice && onboardingSession && !onboardingSession.isExpired
-      ? onboardingSession.status === "awaiting_ap" ||
-        onboardingSession.status === "awaiting_cloud" ||
-        (onboardingSession.status === "claimed" && claimedSessionIsFresh)
-        ? onboardingSession.status
-        : null
-      : null;
-  const pendingSetupCopy = pendingOnboardingStatus ? resolvePendingSetupCopy(pendingOnboardingStatus) : null;
   const measureWeeklyTargetAnchor = () => {
     if (!weeklyTargetAnchorRef.current) {
       return;
@@ -909,108 +876,39 @@ export function HomeScreen() {
         scrollEventThrottle={16}
       >
         <View style={{ alignItems: "center", gap: 28, paddingVertical: 24 }}>
-          {pendingSetupCopy ? (
-            <GlassCard style={{ gap: 18, paddingHorizontal: 20, paddingVertical: 22 }}>
-              <View style={{ alignItems: "center", gap: 14 }}>
-                <View
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 72,
-                    height: 72,
-                    borderRadius: 36,
-                    borderWidth: 1,
-                    borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                    backgroundColor: withAlpha(theme.colors.bgBase, 0.62),
-                  }}
-                >
-                  <ActivityIndicator color={theme.colors.textPrimary} />
-                </View>
-                <View style={{ alignItems: "center", gap: 8 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.title.fontFamily,
-                      fontSize: theme.typography.title.fontSize,
-                      lineHeight: theme.typography.title.lineHeight,
-                      textAlign: "center",
-                    }}
-                  >
-                    {pendingSetupCopy.title}
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                      textAlign: "center",
-                    }}
-                  >
-                    {pendingSetupCopy.body}
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                onPress={() => router.push("/onboarding")}
-                style={({ pressed }) => ({
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 56,
-                  borderRadius: theme.radius.card,
-                  borderCurve: "continuous",
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.16 : 0.12),
-                  backgroundColor: pressed ? withAlpha(theme.colors.textPrimary, 0.92) : theme.colors.textPrimary,
-                  transform: [{ scale: pressed ? 0.988 : 1 }],
-                })}
-              >
-                <Text
-                  style={{
-                    color: theme.colors.bgBase,
-                    fontFamily: theme.typography.label.fontFamily,
-                    fontSize: 18,
-                    lineHeight: 22,
-                  }}
-                >
-                  {pendingSetupCopy.buttonLabel}
-                </Text>
-              </Pressable>
-            </GlassCard>
-          ) : (
-            <>
-              <Pressable
-                onPress={() => router.push("/onboarding?auto=1")}
-                style={({ pressed }) => ({
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 132,
-                  height: 132,
-                  borderRadius: theme.radius.sheet,
-                  borderCurve: "continuous",
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.18 : 0.14),
-                  backgroundColor: withAlpha(theme.colors.bgBase, pressed ? 0.78 : 0.72),
-                  boxShadow: `0px 20px 40px rgba(0, 0, 0, 0.22), 0px 0px 42px ${withAlpha(theme.colors.textPrimary, 0.075)}`,
-                  transform: [{ scale: pressed ? 0.988 : 1 }],
-                })}
-              >
-                <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
-              </Pressable>
+          <Pressable
+            onPress={() => {
+              clearLocalOnboardingSession();
+              router.push("/onboarding?auto=1");
+            }}
+            style={({ pressed }) => ({
+              alignItems: "center",
+              justifyContent: "center",
+              width: 132,
+              height: 132,
+              borderRadius: theme.radius.sheet,
+              borderCurve: "continuous",
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.18 : 0.14),
+              backgroundColor: withAlpha(theme.colors.bgBase, pressed ? 0.78 : 0.72),
+              boxShadow: `0px 20px 40px rgba(0, 0, 0, 0.22), 0px 0px 42px ${withAlpha(theme.colors.textPrimary, 0.075)}`,
+              transform: [{ scale: pressed ? 0.988 : 1 }],
+            })}
+          >
+            <Ionicons color={theme.colors.textPrimary} name="add" size={44} />
+          </Pressable>
 
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontFamily: theme.typography.title.fontFamily,
-                  fontSize: theme.typography.title.fontSize,
-                  lineHeight: theme.typography.title.lineHeight,
-                  textAlign: "center",
-                }}
-              >
-                Connect your AddOne
-              </Text>
-            </>
-          )}
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.title.fontFamily,
+              fontSize: theme.typography.title.fontSize,
+              lineHeight: theme.typography.title.lineHeight,
+              textAlign: "center",
+            }}
+          >
+            Connect your AddOne
+          </Text>
         </View>
       </ScreenScrollView>
     );

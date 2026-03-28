@@ -74,6 +74,7 @@ private:
   int8_t findEarliestRecordedDay_(uint8_t weekIdx) const;
   void initEmpty_(const tm& nowDate);
   void load_();
+  bool readDayStateForDate_(const tm& targetDate, const tm& nowDate, bool& outIsDone) const;
   bool setDayStateForDate_(const tm& targetDate, bool isDone, const tm& nowDate, bool* outChanged = nullptr);
   void shiftWeeks_(int weeks);
 

@@ -1,6 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
 import { ScreenFrame } from "@/components/layout/screen-frame";
@@ -8,16 +8,19 @@ import {
   SetupActionButton as ActionButton,
   SetupFeedbackOverlay,
   SetupInlineButton,
-  SetupMetaText as MetaText,
   SetupNumberedSteps as NumberedSteps,
   SetupPasswordField as PasswordField,
   SetupProgressList,
   SetupRouteHeader,
   SetupSelectionCard as SelectionCard,
   SetupSelectionField as SelectionField,
+  SetupBottomActionBar,
   SetupStageLayout,
+  SetupStageScene,
+  SetupStageSwap,
   SetupStepHeader as StepHeader,
   SetupTextField as TextField,
+  SetupWifiScanState,
 } from "@/components/setup/setup-flow";
 import { WifiNetworkPicker } from "@/components/ui/wifi-network-picker";
 import { theme } from "@/constants/theme";
@@ -30,7 +33,6 @@ import { deviceSettingsPath } from "@/lib/device-routes";
 
 const RECOVERY_SUCCESS_RETURN_MS = 2400;
 const RECOVERY_FIELD_GAP = 16;
-const RECOVERY_META_TOP_SPACE = 22;
 const RECOVERY_DEVICE_REFRESH_MS = 1500;
 
 function makeRequestId() {
@@ -39,17 +41,6 @@ function makeRequestId() {
     const nextValue = token === "x" ? value : (value & 0x3) | 0x8;
     return nextValue.toString(16);
   });
-}
-
-function formatExpirationLabel(expiresAt: string) {
-  const diffMs = new Date(expiresAt).getTime() - Date.now();
-  const diffMinutes = Math.max(0, Math.ceil(diffMs / 60000));
-
-  if (diffMinutes <= 1) {
-    return "Session expires in under a minute";
-  }
-
-  return `Session expires in ${diffMinutes} minutes`;
 }
 
 export default function DeviceRecoveryRoute() {
@@ -86,6 +77,7 @@ export default function DeviceRecoveryRoute() {
     restoreCandidates[0] ??
     null;
   const [hasRequestedAutoRestore, setHasRequestedAutoRestore] = useState(false);
+  const [suppressInitialSceneAnimation, setSuppressInitialSceneAnimation] = useState(true);
   const hasRecoveryFlowInProgress =
     !!session &&
     !session.isExpired &&
@@ -114,6 +106,18 @@ export default function DeviceRecoveryRoute() {
     session,
     submitProvisioning,
   });
+  const showRecoveryHomeWifiStage = controller.stage === "scan_home_wifi" || controller.stage === "choose_home_wifi";
+  const selectedWifiSsid = controller.draft.wifiSsid.trim();
+  const recoveryHomeWifiStageState =
+    controller.stage === "scan_home_wifi"
+      ? "loading"
+      : controller.manualWifiEntry || controller.networks.length === 0
+        ? "manual"
+        : "picker";
+
+  useEffect(() => {
+    setSuppressInitialSceneAnimation(false);
+  }, []);
 
   useEffect(() => {
     if (session || isBusy || controller.terminalFailure) {
@@ -197,7 +201,6 @@ export default function DeviceRecoveryRoute() {
   }
 
   async function startRecoverySession(reason: string) {
-    controller.resetLocalAttempt(reason);
     await createSession({
       bootstrapDayResetTime: device.resetTime ? `${device.resetTime}:00` : "00:00:00",
       bootstrapTimezone: device.timezone,
@@ -225,9 +228,51 @@ export default function DeviceRecoveryRoute() {
     closeRecoveryScreen();
   }
 
+  const recoveryBottomAction =
+    controller.stage === "failure"
+      ? (
+          <ActionButton
+            disabled={isBusy}
+            label={isBusy ? "Restarting…" : "Restart recovery"}
+            onPress={() => void startRecoverySession("restart_recovery")}
+          />
+        )
+      : controller.stage === "intro"
+        ? <ActionButton disabled label="Preparing…" onPress={() => undefined} />
+        : controller.stage === "join_device_ap"
+          ? (
+              <ActionButton
+                disabled
+                label={controller.isCheckingAp ? "Checking AddOne Wi‑Fi…" : "Waiting for AddOne Wi‑Fi…"}
+                onPress={() => void controller.confirmJoinedDeviceAp()}
+              />
+            )
+          : showRecoveryHomeWifiStage
+            ? (
+                <ActionButton
+                  disabled={
+                    controller.stage === "scan_home_wifi" ||
+                    controller.isCheckingAp ||
+                    controller.isSubmittingProvisioning ||
+                    !controller.preparedRequest
+                  }
+                  label={
+                    controller.stage === "scan_home_wifi"
+                      ? "Scanning…"
+                      : controller.isCheckingAp || controller.isSubmittingProvisioning
+                        ? "Connecting…"
+                        : "Connect"
+                  }
+                  onPress={() => void controller.submitWifiCredentials()}
+                />
+              )
+            : null;
+
   return (
     <>
       <ScreenFrame
+        bottomOverlay={recoveryBottomAction ? <SetupBottomActionBar>{recoveryBottomAction}</SetupBottomActionBar> : undefined}
+        contentContainerStyle={{ flexGrow: 1 }}
         contentMaxWidth={theme.layout.narrowContentWidth}
         header={<SetupRouteHeader label="Recovery" onClose={closeRecoveryScreen} title="AddOne" />}
         scroll
@@ -251,213 +296,185 @@ export default function DeviceRecoveryRoute() {
         />
 
         <View style={{ gap: 6 }}>
-          {controller.stage === "failure" ? (
-            <SetupStageLayout
-              footer={
-                <ActionButton
-                  disabled={isBusy}
-                  label={isBusy ? "Restarting…" : "Restart recovery"}
-                  onPress={() => void startRecoverySession("restart_recovery")}
+        {controller.stage === "failure" ? (
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_failure">
+              <SetupStageLayout>
+                <StepHeader
+                  step={1}
+                  subtitle={controller.terminalFailure?.message ?? "Start a fresh recovery session on this phone."}
+                  title={controller.terminalFailure?.title ?? "Restart recovery"}
                 />
-              }
-            >
-              <StepHeader
-                step={1}
-                subtitle={controller.terminalFailure?.message ?? "Start a fresh recovery session on this phone."}
-                title={controller.terminalFailure?.title ?? "Restart recovery"}
-              />
-            </SetupStageLayout>
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
 
           {controller.stage === "intro" ? (
-            <SetupStageLayout
-              footer={
-                <ActionButton
-                  disabled
-                  label="Preparing…"
-                  onPress={() => undefined}
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_intro">
+              <SetupStageLayout>
+                <StepHeader
+                  step={1}
+                  subtitle="Start a recovery session on this phone."
+                  title="Join AddOne Wi‑Fi"
                 />
-              }
-            >
-              <StepHeader
-                step={1}
-                subtitle="Start a recovery session on this phone."
-                title="Join AddOne Wi‑Fi"
-              />
-              <NumberedSteps
-                steps={[
-                  "Open Settings > Wi‑Fi.",
-                  "Join the network that starts with AddOne_XXXX.",
-                  "Come back here when the phone is connected.",
-                ]}
-              />
-            </SetupStageLayout>
+                <NumberedSteps
+                  steps={[
+                    "Open Settings > Wi‑Fi.",
+                    "Join the network that starts with AddOne_XXXX.",
+                    "Come back here when the phone is connected.",
+                  ]}
+                />
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
 
           {controller.stage === "join_device_ap" ? (
-            <SetupStageLayout
-              footer={
-                <ActionButton
-                  disabled
-                  label={controller.isCheckingAp ? "Checking AddOne Wi‑Fi…" : "Waiting for AddOne Wi‑Fi…"}
-                  onPress={() => void controller.confirmJoinedDeviceAp()}
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_join_device_ap">
+              <SetupStageLayout>
+                <StepHeader
+                  step={1}
+                  subtitle="Join the temporary AddOne network on this phone. This screen continues automatically once the phone is connected."
+                  title="Join AddOne Wi‑Fi"
                 />
-              }
-            >
-              <StepHeader
-                step={1}
-                subtitle="Join the temporary AddOne network on this phone. This screen continues automatically once the phone is connected."
-                title="Join AddOne Wi‑Fi"
-              />
-              <NumberedSteps
-                steps={[
-                  "Open Settings > Wi‑Fi.",
-                  "Join the network that starts with AddOne_XXXX.",
-                  "Come back here when the phone is connected.",
-                ]}
-              />
-            </SetupStageLayout>
+                <NumberedSteps
+                  steps={[
+                    "Open Settings > Wi‑Fi.",
+                    "Join the network that starts with AddOne_XXXX.",
+                    "Come back here when the phone is connected.",
+                  ]}
+                />
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
 
-          {controller.stage === "scan_home_wifi" ? (
-            <SetupStageLayout>
-              <StepHeader
-                step={2}
-                subtitle="Looking for the network your board should use."
-                title="Scanning nearby Wi‑Fi"
-              />
-              <View style={{ alignItems: "center", flex: 1, justifyContent: "center", paddingVertical: 18 }}>
-                <ActivityIndicator color={theme.colors.textPrimary} />
-              </View>
-            </SetupStageLayout>
-          ) : null}
+          {showRecoveryHomeWifiStage ? (
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_home_wifi">
+              <SetupStageLayout>
+                <StepHeader step={2} subtitle="Choose the Wi‑Fi network your board should use." title="Home Wi‑Fi" />
+                <SetupStageSwap gap={RECOVERY_FIELD_GAP} swapKey={`recovery_home_wifi_${recoveryHomeWifiStageState}`}>
+                  {controller.stage === "scan_home_wifi" ? (
+                    <SetupWifiScanState />
+                  ) : (
+                    <>
+                      {controller.manualWifiEntry || controller.networks.length === 0 ? (
+                        <TextField
+                          disabled={controller.isSubmittingProvisioning}
+                          onChangeText={controller.setWifiSsid}
+                          placeholder="Wi‑Fi name"
+                          value={controller.draft.wifiSsid}
+                        />
+                      ) : (
+                        <SelectionField
+                          disabled={controller.isSubmittingProvisioning}
+                          onPress={controller.openNetworkPicker}
+                          placeholder="Choose Wi‑Fi"
+                          value={controller.draft.wifiSsid.trim()}
+                        />
+                      )}
 
-          {controller.stage === "choose_home_wifi" ? (
-            <SetupStageLayout
-              footer={
-                <ActionButton
-                  disabled={controller.isCheckingAp || controller.isSubmittingProvisioning || !controller.preparedRequest}
-                  label={controller.isCheckingAp || controller.isSubmittingProvisioning ? "Connecting…" : "Connect"}
-                  onPress={() => void controller.submitWifiCredentials()}
-                />
-              }
-            >
-              <StepHeader step={2} title="Home Wi‑Fi" />
-              <View style={{ gap: RECOVERY_FIELD_GAP }}>
-                {controller.manualWifiEntry || controller.networks.length === 0 ? (
-                  <TextField
-                    disabled={controller.isSubmittingProvisioning}
-                    onChangeText={controller.setWifiSsid}
-                    placeholder="Wi‑Fi name"
-                    value={controller.draft.wifiSsid}
-                  />
-                ) : (
-                  <SelectionField
-                    disabled={controller.isSubmittingProvisioning}
-                    onPress={controller.openNetworkPicker}
-                    placeholder="Choose Wi‑Fi"
-                    value={controller.draft.wifiSsid.trim()}
-                  />
-                )}
+                      <PasswordField
+                        disabled={controller.isSubmittingProvisioning || !controller.draft.wifiSsid.trim()}
+                        onChangeText={controller.setWifiPassword}
+                        onToggleReveal={() => controller.setShowWifiPassword(!controller.showWifiPassword)}
+                        placeholder="Password"
+                        revealed={controller.showWifiPassword}
+                        value={controller.draft.wifiPassword}
+                      />
 
-                <PasswordField
-                  disabled={controller.isSubmittingProvisioning || !controller.draft.wifiSsid.trim()}
-                  onChangeText={controller.setWifiPassword}
-                  onToggleReveal={() => controller.setShowWifiPassword(!controller.showWifiPassword)}
-                  placeholder="Password"
-                  revealed={controller.showWifiPassword}
-                  value={controller.draft.wifiPassword}
-                />
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+                        <SetupInlineButton
+                          disabled={controller.isSubmittingProvisioning || controller.isScanningNetworks}
+                          label={controller.isScanningNetworks ? "Scanning…" : "Rescan"}
+                          onPress={() => void controller.rescanNetworks()}
+                        />
+                        {controller.manualWifiEntry && controller.networks.length > 0 ? (
+                          <SetupInlineButton
+                            disabled={controller.isSubmittingProvisioning}
+                            label="Choose from list"
+                            onPress={() => {
+                              controller.setPickerVisible(true);
+                            }}
+                          />
+                        ) : !controller.manualWifiEntry ? (
+                          <SetupInlineButton
+                            disabled={controller.isSubmittingProvisioning}
+                            label="Type manually"
+                            onPress={controller.enableManualWifiEntry}
+                          />
+                        ) : null}
+                        {!controller.manualWifiEntry && controller.networks.length > 6 ? (
+                          <SetupInlineButton
+                            disabled={controller.isSubmittingProvisioning}
+                            label="All networks"
+                            onPress={controller.openNetworkPicker}
+                          />
+                        ) : null}
+                      </View>
 
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <SetupInlineButton
-                    disabled={controller.isSubmittingProvisioning || controller.isScanningNetworks}
-                    label={controller.isScanningNetworks ? "Scanning…" : "Rescan"}
-                    onPress={() => void controller.rescanNetworks()}
-                  />
-                  {controller.manualWifiEntry && controller.networks.length > 0 ? (
-                    <SetupInlineButton
-                      disabled={controller.isSubmittingProvisioning}
-                      label="Choose from list"
-                      onPress={() => {
-                        controller.setPickerVisible(true);
-                      }}
-                    />
-                  ) : !controller.manualWifiEntry ? (
-                    <SetupInlineButton
-                      disabled={controller.isSubmittingProvisioning}
-                      label="Type manually"
-                      onPress={controller.enableManualWifiEntry}
-                    />
-                  ) : null}
-                  {!controller.manualWifiEntry && controller.networks.length > 6 ? (
-                    <SetupInlineButton
-                      disabled={controller.isSubmittingProvisioning}
-                      label="All networks"
-                      onPress={controller.openNetworkPicker}
-                    />
-                  ) : null}
-                </View>
-
-                {controller.failureState?.retryable ? (
-                  <Text
-                    style={{
-                      color: theme.colors.statusErrorMuted,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: 13,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {controller.failureState.message}
-                  </Text>
-                ) : null}
-              </View>
-            </SetupStageLayout>
+                      {controller.failureState?.retryable ? (
+                        <Text
+                          style={{
+                            color: theme.colors.statusErrorMuted,
+                            fontFamily: theme.typography.body.fontFamily,
+                            fontSize: 13,
+                            lineHeight: 18,
+                          }}
+                        >
+                          {controller.failureState.message}
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+                </SetupStageSwap>
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
 
           {controller.stage === "reconnecting_board" ? (
-            <SetupStageLayout>
-              <StepHeader
-                step={3}
-                subtitle="Hold here while the board reconnects."
-                title="Connecting your board"
-              />
-              <View style={{ gap: 18 }}>
-                {controller.draft.wifiSsid.trim() ? <SelectionCard label="Home network" value={controller.draft.wifiSsid.trim()} /> : null}
-                <SetupProgressList steps={controller.progressRows} />
-              </View>
-            </SetupStageLayout>
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_reconnecting_board">
+              <SetupStageLayout>
+                <StepHeader
+                  step={3}
+                  subtitle="Hold here while the board reconnects."
+                  title="Connecting your board"
+                />
+                <View style={{ gap: 18 }}>
+                  {selectedWifiSsid ? <SelectionCard label="Home network" value={selectedWifiSsid} /> : null}
+                  <SetupProgressList steps={controller.progressRows} />
+                </View>
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
 
           {controller.stage === "restoring_board" ? (
-            <SetupStageLayout>
-              <StepHeader
-                step={3}
-                subtitle="Hold here while recovery finishes."
-                title="Restoring your board"
-              />
-              <View style={{ gap: 18 }}>
-                {controller.draft.wifiSsid.trim() ? <SelectionCard label="Home network" value={controller.draft.wifiSsid.trim()} /> : null}
-                <SetupProgressList steps={controller.progressRows} />
-              </View>
-            </SetupStageLayout>
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_restoring_board">
+              <SetupStageLayout>
+                <StepHeader
+                  step={3}
+                  subtitle="Hold here while recovery finishes."
+                  title="Restoring your board"
+                />
+                <View style={{ gap: 18 }}>
+                  {selectedWifiSsid ? <SelectionCard label="Home network" value={selectedWifiSsid} /> : null}
+                  <SetupProgressList steps={controller.progressRows} />
+                </View>
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
 
           {controller.stage === "success" ? (
-            <SetupStageLayout>
-              <StepHeader
-                step={3}
-                subtitle="Hold here while the board reconnects."
-                title="Connecting your board"
-              />
-              <SetupProgressList steps={controller.progressRows} />
-            </SetupStageLayout>
-          ) : null}
-
-          {session ? (
-            <View style={{ paddingTop: RECOVERY_META_TOP_SPACE }}>
-              <MetaText>{formatExpirationLabel(session.expiresAt)}</MetaText>
-            </View>
+            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_success">
+              <SetupStageLayout>
+                <StepHeader
+                  step={3}
+                  subtitle="Hold here while the board reconnects."
+                  title="Connecting your board"
+                />
+                <View style={{ gap: 18 }}>
+                  {selectedWifiSsid ? <SelectionCard label="Home network" value={selectedWifiSsid} /> : null}
+                  <SetupProgressList steps={controller.progressRows} />
+                </View>
+              </SetupStageLayout>
+            </SetupStageScene>
           ) : null}
         </View>
       </ScreenFrame>

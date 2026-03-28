@@ -37,7 +37,19 @@ function displayNameFromEmail(email?: string | null) {
   }
 
   const [localPart] = email.split("@");
-  return localPart?.trim() || "AddOne User";
+  const normalizedLocalPart = localPart
+    ?.trim()
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizedLocalPart) {
+    return "AddOne User";
+  }
+
+  return normalizedLocalPart
+    .split(" ")
+    .map((segment) => segment[0]?.toUpperCase() + segment.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function normalizeOptionalText(value?: string | null) {

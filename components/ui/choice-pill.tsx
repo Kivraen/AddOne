@@ -18,8 +18,9 @@ export function ChoicePill({ disabled = false, label, selected, onPress }: Choic
       style={{
         borderRadius: theme.radius.pill,
         borderWidth: 1,
-        borderColor: selected ? withAlpha(theme.colors.textPrimary, 0.18) : withAlpha(theme.colors.textPrimary, 0.08),
-        backgroundColor: selected ? withAlpha(theme.colors.textPrimary, 0.1) : withAlpha(theme.colors.bgElevated, 0.86),
+        borderColor: selected ? withAlpha(theme.colors.accentAmber, 0.72) : withAlpha(theme.colors.textPrimary, 0.08),
+        backgroundColor: selected ? withAlpha(theme.colors.accentAmber, 0.24) : withAlpha(theme.colors.bgElevated, 0.86),
+        boxShadow: selected ? `0px 10px 24px ${withAlpha(theme.colors.accentAmber, 0.16)}` : undefined,
         opacity: disabled ? 0.45 : 1,
         paddingHorizontal: 12,
         paddingVertical: 9,

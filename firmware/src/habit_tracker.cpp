@@ -30,14 +30,21 @@ bool HabitTracker::applyCloudState(const String& localDate,
 
   checkWeekBoundary(nowDate);
 
-  if (runtimeRevision_ != expectedRevision) {
-    failureReason = "Runtime revision conflict.";
-    return false;
-  }
-
   tm targetDate{};
   if (!parseLocalDate_(localDate, targetDate)) {
     failureReason = "Invalid local date.";
+    return false;
+  }
+
+  if (runtimeRevision_ != expectedRevision) {
+    bool currentState = false;
+    if (runtimeRevision_ > expectedRevision &&
+        readDayStateForDate_(targetDate, nowDate, currentState) &&
+        currentState == isDone) {
+      return true;
+    }
+
+    failureReason = "Runtime revision conflict.";
     return false;
   }
 
@@ -438,6 +445,19 @@ bool HabitTracker::queueLocalToggleToday(const tm& nowDate, bool& outIsDone) {
 
   runtimeRevision_++;
   return persist_();
+}
+
+bool HabitTracker::readDayStateForDate_(const tm& targetDate, const tm& nowDate, bool& outIsDone) const {
+  const WeekDate currentMonday = mondayOfWeek_(nowDate);
+  const WeekDate targetMonday = mondayOfWeek_(targetDate);
+  const int weekIdx = weeksBetween_(targetMonday, currentMonday);
+  if (weekIdx < 0 || weekIdx >= Config::kWeeks) {
+    return false;
+  }
+
+  const uint8_t dayOfWeek = static_cast<uint8_t>(dayOfWeekMondayBased_(targetDate));
+  outIsDone = grid_.days[dayOfWeek][weekIdx];
+  return true;
 }
 
 bool HabitTracker::setDayStateForDate_(const tm& targetDate, bool isDone, const tm& nowDate, bool* outChanged) {

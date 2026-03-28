@@ -1,13 +1,14 @@
+import { Image } from "expo-image";
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Pressable,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -19,8 +20,9 @@ import { withAlpha } from "@/lib/color";
 
 const IS_IOS = process.env.EXPO_OS === "ios";
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const SIGN_IN_LOGO = require("../assets/branding/sign-in-logo.png");
 
-function SectionCopy({ children, tone = "secondary" }: { children: string; tone?: "primary" | "secondary" | "error" }) {
+function SectionCopy({ children, tone = "secondary", textAlign = "left" }: { children: string; tone?: "primary" | "secondary" | "error"; textAlign?: "left" | "center" }) {
   const color =
     tone === "primary"
       ? theme.colors.textPrimary
@@ -36,6 +38,7 @@ function SectionCopy({ children, tone = "secondary" }: { children: string; tone?
         fontFamily: theme.typography.body.fontFamily,
         fontSize: theme.typography.body.fontSize,
         lineHeight: theme.typography.body.lineHeight,
+        textAlign,
       }}
     >
       {children}
@@ -64,11 +67,29 @@ function formatOtpRequestError(error: string) {
   const normalized = error.toLowerCase();
 
   if (normalized.includes("email rate limit exceeded")) {
-    return "Supabase returned \"Email rate limit exceeded\" for this staging project. This is the project quota, not a sign that your address is invalid. Wait for the limit window to reset or switch the project to custom SMTP.";
+    return "Too many sign-in codes were requested. Wait a minute, then try again.";
   }
 
   if (normalized.includes("rate limit")) {
-    return "Supabase throttled auth email delivery for this staging project. Wait for the limit window to reset, then try again.";
+    return "Too many attempts right now. Wait a minute, then try again.";
+  }
+
+  if (normalized.includes("invalid email")) {
+    return "Enter a valid email address.";
+  }
+
+  return error;
+}
+
+function formatOtpVerificationError(error: string) {
+  const normalized = error.toLowerCase();
+
+  if (normalized.includes("expired")) {
+    return "That code expired. Request a new one and try again.";
+  }
+
+  if (normalized.includes("invalid")) {
+    return "That code did not match. Check the 6-digit code and try again.";
   }
 
   return error;
@@ -79,16 +100,19 @@ export default function SignInScreen() {
   const [email, setEmail] = useState(pendingEmail ?? "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [step, setStep] = useState<"email" | "otp">("email");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const { height: windowHeight } = useWindowDimensions();
 
   const normalizedCode = useMemo(() => code.replace(/\s+/g, ""), [code]);
   const isOtpStep = step === "otp";
   const isResendBlocked = resendCooldown > 0;
+  const trimmedEmail = email.trim().toLowerCase();
+  const emailStepTopOffset = Math.max(theme.spacing[40], Math.round((windowHeight - 120) * 0.18));
+  const emailButtonLabel = trimmedEmail ? "Send code" : "Type your email to continue";
   const isSubmitDisabled = isOtpStep
     ? normalizedCode.length < 6 || isVerifyingOtp
-    : !email.trim() || isSendingOtp || isResendBlocked;
+    : !trimmedEmail || isSendingOtp || isResendBlocked;
 
   useEffect(() => {
     if (resendCooldown <= 0) {
@@ -119,13 +143,10 @@ export default function SignInScreen() {
 
     Keyboard.dismiss();
     setError(null);
-    setMessage(null);
 
     const nextError = await sendEmailOtp(nextEmail);
     if (nextError) {
-      const formattedError = formatOtpRequestError(nextError);
-      setError(formattedError);
-      Alert.alert("Code request failed", formattedError);
+      setError(formatOtpRequestError(nextError));
       return;
     }
 
@@ -133,10 +154,6 @@ export default function SignInScreen() {
     setStep("otp");
     setCode("");
     setResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
-
-    const nextMessage = `Enter the email code from Supabase. You can request another code in ${OTP_RESEND_COOLDOWN_SECONDS} seconds. If the email still contains a magic link instead of a code, update the Supabase email template to use {{ .Token }}.`;
-    setMessage(nextMessage);
-    Alert.alert("Code sent", nextMessage);
   }
 
   async function handleVerifyOtp() {
@@ -147,7 +164,6 @@ export default function SignInScreen() {
 
     Keyboard.dismiss();
     setError(null);
-    setMessage(null);
 
     const nextError = await verifyEmailOtp({
       email: nextEmail,
@@ -155,8 +171,7 @@ export default function SignInScreen() {
     });
 
     if (nextError) {
-      setError(nextError);
-      Alert.alert("Code verification failed", nextError);
+      setError(formatOtpVerificationError(nextError));
     }
   }
 
@@ -164,15 +179,35 @@ export default function SignInScreen() {
     return <Redirect href="/" />;
   }
 
+  const logo = (
+    <View
+      style={{
+        alignItems: "center",
+        paddingBottom: 12,
+        paddingHorizontal: theme.layout.pagePadding,
+      }}
+    >
+      <Image
+        contentFit="contain"
+        source={SIGN_IN_LOGO}
+        style={{
+          height: 44,
+          opacity: 0.92,
+          width: 220,
+        }}
+      />
+    </View>
+  );
+
   return (
     <>
       <Stack.Screen
         options={{
-          headerLargeTitle: !isOtpStep,
+          headerLargeTitle: false,
           headerShadowVisible: false,
           headerStyle: { backgroundColor: theme.colors.bgBase },
           headerTintColor: theme.colors.textPrimary,
-          headerTitle: isOtpStep ? "Verify Email" : "AddOne Account",
+          headerTitle: isOtpStep ? "Code" : "Account",
           headerTitleStyle: {
             color: theme.colors.textPrimary,
             fontFamily: theme.typography.title.fontFamily,
@@ -182,259 +217,267 @@ export default function SignInScreen() {
       />
 
       <ScreenScrollView
+        bottomInset={120}
+        bottomOverlay={logo}
         contentContainerStyle={{ flexGrow: 1 }}
         contentMaxWidth={theme.layout.narrowContentWidth}
       >
         <KeyboardAvoidingView behavior={IS_IOS ? "padding" : undefined} keyboardVerticalOffset={16} style={{ flex: 1 }}>
           <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-            <View style={{ flex: 1, justifyContent: "center", minHeight: "100%" }}>
-              <ScreenSection style={{ gap: 24, paddingVertical: 24 }}>
-                <View style={{ gap: 8 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.textTertiary,
-                      fontFamily: theme.typography.micro.fontFamily,
-                      fontSize: theme.typography.micro.fontSize,
-                      lineHeight: theme.typography.micro.lineHeight,
-                      letterSpacing: theme.typography.micro.letterSpacing,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Cloud mode
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.display.fontFamily,
-                      fontSize: theme.typography.display.fontSize,
-                      lineHeight: theme.typography.display.lineHeight,
-                    }}
-                  >
-                    {isOtpStep ? "Enter your email code" : "Sign in with email code"}
-                  </Text>
-                  <SectionCopy>
-                    Use your email to unlock setup, Wi-Fi recovery, board sync, history editing, and automatic backups.
-                  </SectionCopy>
-                </View>
-
-                <GlassCard style={{ gap: 18, paddingHorizontal: 18, paddingVertical: 18 }}>
-                  {message ? (
-                    <View
-                      style={{
-                        borderRadius: theme.radius.card,
-                        borderWidth: 1,
-                        borderColor: theme.materials.panel.border,
-                        backgroundColor: withAlpha(theme.colors.bgBase, 0.16),
-                        paddingHorizontal: 14,
-                        paddingVertical: 14,
-                      }}
-                    >
-                      <SectionCopy>{message}</SectionCopy>
-                    </View>
-                  ) : null}
-
-                  {error ? (
-                    <View
-                      style={{
-                        borderRadius: theme.radius.card,
-                        borderWidth: 1,
-                        borderColor: withAlpha(theme.colors.statusErrorMuted, 0.22),
-                        backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
-                        paddingHorizontal: 14,
-                        paddingVertical: 14,
-                      }}
-                    >
-                      <SectionCopy tone="error">{error}</SectionCopy>
-                    </View>
-                  ) : null}
-
-                  <View style={{ gap: 10 }}>
-                    <FieldLabel>Email</FieldLabel>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoComplete="email"
-                      autoCorrect={false}
-                      blurOnSubmit
-                      editable={!isOtpStep}
-                      keyboardType="email-address"
-                      onChangeText={(value) => {
-                        setEmail(value);
-                        setError(null);
-                        setMessage(null);
-                      }}
-                      onSubmitEditing={() => {
-                        if (!isOtpStep) {
-                          void handleSendOtp();
-                        }
-                      }}
-                      placeholder="you@example.com"
-                      placeholderTextColor={theme.colors.textMuted}
-                      returnKeyType={isOtpStep ? "done" : "send"}
-                      style={{
-                        borderRadius: theme.radius.sheet,
-                        borderWidth: 1,
-                        borderColor: theme.materials.panel.border,
-                        backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
-                        color: theme.colors.textPrimary,
-                        fontFamily: theme.typography.body.fontFamily,
-                        fontSize: theme.typography.body.fontSize,
-                        lineHeight: theme.typography.body.lineHeight,
-                        opacity: isOtpStep ? 0.72 : 1,
-                        paddingHorizontal: 16,
-                        paddingVertical: 16,
-                      }}
-                      value={email}
-                    />
-                  </View>
-
+            <View style={{ flex: 1, minHeight: "100%" }}>
+              <ScreenSection style={{ flex: 1, justifyContent: "center", gap: 24, paddingTop: 24, paddingBottom: 0 }}>
+                <View style={{ gap: 24, paddingTop: isOtpStep ? 0 : emailStepTopOffset }}>
                   {isOtpStep ? (
-                    <View style={{ gap: 10 }}>
-                      <FieldLabel>Email code</FieldLabel>
+                    <View style={{ alignItems: "center" }}>
+                      <Text
+                        style={{
+                          color: theme.colors.textPrimary,
+                          fontFamily: theme.typography.title.fontFamily,
+                          fontSize: theme.typography.title.fontSize,
+                          lineHeight: theme.typography.title.lineHeight,
+                          maxWidth: 280,
+                          textAlign: "center",
+                        }}
+                      >
+                        Check your email
+                      </Text>
+                      <SectionCopy textAlign="center">{`Enter the 6-digit code sent to ${trimmedEmail}.`}</SectionCopy>
+                    </View>
+                  ) : null}
+
+                  <GlassCard
+                    style={
+                      isOtpStep
+                        ? { gap: 16, paddingHorizontal: 18, paddingVertical: 18 }
+                        : {
+                            gap: 12,
+                            paddingHorizontal: 0,
+                            paddingVertical: 0,
+                            backgroundColor: "transparent",
+                            borderWidth: 0,
+                            boxShadow: "none",
+                          }
+                    }
+                  >
+                    {error ? (
+                      <View
+                        style={{
+                          borderRadius: theme.radius.card,
+                          borderWidth: 1,
+                          borderColor: withAlpha(theme.colors.statusErrorMuted, 0.22),
+                          backgroundColor: withAlpha(theme.colors.statusErrorMuted, 0.12),
+                          paddingHorizontal: 14,
+                          paddingVertical: 14,
+                        }}
+                      >
+                        <SectionCopy tone="error">{error}</SectionCopy>
+                      </View>
+                    ) : null}
+
+                    {!isOtpStep ? (
                       <TextInput
                         autoCapitalize="none"
-                        autoComplete="one-time-code"
+                        autoComplete="email"
                         autoCorrect={false}
                         blurOnSubmit
-                        keyboardType={IS_IOS ? "number-pad" : "numeric"}
+                        keyboardType="email-address"
                         onChangeText={(value) => {
-                          setCode(value);
+                          setEmail(value);
                           setError(null);
                         }}
                         onSubmitEditing={() => {
-                          void handleVerifyOtp();
+                          void handleSendOtp();
                         }}
-                        placeholder="123456"
+                        placeholder="Email"
                         placeholderTextColor={theme.colors.textMuted}
-                        returnKeyType="done"
+                        returnKeyType="send"
                         style={{
                           borderRadius: theme.radius.sheet,
                           borderWidth: 1,
                           borderColor: theme.materials.panel.border,
                           backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
                           color: theme.colors.textPrimary,
-                          fontFamily: theme.typography.display.fontFamily,
-                          fontSize: theme.typography.title.fontSize,
-                          letterSpacing: 2,
-                          lineHeight: theme.typography.title.lineHeight,
+                          fontFamily: theme.typography.body.fontFamily,
+                          fontSize: theme.typography.body.fontSize,
+                          lineHeight: theme.typography.body.lineHeight,
                           paddingHorizontal: 16,
-                          paddingVertical: 16,
+                          paddingVertical: 18,
+                          textAlign: "center",
                         }}
-                        textContentType="oneTimeCode"
-                        value={code}
+                        value={email}
                       />
-                    </View>
-                  ) : null}
-
-                  <Pressable
-                    disabled={isSubmitDisabled}
-                    onPress={() => {
-                      if (isOtpStep) {
-                        void handleVerifyOtp();
-                        return;
-                      }
-
-                      void handleSendOtp();
-                    }}
-                    style={{
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minHeight: 58,
-                      borderRadius: theme.radius.sheet,
-                      backgroundColor: isSubmitDisabled ? withAlpha(theme.colors.textPrimary, 0.12) : theme.colors.textPrimary,
-                      opacity: isSubmitDisabled ? 0.6 : 1,
-                    }}
-                  >
-                    {isSendingOtp || isVerifyingOtp ? (
-                      <ActivityIndicator color={theme.colors.textInverse} />
                     ) : (
-                      <Text
-                        style={{
-                          color: theme.colors.textInverse,
-                          fontFamily: theme.typography.label.fontFamily,
-                          fontSize: 18,
-                          lineHeight: 22,
-                        }}
-                      >
-                        {isOtpStep ? "Verify code" : "Send email code"}
-                      </Text>
+                      <>
+                        <View style={{ gap: 10 }}>
+                          <FieldLabel>Email</FieldLabel>
+                          <TextInput
+                            autoCapitalize="none"
+                            autoComplete="email"
+                            autoCorrect={false}
+                            blurOnSubmit
+                            editable={false}
+                            keyboardType="email-address"
+                            placeholder="Email"
+                            placeholderTextColor={theme.colors.textMuted}
+                            style={{
+                              borderRadius: theme.radius.sheet,
+                              borderWidth: 1,
+                              borderColor: theme.materials.panel.border,
+                              backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
+                            color: theme.colors.textPrimary,
+                            fontFamily: theme.typography.body.fontFamily,
+                            fontSize: theme.typography.body.fontSize,
+                            lineHeight: theme.typography.body.lineHeight,
+                            opacity: 0.72,
+                            paddingHorizontal: 16,
+                            paddingVertical: 16,
+                            textAlign: "center",
+                          }}
+                          value={email}
+                        />
+                        </View>
+
+                        <TextInput
+                          autoCapitalize="none"
+                          autoComplete="one-time-code"
+                          autoCorrect={false}
+                          blurOnSubmit
+                          keyboardType={IS_IOS ? "number-pad" : "numeric"}
+                          onChangeText={(value) => {
+                            setCode(value);
+                            setError(null);
+                          }}
+                          onSubmitEditing={() => {
+                            void handleVerifyOtp();
+                          }}
+                          placeholder="123456"
+                          placeholderTextColor={theme.colors.textMuted}
+                          returnKeyType="done"
+                          style={{
+                            borderRadius: theme.radius.sheet,
+                            borderWidth: 1,
+                            borderColor: theme.materials.panel.border,
+                            backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
+                            color: theme.colors.textPrimary,
+                            fontFamily: theme.typography.display.fontFamily,
+                            fontSize: theme.typography.title.fontSize,
+                            letterSpacing: 2,
+                            lineHeight: theme.typography.title.lineHeight,
+                            paddingHorizontal: 16,
+                            paddingVertical: 18,
+                            textAlign: "center",
+                          }}
+                          textContentType="oneTimeCode"
+                          value={code}
+                        />
+                      </>
                     )}
-                  </Pressable>
 
-                  {isOtpStep ? (
-                    <View style={{ flexDirection: "row", gap: 10 }}>
-                      <Pressable
-                        onPress={() => {
-                          setStep("email");
-                          setCode("");
-                          setError(null);
-                          setMessage(null);
-                          setResendCooldown(0);
-                        }}
-                        style={{
-                          alignItems: "center",
-                          borderRadius: theme.radius.sheet,
-                          borderWidth: 1,
-                          borderColor: theme.materials.panel.border,
-                          flex: 1,
-                          justifyContent: "center",
-                          minHeight: 52,
-                        }}
-                      >
+                    <Pressable
+                      disabled={isSubmitDisabled}
+                      onPress={() => {
+                        if (isOtpStep) {
+                          void handleVerifyOtp();
+                          return;
+                        }
+
+                        void handleSendOtp();
+                      }}
+                      style={{
+                        alignItems: "center",
+                        alignSelf: "stretch",
+                        borderColor: isOtpStep ? "transparent" : theme.materials.panel.border,
+                        borderWidth: isOtpStep ? 0 : 1,
+                        justifyContent: "center",
+                        minHeight: 58,
+                        borderRadius: theme.radius.sheet,
+                        backgroundColor: isOtpStep
+                          ? isSubmitDisabled
+                            ? withAlpha(theme.colors.textPrimary, 0.12)
+                            : theme.colors.textPrimary
+                          : "transparent",
+                        opacity: isSubmitDisabled ? 0.6 : 1,
+                        paddingHorizontal: 0,
+                      }}
+                    >
+                      {isSendingOtp || isVerifyingOtp ? (
+                        <ActivityIndicator color={isOtpStep ? theme.colors.textInverse : theme.colors.textPrimary} />
+                      ) : (
                         <Text
                           style={{
-                            color: theme.colors.textPrimary,
+                            color: isOtpStep ? theme.colors.textInverse : theme.colors.textPrimary,
                             fontFamily: theme.typography.label.fontFamily,
-                            fontSize: 18,
-                            lineHeight: 22,
+                            fontSize: isOtpStep ? 18 : 18,
+                            lineHeight: isOtpStep ? 22 : 22,
                           }}
                         >
-                          Change email
+                          {isOtpStep ? "Continue" : emailButtonLabel}
                         </Text>
-                      </Pressable>
-                      <Pressable
-                        disabled={isSendingOtp || isVerifyingOtp || isResendBlocked}
-                        onPress={() => {
-                          void handleSendOtp();
-                        }}
-                        style={{
-                          alignItems: "center",
-                          borderRadius: theme.radius.sheet,
-                          borderWidth: 1,
-                          borderColor: theme.materials.panel.border,
-                          flex: 1,
-                          justifyContent: "center",
-                          minHeight: 52,
-                          opacity: isSendingOtp || isVerifyingOtp || isResendBlocked ? 0.6 : 1,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: theme.colors.textPrimary,
-                            fontFamily: theme.typography.label.fontFamily,
-                            fontSize: 18,
-                            lineHeight: 22,
-                          }}
-                        >
-                          {isResendBlocked ? `Retry in ${resendCooldown}s` : "Resend code"}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </GlassCard>
+                      )}
+                    </Pressable>
 
-                <Text
-                  style={{
-                    color: theme.colors.textTertiary,
-                    fontFamily: theme.typography.micro.fontFamily,
-                    fontSize: theme.typography.micro.fontSize,
-                    lineHeight: theme.typography.micro.lineHeight,
-                    letterSpacing: theme.typography.micro.letterSpacing,
-                    textAlign: "center",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Current dev flow uses email OTP. Branded auth emails come later.
-                </Text>
+                    {isOtpStep ? (
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <Pressable
+                          onPress={() => {
+                            setStep("email");
+                            setCode("");
+                            setError(null);
+                            setResendCooldown(0);
+                          }}
+                          style={{
+                            alignItems: "center",
+                            borderRadius: theme.radius.sheet,
+                            borderWidth: 1,
+                            borderColor: theme.materials.panel.border,
+                            flex: 1,
+                            justifyContent: "center",
+                            minHeight: 52,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.textPrimary,
+                              fontFamily: theme.typography.label.fontFamily,
+                              fontSize: 18,
+                              lineHeight: 22,
+                            }}
+                          >
+                            Change email
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          disabled={isSendingOtp || isVerifyingOtp || isResendBlocked}
+                          onPress={() => {
+                            void handleSendOtp();
+                          }}
+                          style={{
+                            alignItems: "center",
+                            borderRadius: theme.radius.sheet,
+                            borderWidth: 1,
+                            borderColor: theme.materials.panel.border,
+                            flex: 1,
+                            justifyContent: "center",
+                            minHeight: 52,
+                            opacity: isSendingOtp || isVerifyingOtp || isResendBlocked ? 0.6 : 1,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.textPrimary,
+                              fontFamily: theme.typography.label.fontFamily,
+                              fontSize: 18,
+                              lineHeight: 22,
+                            }}
+                          >
+                            {isResendBlocked ? `Retry in ${resendCooldown}s` : "Resend"}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </GlassCard>
+
+                </View>
               </ScreenSection>
             </View>
           </Pressable>

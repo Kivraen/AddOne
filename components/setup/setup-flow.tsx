@@ -1,8 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 import { GlassCard } from "@/components/ui/glass-card";
 import { IconButton } from "@/components/ui/icon-button";
@@ -16,6 +26,15 @@ type SetupStatusTone = "error" | "neutral" | "success";
 export const SETUP_STAGE_CARD_MIN_HEIGHT = 468;
 export const SETUP_STAGE_FRAME_HEIGHT = 548;
 const SETUP_STAGE_CARD_STATUS_MIN_HEIGHT = 88;
+const SETUP_SCENE_ENTER_MS = 260;
+const SETUP_SCENE_EXIT_MS = 180;
+const SETUP_SCENE_LAYOUT_MS = 240;
+const SETUP_SWAP_ENTER_MS = 180;
+const SETUP_SWAP_EXIT_MS = 120;
+const SETUP_SWAP_LAYOUT_MS = 180;
+const SETUP_WIFI_SCAN_LOOP_MS = 1800;
+const SETUP_WIFI_SCAN_RING_SIZE = 152;
+const SETUP_WIFI_SCAN_ORBIT_RADIUS = 54;
 
 export function SetupActionButton({
   disabled = false,
@@ -114,38 +133,54 @@ export function SetupRouteHeader({
   onClose,
   title,
 }: {
-  label: string;
+  label?: string;
   onClose: () => void;
-  title: string;
+  title?: string;
 }) {
+  const hasBrandContent = Boolean(label || title);
+  const isTitleOnly = Boolean(title && !label);
+
   return (
-    <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 8 }}>
-      <View style={{ gap: 6 }}>
-        <Text
-          style={{
-            color: theme.colors.textTertiary,
-            fontFamily: theme.typography.micro.fontFamily,
-            fontSize: theme.typography.micro.fontSize,
-            lineHeight: theme.typography.micro.lineHeight,
-            letterSpacing: theme.typography.micro.letterSpacing,
-            textTransform: "uppercase",
-          }}
-        >
-          {label}
-        </Text>
-        <Text
-          style={{
-            color: withAlpha(theme.colors.textPrimary, 0.82),
-            fontFamily: theme.typography.title.fontFamily,
-            fontSize: 22,
-            lineHeight: 24,
-            letterSpacing: -0.25,
-          }}
-        >
-          {title}
-        </Text>
-      </View>
-      <IconButton icon="close-outline" onPress={onClose} />
+    <View
+      style={{
+        alignItems: isTitleOnly ? "flex-start" : "center",
+        flexDirection: "row",
+        justifyContent: hasBrandContent ? "space-between" : "flex-end",
+        paddingBottom: hasBrandContent ? 8 : 0,
+      }}
+    >
+      {hasBrandContent ? (
+        <View style={{ flex: 1, gap: label ? 6 : 0, paddingRight: 16 }}>
+          {label ? (
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontFamily: theme.typography.micro.fontFamily,
+                fontSize: theme.typography.micro.fontSize,
+                lineHeight: theme.typography.micro.lineHeight,
+                letterSpacing: theme.typography.micro.letterSpacing,
+                textTransform: "uppercase",
+              }}
+            >
+              {label}
+            </Text>
+          ) : null}
+          {title ? (
+            <Text
+              style={{
+                color: isTitleOnly ? theme.colors.textPrimary : withAlpha(theme.colors.textPrimary, 0.82),
+                fontFamily: isTitleOnly ? theme.typography.display.fontFamily : theme.typography.title.fontFamily,
+                fontSize: isTitleOnly ? 26 : 22,
+                lineHeight: isTitleOnly ? 30 : 24,
+                letterSpacing: isTitleOnly ? -0.5 : -0.25,
+              }}
+            >
+              {title}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      <IconButton icon="close-outline" iconSize={16} onPress={onClose} size={36} />
     </View>
   );
 }
@@ -163,6 +198,279 @@ export function SetupStageLayout({
     <View style={{ minHeight, justifyContent: "space-between" }}>
       <View style={{ flex: 1, gap: 28 }}>{children}</View>
       {footer ? <View style={{ paddingTop: 28 }}>{footer}</View> : null}
+    </View>
+  );
+}
+
+export function SetupStageScene({
+  children,
+  disableEnter = false,
+  sceneKey,
+}: {
+  children: ReactNode;
+  disableEnter?: boolean;
+  sceneKey: string;
+}) {
+  return (
+    <Animated.View
+      entering={
+        disableEnter
+          ? undefined
+          : FadeIn.duration(SETUP_SCENE_ENTER_MS).withInitialValues({
+              opacity: 0,
+              transform: [{ translateY: 18 }, { scale: 0.985 }],
+            })
+      }
+      exiting={FadeOut.duration(SETUP_SCENE_EXIT_MS)}
+      key={sceneKey}
+      layout={LinearTransition.duration(SETUP_SCENE_LAYOUT_MS)}
+      style={{ gap: 6 }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+export function SetupStageSwap({
+  children,
+  gap = 0,
+  swapKey,
+}: {
+  children: ReactNode;
+  gap?: number;
+  swapKey: string;
+}) {
+  return (
+    <Animated.View
+      entering={FadeIn.duration(SETUP_SWAP_ENTER_MS).withInitialValues({
+        opacity: 0,
+        transform: [{ translateY: 12 }],
+      })}
+      exiting={FadeOut.duration(SETUP_SWAP_EXIT_MS)}
+      key={swapKey}
+      layout={LinearTransition.duration(SETUP_SWAP_LAYOUT_MS)}
+      style={gap > 0 ? { gap } : undefined}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+export function SetupBottomActionBar({
+  children,
+  maxWidth = theme.layout.narrowContentWidth,
+}: {
+  children: ReactNode;
+  maxWidth?: number;
+}) {
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{
+        paddingHorizontal: theme.layout.pagePadding,
+        paddingBottom: theme.spacing[16],
+      }}
+    >
+      <View style={{ alignSelf: "center", maxWidth, width: "100%" }}>
+        <BlurView
+          intensity={24}
+          tint="dark"
+          style={{
+            overflow: "hidden",
+            borderRadius: theme.radius.hero,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+            backgroundColor: withAlpha(theme.colors.bgBase, 0.42),
+          }}
+        >
+          <View
+            style={{
+              gap: 12,
+              paddingHorizontal: 14,
+              paddingTop: 14,
+              paddingBottom: 8,
+            }}
+          >
+            {children}
+          </View>
+        </BlurView>
+      </View>
+    </View>
+  );
+}
+
+export function SetupWifiScanState({
+  subtitle,
+}: {
+  subtitle?: string;
+}) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, {
+        duration: SETUP_WIFI_SCAN_LOOP_MS,
+        easing: Easing.linear,
+      }),
+      -1,
+      false,
+    );
+  }, [progress]);
+
+  const outerRingStyle = useAnimatedStyle(() => {
+    const scale = interpolate(progress.value, [0, 1], [0.78, 1.08]);
+    const opacity = interpolate(progress.value, [0, 0.7, 1], [0.24, 0.08, 0]);
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  const innerRingStyle = useAnimatedStyle(() => {
+    const shifted = (progress.value + 0.35) % 1;
+    const scale = interpolate(shifted, [0, 1], [0.68, 0.98]);
+    const opacity = interpolate(shifted, [0, 0.7, 1], [0.18, 0.06, 0]);
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  const centerPulseStyle = useAnimatedStyle(() => {
+    const scale = interpolate(progress.value, [0, 0.5, 1], [0.96, 1.04, 0.96]);
+    const opacity = interpolate(progress.value, [0, 0.5, 1], [0.82, 1, 0.82]);
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  const orbitDotStyle = useAnimatedStyle(() => {
+    const angle = progress.value * Math.PI * 2 - Math.PI / 2;
+    const translateX = Math.cos(angle) * SETUP_WIFI_SCAN_ORBIT_RADIUS;
+    const translateY = Math.sin(angle) * SETUP_WIFI_SCAN_ORBIT_RADIUS;
+
+    return {
+      transform: [{ translateX }, { translateY }],
+    };
+  });
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        flex: 1,
+        justifyContent: "center",
+        paddingBottom: 4,
+        paddingTop: 28,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          gap: subtitle ? 18 : 0,
+          maxWidth: 260,
+          width: "100%",
+        }}
+      >
+        <View
+          style={{
+            alignItems: "center",
+            height: 176,
+            justifyContent: "center",
+            width: 176,
+          }}
+        >
+          <Animated.View
+            style={[
+              {
+                position: "absolute",
+                height: SETUP_WIFI_SCAN_RING_SIZE,
+                width: SETUP_WIFI_SCAN_RING_SIZE,
+                borderRadius: SETUP_WIFI_SCAN_RING_SIZE / 2,
+                borderWidth: 1,
+                borderColor: withAlpha(theme.colors.accentAmber, 0.22),
+                backgroundColor: withAlpha(theme.colors.accentAmber, 0.03),
+              },
+              outerRingStyle,
+            ]}
+          />
+          <Animated.View
+            style={[
+              {
+                position: "absolute",
+                height: SETUP_WIFI_SCAN_RING_SIZE - 28,
+                width: SETUP_WIFI_SCAN_RING_SIZE - 28,
+                borderRadius: (SETUP_WIFI_SCAN_RING_SIZE - 28) / 2,
+                borderWidth: 1,
+                borderColor: withAlpha(theme.colors.textPrimary, 0.12),
+              },
+              innerRingStyle,
+            ]}
+          />
+
+          <Animated.View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              height: 96,
+              width: 96,
+              borderRadius: 48,
+              backgroundColor: withAlpha(theme.colors.bgElevated, 0.72),
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+              boxShadow: `0px 16px 36px ${withAlpha(theme.colors.bgBase, 0.24)}`,
+            }}
+            pointerEvents="none"
+          >
+            <Animated.View style={centerPulseStyle}>
+              <Ionicons color={theme.colors.accentAmber} name="wifi" size={42} />
+            </Animated.View>
+          </Animated.View>
+
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 176,
+              width: 176,
+            }}
+          >
+            <Animated.View
+              style={[
+                {
+                  height: 12,
+                  width: 12,
+                  borderRadius: 6,
+                  backgroundColor: theme.colors.accentAmber,
+                  boxShadow: `0px 0px 18px ${withAlpha(theme.colors.accentAmber, 0.45)}`,
+                },
+                orbitDotStyle,
+              ]}
+            />
+          </View>
+        </View>
+
+        {subtitle ? (
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.typography.body.fontFamily,
+              fontSize: theme.typography.body.fontSize,
+              lineHeight: theme.typography.body.lineHeight,
+              textAlign: "center",
+            }}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -609,33 +917,50 @@ export function SetupSelectionCard({
 
 export function SetupStepHeader({
   eyebrow,
+  hideTitle = false,
   step,
   subtitle,
   title,
   totalSteps = 3,
 }: {
   eyebrow?: string;
+  hideTitle?: boolean;
   step?: number;
   subtitle?: string;
   title: string;
   totalSteps?: number;
 }) {
   const headerLabel = step ? `Step ${step} of ${totalSteps}` : eyebrow;
+  const headerGap = hideTitle ? 22 : 16;
+  const chipSpacing = hideTitle
+    ? {
+        paddingTop: 18,
+        paddingBottom: 26,
+      }
+    : {
+        paddingBottom: 28,
+      };
 
   return (
-    <View style={{ gap: 16 }}>
-      {headerLabel ? <SetupStageChip label={headerLabel} /> : null}
-      <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.display.fontFamily,
-          fontSize: 32,
-          lineHeight: 36,
-          letterSpacing: -0.9,
-        }}
-      >
-        {title}
-      </Text>
+    <View style={{ gap: headerGap }}>
+      {headerLabel ? (
+        <View style={chipSpacing}>
+          <SetupStageChip label={headerLabel} />
+        </View>
+      ) : null}
+      {!hideTitle ? (
+        <Text
+          style={{
+            color: theme.colors.textPrimary,
+            fontFamily: theme.typography.display.fontFamily,
+            fontSize: 32,
+            lineHeight: 36,
+            letterSpacing: -0.9,
+          }}
+        >
+          {title}
+        </Text>
+      ) : null}
       {subtitle ? <SetupBodyText>{subtitle}</SetupBodyText> : null}
     </View>
   );
@@ -709,7 +1034,7 @@ export function SetupSelectionField({
         borderRadius: theme.radius.card,
         borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.14 : 0.1),
+        borderColor: withAlpha(theme.colors.textPrimary, pressed ? 0.18 : 0.14),
         backgroundColor: withAlpha(theme.colors.bgBase, pressed ? 0.84 : 0.78),
         opacity: disabled ? 0.6 : 1,
         paddingHorizontal: 16,
@@ -774,7 +1099,7 @@ export function SetupPasswordField({
         borderRadius: theme.radius.card,
         borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, 0.1),
+        borderColor: withAlpha(theme.colors.textPrimary, 0.14),
         backgroundColor: withAlpha(theme.colors.bgBase, 0.78),
         boxShadow: `0px 12px 28px ${withAlpha(theme.colors.bgBase, 0.18)}`,
         opacity: disabled ? 0.6 : 1,
@@ -825,6 +1150,7 @@ export function SetupTextField({
   onChangeText,
   placeholder,
   secureTextEntry = false,
+  trailingAccessory,
   value,
 }: {
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
@@ -833,8 +1159,52 @@ export function SetupTextField({
   onChangeText: (value: string) => void;
   placeholder: string;
   secureTextEntry?: boolean;
+  trailingAccessory?: ReactNode;
   value: string;
 }) {
+  if (trailingAccessory) {
+    return (
+      <View
+        style={{
+          alignItems: "center",
+          flexDirection: "row",
+          gap: 12,
+          minHeight: 58,
+          borderRadius: theme.radius.card,
+          borderCurve: "continuous",
+          borderWidth: 1,
+          borderColor: withAlpha(theme.colors.textPrimary, 0.14),
+          backgroundColor: withAlpha(theme.colors.bgBase, 0.78),
+          boxShadow: `0px 12px 28px ${withAlpha(theme.colors.bgBase, 0.18)}`,
+          opacity: disabled ? 0.6 : 1,
+          paddingLeft: 16,
+          paddingRight: 10,
+        }}
+      >
+        <TextInput
+          autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          editable={!disabled}
+          maxLength={maxLength}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.colors.textTertiary}
+          secureTextEntry={secureTextEntry}
+          style={{
+            color: theme.colors.textPrimary,
+            flex: 1,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: theme.typography.body.fontSize,
+            lineHeight: theme.typography.body.lineHeight,
+            paddingVertical: 17,
+          }}
+          value={value}
+        />
+        {trailingAccessory}
+      </View>
+    );
+  }
+
   return (
     <TextInput
       autoCapitalize={autoCapitalize}
@@ -850,7 +1220,7 @@ export function SetupTextField({
         borderRadius: theme.radius.card,
         borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, 0.1),
+        borderColor: withAlpha(theme.colors.textPrimary, 0.14),
         backgroundColor: withAlpha(theme.colors.bgBase, 0.78),
         boxShadow: `0px 12px 28px ${withAlpha(theme.colors.bgBase, 0.18)}`,
         color: theme.colors.textPrimary,

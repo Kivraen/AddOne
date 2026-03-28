@@ -225,3 +225,7 @@ Current result:
   - no finished installable build exists for the accepted March 27, 2026 release-candidate baseline; the latest finished iOS internal build is from March 18, 2026, the latest finished iOS store build is from March 20, 2026, and there are still no finished Android builds
 - non-blocking operational risk:
   - `https://gateway-beta.addone.studio/health` still is not a usable public health target because it returns `HTTP 404`; keep on-host checks until that route is repaired
+
+Auth note for the next iOS RC build:
+- the app’s sign-in surface now assumes a 6-digit email code flow with neutral AddOne copy
+- before the next store-facing RC build, make sure the hosted Supabase auth email template uses `{{ .Token }}` as the primary action instead of `{{ .ConfirmationURL }}`, removes any `confirm your email` wording, and avoids localhost-facing fallback copy in the delivered email

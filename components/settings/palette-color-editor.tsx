@@ -1,8 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { LayoutChangeEvent, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import ColorPicker, { HueSlider, Panel1 } from "reanimated-color-picker";
 
-import { PixelGrid } from "@/components/board/pixel-grid";
+import { DeviceBoardStage } from "@/components/board/device-board-stage";
 import {
   SettingsDivider,
   SettingsFieldLabel,
@@ -13,7 +13,7 @@ import {
   SettingsSurface,
 } from "@/components/settings/device-settings-scaffold";
 import { theme } from "@/constants/theme";
-import { buildBoardCells } from "@/lib/board";
+import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import {
   DeviceSettingsDraft,
   EditablePaletteRole,
@@ -37,48 +37,81 @@ const COLOR_HUE_BOTTOM_SPACE = 10;
 const COLOR_ACTION_DIVIDER_TOP_SPACE = 18;
 const COLOR_ACTION_DIVIDER_GAP = 16;
 
-function PreviewBoard({ device, palette }: { device: AddOneDevice; palette: BoardPalette }) {
-  const { width } = useWindowDimensions();
-  const [availableWidth, setAvailableWidth] = useState(0);
-  const cells = useMemo(() => buildBoardCells(device), [device]);
+const PALETTE_PREVIEW_TODAY = {
+  weekIndex: 0,
+  dayIndex: 4,
+} as const;
 
-  function handleLayout(event: LayoutChangeEvent) {
-    const next = event.nativeEvent.layout.width - 32;
-    if (Math.abs(next - availableWidth) > 1) {
-      setAvailableWidth(next);
-    }
-  }
+const PALETTE_PREVIEW_WEEKS: boolean[][] = [
+  [true, true, false, true, true, false, false],
+  [true, true, false, true, false, true, false],
+  [true, true, true, false, true, false, false],
+  [true, true, false, true, true, false, false],
+  [true, false, true, true, false, false, true],
+  [true, true, true, false, true, false, false],
+  [true, true, false, false, true, false, true],
+  [true, true, false, true, false, false, true],
+  [true, false, true, true, false, true, false],
+  [true, true, true, false, false, false, true],
+  [true, true, false, true, false, false, true],
+  [true, false, true, false, true, true, false],
+  [true, true, true, true, false, false, true],
+  [true, true, true, false, true, true, true],
+  [true, true, false, true, true, true, true],
+  [true, false, true, true, true, true, true],
+  [true, true, true, true, true, true, false],
+  [true, false, false, true, false, false, false],
+  [true, false, true, false, false, false, false],
+  [false, true, false, true, false, false, false],
+  [true, true, false, false, true, false, false],
+];
+
+function buildPalettePreviewDevice(device: AddOneDevice): AddOneDevice {
+  const recordedDaysTotal = PALETTE_PREVIEW_WEEKS.reduce(
+    (total, week) => total + week.filter(Boolean).length,
+    0,
+  );
+  const successfulWeeksTotal = PALETTE_PREVIEW_WEEKS.slice(1).filter(
+    (week) => week.filter(Boolean).length >= device.weeklyTarget,
+  ).length;
+
+  return {
+    ...device,
+    dateGrid: undefined,
+    days: PALETTE_PREVIEW_WEEKS.map((week) => [...week]),
+    habitStartedOnLocal: null,
+    historyEraStartedAt: null,
+    isProjectedBeyondSnapshot: false,
+    logicalToday: "2026-03-13",
+    needsSnapshotRefresh: false,
+    recordedDaysTotal,
+    successfulWeeksTotal,
+    today: { ...PALETTE_PREVIEW_TODAY },
+  };
+}
+
+export function PalettePreviewBoard({
+  device,
+  palette,
+  title = "Live preview",
+}: {
+  device: AddOneDevice;
+  palette: BoardPalette;
+  title?: string;
+}) {
+  const previewDevice = useMemo(() => buildPalettePreviewDevice(device), [device]);
+  const cells = useMemo(() => buildBoardCells(previewDevice), [previewDevice]);
+  const accentColor = useMemo(() => getMergedPalette(previewDevice.paletteId, previewDevice.customPalette).dayOn, [previewDevice]);
 
   return (
-    <SettingsSurface style={{ paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 }}>
-      <View style={{ gap: SETTINGS_HEADER_GAP }}>
-        <SettingsSectionTitle>Live preview</SettingsSectionTitle>
-      </View>
-      <View
-        onLayout={handleLayout}
-        style={{
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          borderRadius: theme.radius.card,
-          borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.06),
-          backgroundColor: palette.socket,
-          paddingHorizontal: 16,
-          paddingTop: 16,
-          paddingBottom: 14,
-        }}
-      >
-        <PixelGrid
-          availableWidth={Math.max(0, Math.min(availableWidth || width - 96, width - 96))}
-          cells={cells}
-          mode="preview"
-          palette={palette}
-          readOnly
-          showFooterHint={false}
-        />
-      </View>
-    </SettingsSurface>
+    <View style={{ gap: title ? SETTINGS_HEADER_GAP : 0 }}>
+      {title ? (
+        <View style={{ gap: SETTINGS_HEADER_GAP }}>
+          <SettingsSectionTitle>{title}</SettingsSectionTitle>
+        </View>
+      ) : null}
+      <DeviceBoardStage accentColor={accentColor} cells={cells} palette={palette} />
+    </View>
   );
 }
 
@@ -200,7 +233,7 @@ export function PaletteColorEditor({
 
   return (
     <View style={{ gap: SETTINGS_PAGE_GAP }}>
-      <PreviewBoard
+      <PalettePreviewBoard
         device={{
           ...device,
           customPalette: deferredEditorDraft.customPalette,

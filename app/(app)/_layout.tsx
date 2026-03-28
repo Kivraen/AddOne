@@ -43,6 +43,13 @@ export default function AppLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="onboarding"
+          options={{
+            animation: "simple_push",
+            contentStyle: { backgroundColor: theme.colors.bgBase },
+          }}
+        />
         <Stack.Screen name="devices/[deviceId]" options={{ contentStyle: { backgroundColor: theme.colors.bgBase } }} />
       </Stack>
     </View>

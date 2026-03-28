@@ -1,3 +1,4 @@
+import * as Linking from "expo-linking";
 import { Session, User } from "@supabase/supabase-js";
 import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useState } from "react";
 
@@ -160,9 +161,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setIsSendingOtp(true);
       setPendingEmail(email);
 
+      const emailRedirectTo = Linking.createURL("/auth/callback");
+
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
+          emailRedirectTo,
           shouldCreateUser: true,
         },
       });
