@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -64,8 +64,9 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
 - Next brief: `T-049` final iOS release-candidate polish and baseline lock
-- Current execution task: first run `T-049` to finalize sign-in/auth copy, align Expo SDK 55 patch dependencies, and fold the accepted `T-046` through `T-048` app fixes into one explicit iOS RC baseline; then run `T-050` as the final user-facing polish pass on first-device onboarding and setup before the next build
+- Current execution task: first run `T-049` to finalize sign-in/auth copy, align Expo SDK 55 patch dependencies, and fold the accepted `T-046` through `T-048` app fixes into one explicit iOS RC baseline; then run `T-050` as the final user-facing polish pass on first-device onboarding and setup before the next build.
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, `T-048` is now accepted as the Home confirmation-latency follow-up, and `T-051` is now accepted as the broker credential-sync fix after the re-onboarding regression investigation. `T-046` through `T-048` are direct inputs to the final ship baseline, while `T-051` clears a separate hosted-beta reliability blocker.
+- One additional proof gap is now explicit: the current claim-transfer SQL appears to revoke all approved memberships, cancel pending share requests, rotate share codes, archive the old board, and preserve prior-owner backups privately, but there is still no explicit live three-party proof for owner A plus viewer B plus new owner C. `T-052` is now queued as a narrow validation slice for that path.
 
 ## Current Blockers
 
@@ -103,6 +104,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-049` is now the active next execution brief: the final iOS RC still needs one explicit polished app baseline before submission work begins, because the finished `dce8541` build does not yet include the accepted later RC fixes, the final auth copy cleanup, or Expo SDK 55 patch alignment.
 - `T-050` is now queued immediately after `T-049`: the first-device onboarding and setup journey is working, but it is still too raw in pacing, hierarchy, copy, and completion tone for a store-facing release and should be the last major product-facing polish slice before the final iOS RC build.
 - `T-051` is now accepted on `codex/s4-mqtt-broker-sync-automation`: the hosted beta stack now runs a `broker-password-sync` sidecar that polls `list_active_device_mqtt_credentials()`, rewrites `mosquitto/passwords.txt`, and restarts Mosquitto automatically when the credential fingerprint changes. Cross-account re-onboarding on `AO_B0CBD8CFABB0` now returns to MQTT automatically, and the manual VPS password-refresh step is no longer normal operation.
+- `T-052` is now ready as a narrow validation slice: the ownership-transfer path appears to revoke old owner and viewer access correctly while preserving prior-owner backups privately, but that exact owner A plus viewer B plus new owner C path still needs live proof before we treat it as fully trusted behavior.
 - The coordinator-facing auth note in [2026-03-27-supabase-auth-url-configuration-and-otp-alignment.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/agent-reports/2026-03-27-supabase-auth-url-configuration-and-otp-alignment.md) remains an external release-ops prerequisite before the next store-facing iOS RC build: Supabase `Site URL`, redirect allow-list entries, and `Confirm Email` still need explicit dashboard verification.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.

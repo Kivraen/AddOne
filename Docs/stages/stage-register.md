@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 ## Current Stage Map
 
@@ -15,7 +15,7 @@ Last updated: March 27, 2026
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Next brief: `T-049` final iOS release-candidate polish and baseline lock
-- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. `T-051` is now accepted as a hosted-beta reliability fix, the old `T-045` artifact gate is no longer the active blocker, and `T-050` is queued as the last planned user-facing polish slice after `T-049`.
+- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. `T-051` is now accepted as a hosted-beta reliability fix, `T-052` is now ready as a narrow ownership-transfer proof slice, the old `T-045` artifact gate is no longer the active blocker, and `T-050` is queued as the last planned user-facing polish slice after `T-049`.
 
 ## Stage Notes
 
@@ -56,6 +56,7 @@ Last updated: March 27, 2026
 - `T-049` is now ready: the next gate is not artifact production but final iOS RC polish and baseline lock before one fresh submission candidate build.
 - `T-050` is now ready behind `T-049`: the first-device onboarding and setup journey should be polished as the last major product-facing slice before the final iOS RC build and submission prep.
 - `T-051` is now accepted on `codex/s4-mqtt-broker-sync-automation`: the hosted broker password file now syncs automatically from Supabase credential changes and the cross-account re-onboarding regression no longer requires a manual VPS password-refresh step.
+- `T-052` is now ready: the current claim-transfer and sharing-cleanup logic looks correct on paper, but the exact owner A plus viewer B plus new owner C path still needs live proof that active sharing is revoked while prior owner backups remain private.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
