@@ -37,6 +37,7 @@ import { useOnboarding } from "@/hooks/use-onboarding";
 import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { getDeviceAccentColor } from "@/lib/device-accent";
+import { DEVICE_HEARTBEAT_INTERVAL_MS, latestConnectionActivityAt } from "@/lib/device-connection";
 import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
@@ -109,9 +110,20 @@ function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState 
   return device.needsSnapshotRefresh ? "verifying-board" : "online";
 }
 
-function boardButtonState(device: AddOneDevice, isApplyingToday: boolean, isLocked = false): PrimaryActionState {
-  if (isApplyingToday || isLocked) {
+function boardButtonState(
+  device: AddOneDevice,
+  options?: {
+    isApplyingToday?: boolean;
+    isAwaitingMirror?: boolean;
+    isLocked?: boolean;
+  },
+): PrimaryActionState {
+  if (options?.isApplyingToday || options?.isLocked) {
     return "syncing";
+  }
+
+  if (options?.isAwaitingMirror) {
+    return "pendingSync";
   }
 
   if (!isDeviceControlReady(device)) {
@@ -507,6 +519,7 @@ function HeaderChip({
   label,
   onPress,
   pulse = false,
+  tone = "default",
 }: {
   color?: string;
   icon?: keyof typeof Ionicons.glyphMap;
@@ -514,10 +527,17 @@ function HeaderChip({
   label?: string;
   onPress?: () => void;
   pulse?: boolean;
+  tone?: "accent" | "default";
 }) {
+  const isAccentTone = tone === "accent";
+  const resolvedIconColor = iconColor ?? (isAccentTone ? theme.colors.accentAmber : theme.colors.textSecondary);
+  const resolvedLabelColor = isAccentTone ? theme.colors.accentAmber : theme.colors.textPrimary;
+  const chipBorderColor = isAccentTone ? withAlpha(theme.colors.accentAmber, 0.24) : theme.materials.panel.border;
+  const chipBackgroundColor = isAccentTone ? withAlpha(theme.colors.accentAmber, 0.12) : withAlpha(theme.colors.bgBase, 0.22);
+  const chipShadow = isAccentTone ? `0px 10px 24px ${withAlpha(theme.colors.accentAmber, 0.14)}` : undefined;
   const content = (
     <>
-      {icon ? <Ionicons color={iconColor ?? theme.colors.textSecondary} name={icon} size={16} /> : null}
+      {icon ? <Ionicons color={resolvedIconColor} name={icon} size={16} /> : null}
       {color && pulse ? <PulsingStatusDot color={color} /> : null}
       {color && !pulse ? (
         <View
@@ -533,7 +553,7 @@ function HeaderChip({
       {label ? (
         <Text
           style={{
-            color: theme.colors.textPrimary,
+            color: resolvedLabelColor,
             fontFamily: theme.typography.label.fontFamily,
             fontSize: 12,
             lineHeight: 16,
@@ -557,8 +577,9 @@ function HeaderChip({
           minWidth: label ? 36 : 44,
           borderRadius: theme.radius.full,
           borderWidth: 1,
-          borderColor: theme.materials.panel.border,
-          backgroundColor: withAlpha(theme.colors.bgBase, 0.22),
+          borderColor: chipBorderColor,
+          backgroundColor: chipBackgroundColor,
+          boxShadow: chipShadow,
           paddingHorizontal: label ? 12 : 0,
           paddingVertical: 7,
         }}
@@ -579,8 +600,9 @@ function HeaderChip({
         minHeight: 36,
         borderRadius: theme.radius.full,
         borderWidth: 1,
-        borderColor: theme.materials.panel.border,
-        backgroundColor: withAlpha(theme.colors.bgBase, 0.22),
+        borderColor: chipBorderColor,
+        backgroundColor: chipBackgroundColor,
+        boxShadow: chipShadow,
         paddingHorizontal: 12,
         paddingVertical: 7,
       }}
@@ -620,12 +642,15 @@ export function HomeScreen() {
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
   const clearBoardEditorOpen = useAppUiStore((state) => state.clearBoardEditorOpen);
-  const activePendingTodayState = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
+  const activePendingTodayEntry = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
+  const activePendingTodayState = activePendingTodayEntry?.isDone;
+  const activePendingTodayPhase = activePendingTodayEntry?.phase ?? null;
   const todayActionLockRef = useRef(false);
   const [todayActionInFlight, setTodayActionInFlight] = useState(false);
   const [manualRefreshInFlight, setManualRefreshInFlight] = useState(false);
   const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
   const staleRefreshKeyRef = useRef<string | null>(null);
+  const reachabilityProbeKeyRef = useRef<string | null>(null);
   const pullRefreshDistanceRef = useRef(0);
   const weeklyTargetAnchorRef = useRef<View>(null);
   const [weeklyTargetBottom, setWeeklyTargetBottom] = useState<number | null>(null);
@@ -646,6 +671,7 @@ export function HomeScreen() {
 
     return withPendingTodayState(activeDevice, activePendingTodayState);
   }, [activeDevice, activePendingTodayState]);
+  const headerStatusState = effectiveDevice ? headerConnectionState(effectiveDevice) : null;
   const claimedSessionIsFresh = useMemo(() => {
     if (onboardingSession?.status !== "claimed" || !onboardingSession.claimedAt) {
       return false;
@@ -739,6 +765,45 @@ export function HomeScreen() {
   ]);
 
   useEffect(() => {
+    if (
+      !activeDevice ||
+      !isDeviceControlReady(activeDevice) ||
+      headerStatusState !== "checking-connection" ||
+      manualRefreshInFlight ||
+      staleRefreshInFlight
+    ) {
+      reachabilityProbeKeyRef.current = null;
+      return;
+    }
+
+    const lastActivityAt = latestConnectionActivityAt(activeDevice);
+    if (!lastActivityAt || Date.now() - lastActivityAt < DEVICE_HEARTBEAT_INTERVAL_MS) {
+      reachabilityProbeKeyRef.current = null;
+      return;
+    }
+
+    const probeKey = `${activeDevice.id}:${activeDevice.lastSeenAt ?? ""}:${activeDevice.lastSyncAt ?? ""}:${activeDevice.lastSnapshotAt ?? ""}`;
+    if (reachabilityProbeKeyRef.current === probeKey) {
+      return;
+    }
+
+    reachabilityProbeKeyRef.current = probeKey;
+
+    void refreshRuntimeSnapshot(activeDevice.id, {
+      errorMessage: "The board did not answer the connection check in time.",
+      timeoutMs: 6_500,
+    }).catch((error) => {
+      console.warn("Failed to confirm device reachability from home", error);
+    });
+  }, [
+    activeDevice,
+    headerStatusState,
+    manualRefreshInFlight,
+    refreshRuntimeSnapshot,
+    staleRefreshInFlight,
+  ]);
+
+  useEffect(() => {
     if (!effectiveDevice) {
       setWeeklyTargetBottom(null);
       return;
@@ -775,12 +840,11 @@ export function HomeScreen() {
       if (
         probeDevice &&
         probeDevice.accountRemovalState === "active" &&
-        probeDevice.recoveryState === "ready" &&
-        probeDevice.isLive &&
-        !refreshResult.markedConnectivityIssue
+        probeDevice.recoveryState === "ready"
       ) {
         try {
           await refreshRuntimeSnapshot(probeDevice.id, {
+            connectivityIssuePhase: "confirmed",
             errorMessage: "The board did not answer the refresh check in time.",
             timeoutMs: 6_500,
           });
@@ -959,12 +1023,17 @@ export function HomeScreen() {
     .slice(0, device.today.dayIndex + 1)
     .filter(Boolean).length;
   const habitWeeksTotal = totalHabitWeeks(device);
+  const isTodayAwaitingMirror = activePendingTodayPhase === "confirmed";
+  const isTodayAwaitingDeviceConfirmation = activePendingTodayState !== undefined && !isTodayAwaitingMirror;
   const isTodayToggleLocked = staleRefreshInFlight || todayActionInFlight || activePendingTodayState !== undefined;
   const buttonIsApplying = isApplyingToday && activeDeviceId === device.id;
-  const todayState = boardButtonState(device, buttonIsApplying, isTodayToggleLocked);
+  const todayState = boardButtonState(device, {
+    isApplyingToday: buttonIsApplying || isTodayAwaitingDeviceConfirmation,
+    isAwaitingMirror: isTodayAwaitingMirror,
+    isLocked: staleRefreshInFlight || todayActionInFlight,
+  });
   const dividerColor = withAlpha(theme.colors.textPrimary, 0.08);
   const insight = boardInsight(device, stats, currentWeekCompleted);
-  const headerStatusState = headerConnectionState(device);
   const headerStatusColor =
     headerStatusState === "online"
       ? theme.colors.accentSuccess
@@ -1064,7 +1133,12 @@ export function HomeScreen() {
               }}
             >
               {headerStatusState === "offline" || headerStatusState === "needs-recovery" || headerStatusState === "recovering" ? (
-                <HeaderChip icon="wifi-outline" label="Recovery" onPress={() => router.push(deviceRecoveryPath(device.id))} />
+                <HeaderChip
+                  icon="wifi-outline"
+                  label="Recovery"
+                  onPress={() => router.push(deviceRecoveryPath(device.id))}
+                  tone="accent"
+                />
               ) : headerStatusState === "removing" ? (
                 <HeaderChip color={headerStatusColor} pulse />
               ) : headerStatusState === "checking-connection" ? (

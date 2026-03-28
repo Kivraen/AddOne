@@ -2,7 +2,7 @@ import { AddOneDevice } from "@/types/addone";
 
 export const DEVICE_HEARTBEAT_INTERVAL_MS = 60_000;
 export const DEVICE_CONNECTION_JITTER_MS = 15_000;
-export const DEVICE_ONLINE_STALE_MS = DEVICE_HEARTBEAT_INTERVAL_MS + DEVICE_CONNECTION_JITTER_MS;
+export const DEVICE_ONLINE_STALE_MS = DEVICE_HEARTBEAT_INTERVAL_MS;
 export const DEVICE_OFFLINE_CONFIRMATION_MS = DEVICE_ONLINE_STALE_MS + DEVICE_CONNECTION_JITTER_MS;
 
 type DeviceConnectionTimestamps = Pick<AddOneDevice, "lastSeenAt" | "lastSnapshotAt" | "lastSyncAt">;

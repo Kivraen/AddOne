@@ -23,7 +23,7 @@ import { areCustomPalettesEqual, sanitizeCustomPalette } from "@/lib/device-sett
 import { buildRestoreHistoryDraft, buildRestoreSettingsPatch } from "@/lib/onboarding-restore";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
-import { useAppUiStore } from "@/store/app-ui-store";
+import { ConnectivityIssuePhase, useAppUiStore } from "@/store/app-ui-store";
 import {
   AddOneDevice,
   CelebrationTransitionSpeed,
@@ -35,6 +35,15 @@ import {
 } from "@/types/addone";
 
 type DeviceRemovalProgressState = "idle" | "removing_offline" | "sending_reset" | "waiting_for_board";
+type SettledResult<T> =
+  | {
+      ok: true;
+      value: T;
+    }
+  | {
+      error: unknown;
+      ok: false;
+    };
 
 function randomHexSegment(length: number) {
   let output = "";
@@ -64,10 +73,31 @@ function sleep(ms: number) {
   });
 }
 
+function settlePromise<T>(promise: Promise<T>): Promise<SettledResult<T>> {
+  return promise.then(
+    (value) => ({
+      ok: true as const,
+      value,
+    }),
+    (error) => ({
+      error,
+      ok: false as const,
+    }),
+  );
+}
+
 const DEVICE_SNAPSHOT_SELF_HEAL_MS = 30_000;
 const LIVE_WAIT_CACHE_POLL_MS = 100;
 const LIVE_WAIT_REFRESH_MS = 1_500;
 const CONNECTIVITY_CHECKING_MS = 10_000;
+
+function logTodayToggleTrace(traceId: string, startedAt: number, stage: string) {
+  if (!__DEV__) {
+    return;
+  }
+
+  console.info(`[home-toggle-trace:${traceId}] ${stage} +${Date.now() - startedAt}ms`);
+}
 
 function isTransientNetworkFailureMessage(message: string) {
   return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
@@ -219,7 +249,10 @@ export function useDevices() {
       return device;
     }
 
-    const syncState: SyncState = Date.now() - connectivityIssue.markedAt < CONNECTIVITY_CHECKING_MS ? "syncing" : "offline";
+    const syncState: SyncState =
+      connectivityIssue.phase === "confirmed" || Date.now() - connectivityIssue.markedAt >= CONNECTIVITY_CHECKING_MS
+        ? "offline"
+        : "syncing";
 
     return {
       ...device,
@@ -298,7 +331,7 @@ export function useDevices() {
 
   useEffect(() => {
     for (const [deviceId, pendingState] of Object.entries(pendingTodayStateByDevice)) {
-      if (pendingState === undefined) {
+      if (!pendingState) {
         continue;
       }
 
@@ -312,7 +345,7 @@ export function useDevices() {
         continue;
       }
 
-      if (getDayStateByLocalDate(matchingDevice, localDate) === pendingState) {
+      if (getDayStateByLocalDate(matchingDevice, localDate) === pendingState.isDone) {
         clearPendingTodayState(deviceId);
       }
     }
@@ -337,6 +370,7 @@ export function useDeviceActions() {
   const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
   const clearRuntimeConflictRecovery = useAppUiStore((state) => state.clearRuntimeConflictRecovery);
   const markConnectivityIssue = useAppUiStore((state) => state.markConnectivityIssue);
+  const markPendingTodayStateConfirmed = useAppUiStore((state) => state.markPendingTodayStateConfirmed);
   const markRuntimeConflictRecovery = useAppUiStore((state) => state.markRuntimeConflictRecovery);
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
   const [isAwaitingSettingsConfirmation, setIsAwaitingSettingsConfirmation] = useState(false);
@@ -486,7 +520,7 @@ export function useDeviceActions() {
     });
   };
 
-  const markDeviceConnectivityIssueFromTimeout = (deviceId: string) => {
+  const markDeviceConnectivityIssue = (deviceId: string, phase: ConnectivityIssuePhase = "checking") => {
     const device = resolveDevice(deviceId);
     if (!device) {
       return;
@@ -496,7 +530,12 @@ export function useDeviceActions() {
       lastSeenAt: device.lastSeenAt ?? null,
       lastSnapshotAt: device.lastSnapshotAt ?? null,
       lastSyncAt: device.lastSyncAt ?? null,
+      phase,
     });
+  };
+
+  const markDeviceConnectivityIssueFromTimeout = (deviceId: string, phase: ConnectivityIssuePhase = "checking") => {
+    markDeviceConnectivityIssue(deviceId, phase);
   };
 
   const readCommandFailure = async (commandId?: string | null) => {
@@ -521,6 +560,7 @@ export function useDeviceActions() {
     options: {
       baseRevision?: number;
       commandId?: string | null;
+      connectivityIssuePhase?: ConnectivityIssuePhase;
       errorMessage?: string;
       requireRevisionAdvance?: boolean;
       timeoutMs?: number;
@@ -567,7 +607,7 @@ export function useDeviceActions() {
       throw new Error(failure);
     }
 
-    markDeviceConnectivityIssueFromTimeout(deviceId);
+    markDeviceConnectivityIssueFromTimeout(deviceId, options.connectivityIssuePhase);
     throw new Error(options.errorMessage ?? "The device did not mirror the latest state in time.");
   };
 
@@ -632,11 +672,15 @@ export function useDeviceActions() {
   const refreshRuntimeSnapshot = async (
     deviceId?: string,
     options?: {
+      connectivityIssuePhase?: ConnectivityIssuePhase;
       errorMessage?: string;
       timeoutMs?: number;
     },
   ) => {
-    const targetDevice = await resolveFreshLiveDevice(deviceId);
+    const targetDevice = await resolveFreshDevice(deviceId);
+    if (!targetDevice) {
+      throw new Error("No AddOne device is active.");
+    }
     const previousSnapshotAt = targetDevice.lastSnapshotAt ?? "";
     const previousRevision = targetDevice.runtimeRevision;
     const result = await refreshRuntimeMutation.mutateAsync({
@@ -649,6 +693,7 @@ export function useDeviceActions() {
       {
         baseRevision: previousRevision,
         commandId: result.command_id ?? null,
+        connectivityIssuePhase: options?.connectivityIssuePhase,
         errorMessage: options?.errorMessage ?? "The device did not publish a fresh runtime snapshot in time.",
         requireRevisionAdvance: false,
         timeoutMs: options?.timeoutMs,
@@ -1111,6 +1156,9 @@ export function useDeviceActions() {
 
         const desiredState = !targetDevice.days[targetDevice.today.weekIndex][targetDevice.today.dayIndex];
         const baseRevision = targetDevice.runtimeRevision;
+        const traceId = makeClientEventId();
+        const traceStartedAt = Date.now();
+        logTodayToggleTrace(traceId, traceStartedAt, "tap");
         setPendingTodayState(targetDevice.id, desiredState);
 
         let result: Awaited<ReturnType<typeof setDayStateMutation.mutateAsync>> | null = null;
@@ -1118,45 +1166,112 @@ export function useDeviceActions() {
         try {
           result = await setDayStateMutation.mutateAsync({
             baseRevision,
-            clientEventId: makeClientEventId(),
+            clientEventId: traceId,
             deviceId: targetDevice.id,
             isDone: desiredState,
             localDate,
           });
+          logTodayToggleTrace(traceId, traceStartedAt, "command queued");
 
-          await waitForDeviceMatch(
-            targetDevice.id,
-            {
-              baseRevision,
-              commandId: result.command_id ?? null,
-              errorMessage: "The device did not confirm today's state in time.",
-              requireRevisionAdvance: false,
-            },
-            (device) => getDayStateByLocalDate(device, localDate) === desiredState,
+          const mirrorWait = settlePromise(
+            waitForDeviceMatch(
+              targetDevice.id,
+              {
+                baseRevision,
+                commandId: result.command_id ?? null,
+                errorMessage: "The device did not confirm today's state in time.",
+                requireRevisionAdvance: false,
+              },
+              (device) => getDayStateByLocalDate(device, localDate) === desiredState,
+            ).then((device) => {
+              logTodayToggleTrace(traceId, traceStartedAt, "runtime snapshot visible");
+              return device;
+            }),
           );
-          clearPendingTodayState(targetDevice.id);
-          clearConnectivityIssue(targetDevice.id);
-          clearRuntimeConflictRecovery(targetDevice.id);
-          void invalidateCloudDevices();
-        } catch (error) {
-          const appliedCommand =
-            result?.command_id
-              ? await fetchDeviceCommandStatus(result.command_id).catch(() => null)
-              : null;
+          const commandAppliedWait = result.command_id
+            ? settlePromise(
+                waitForCommandApplied(result.command_id, {
+                  errorMessage: "The device did not confirm today's state in time.",
+                }).then((command) => {
+                  logTodayToggleTrace(traceId, traceStartedAt, "command applied");
+                  return command;
+                }),
+              )
+            : null;
 
-          if (appliedCommand?.status === "applied") {
+          const firstConfirmation = commandAppliedWait
+            ? await Promise.race([
+                mirrorWait.then((settled) => ({ kind: "mirror" as const, settled })),
+                commandAppliedWait.then((settled) => ({ kind: "command" as const, settled })),
+              ])
+            : { kind: "mirror" as const, settled: await mirrorWait };
+
+          const handleConfirmedButAwaitingMirror = () => {
+            markPendingTodayStateConfirmed(targetDevice.id);
             clearConnectivityIssue(targetDevice.id);
             clearRuntimeConflictRecovery(targetDevice.id);
             void invalidateCloudDevices();
-            void refreshRuntimeSnapshot(targetDevice.id, {
-              errorMessage: "The board changed, but the refreshed snapshot did not arrive in time.",
-              timeoutMs: 12_000,
-            }).catch((refreshError) => {
-              console.warn("Day-state command applied before the runtime snapshot caught up", refreshError);
+            logTodayToggleTrace(traceId, traceStartedAt, "app confirmation complete");
+
+            void mirrorWait.then((mirrorResult) => {
+              if (mirrorResult.ok) {
+                clearPendingTodayState(targetDevice.id);
+                clearConnectivityIssue(targetDevice.id);
+                clearRuntimeConflictRecovery(targetDevice.id);
+                return;
+              }
+
+              void refreshRuntimeSnapshot(targetDevice.id, {
+                errorMessage: "The board changed, but the refreshed snapshot did not arrive in time.",
+                timeoutMs: 12_000,
+              })
+                .then(() => {
+                  logTodayToggleTrace(traceId, traceStartedAt, "runtime snapshot visible");
+                  clearPendingTodayState(targetDevice.id);
+                })
+                .catch((refreshError) => {
+                  console.warn("Day-state command applied before the runtime snapshot caught up", refreshError);
+                });
             });
+          };
+
+          if (firstConfirmation.settled.ok) {
+            if (firstConfirmation.kind === "mirror") {
+              clearPendingTodayState(targetDevice.id);
+              clearConnectivityIssue(targetDevice.id);
+              clearRuntimeConflictRecovery(targetDevice.id);
+              void invalidateCloudDevices();
+              logTodayToggleTrace(traceId, traceStartedAt, "app confirmation complete");
+              return;
+            }
+
+            handleConfirmedButAwaitingMirror();
             return;
           }
 
+          const fallbackConfirmation =
+            firstConfirmation.kind === "mirror"
+              ? commandAppliedWait
+                ? await commandAppliedWait
+                : null
+              : await mirrorWait;
+
+          if (fallbackConfirmation?.ok) {
+            if (firstConfirmation.kind === "mirror") {
+              handleConfirmedButAwaitingMirror();
+              return;
+            }
+
+            clearPendingTodayState(targetDevice.id);
+            clearConnectivityIssue(targetDevice.id);
+            clearRuntimeConflictRecovery(targetDevice.id);
+            void invalidateCloudDevices();
+            logTodayToggleTrace(traceId, traceStartedAt, "app confirmation complete");
+            return;
+          }
+
+          throw firstConfirmation.settled.error;
+        } catch (error) {
           clearPendingTodayState(targetDevice.id);
           const message = error instanceof Error ? error.message : "Failed to change today's state.";
           if (allowRetry && isRuntimeRevisionConflictError(message)) {

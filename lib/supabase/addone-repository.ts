@@ -46,6 +46,7 @@ type DeviceRow = Tables<"devices"> & {
 type MembershipRow = Tables<"device_memberships">;
 type RuntimeSnapshotRow = Tables<"device_runtime_snapshots">;
 type CommandRow = Tables<"device_commands">;
+type DeviceDayStateRow = Tables<"device_day_states">;
 type DeviceOnboardingSessionRow = Tables<"device_onboarding_sessions">;
 type ProfileRow = Tables<"profiles">;
 type ShareCodeRow = Tables<"device_share_codes">;
@@ -458,6 +459,35 @@ async function fetchLatestRuntimeSnapshots(deviceIds: string[], options?: { allo
   }
 }
 
+async function fetchDeviceDayStatesForLocalDates(
+  deviceIds: string[],
+  localDates: string[],
+  options?: { allowEmptyOnTransientFailure?: boolean },
+) {
+  if (deviceIds.length === 0 || localDates.length === 0) {
+    return [] as DeviceDayStateRow[];
+  }
+
+  const supabase = ensureSupabase();
+  try {
+    return await withTransientNetworkRetry(async () => {
+      const { data, error } = await supabase
+        .from("device_day_states")
+        .select("device_id, history_era, local_date, is_done, effective_at, updated_at")
+        .in("device_id", deviceIds)
+        .in("local_date", localDates);
+
+      return assertData(error, (data ?? []) as DeviceDayStateRow[], "Failed to load current device day states.");
+    });
+  } catch (error) {
+    if (options?.allowEmptyOnTransientFailure !== false && error instanceof Error && isTransientNetworkFailureMessage(error.message)) {
+      return [] as DeviceDayStateRow[];
+    }
+
+    throw error;
+  }
+}
+
 function resolveAuthoritativeSnapshotForDevice(device: DeviceRow, snapshots: RuntimeSnapshotRow[]) {
   const deviceSnapshots = snapshots.filter((row) => row.device_id === device.id);
   if (deviceSnapshots.length === 0) {
@@ -479,6 +509,50 @@ function resolveAuthoritativeSnapshotForDevice(device: DeviceRow, snapshots: Run
   }
 
   return null;
+}
+
+function selectProjectedTodayState(device: AddOneDevice, dayStates: DeviceDayStateRow[]) {
+  const matchingStates = dayStates.filter((row) => row.device_id === device.id && row.local_date === device.logicalToday);
+  if (matchingStates.length === 0) {
+    return null;
+  }
+
+  matchingStates.sort((left, right) => {
+    const historyEraDelta = Number(right.history_era ?? 0) - Number(left.history_era ?? 0);
+    if (historyEraDelta !== 0) {
+      return historyEraDelta;
+    }
+
+    const effectiveAtDelta = new Date(right.effective_at ?? 0).getTime() - new Date(left.effective_at ?? 0).getTime();
+    if (effectiveAtDelta !== 0) {
+      return effectiveAtDelta;
+    }
+
+    return new Date(right.updated_at ?? 0).getTime() - new Date(left.updated_at ?? 0).getTime();
+  });
+
+  return matchingStates[0] ?? null;
+}
+
+function overlayProjectedTodayState(device: AddOneDevice, dayStates: DeviceDayStateRow[]) {
+  const projectedTodayState = selectProjectedTodayState(device, dayStates);
+  if (!projectedTodayState) {
+    return device;
+  }
+
+  const week = device.days[device.today.weekIndex];
+  const currentState = week?.[device.today.dayIndex];
+  if (currentState === undefined || currentState === projectedTodayState.is_done) {
+    return device;
+  }
+
+  const days = device.days.map((currentWeek) => [...currentWeek]);
+  days[device.today.weekIndex][device.today.dayIndex] = projectedTodayState.is_done;
+
+  return {
+    ...device,
+    days,
+  };
 }
 
 async function fetchOwnedDeviceHistoryMetrics() {
@@ -704,8 +778,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     accumulator[row.device_id] = row;
     return accumulator;
   }, {});
-
-  return memberships.map((membership) =>
+  const provisionalDevices = memberships.map((membership) =>
     mapDeviceRowToAppDevice({
       currentUserName,
       device: membership.device as DeviceRow,
@@ -714,6 +787,10 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
       snapshot: resolveAuthoritativeSnapshotForDevice(membership.device as DeviceRow, snapshots),
     }),
   );
+  const todayStateDates = Array.from(new Set(provisionalDevices.map((device) => device.logicalToday).filter(Boolean)));
+  const dayStates = await fetchDeviceDayStatesForLocalDates(deviceIds, todayStateDates);
+
+  return provisionalDevices.map((device) => overlayProjectedTodayState(device, dayStates));
 }
 
 export async function fetchSharedBoards(userId: string) {

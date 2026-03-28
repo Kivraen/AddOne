@@ -4,29 +4,38 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { DeviceRecoveryState, OnboardingRestoreSource } from "@/types/addone";
 
+type PendingTodayState = {
+  isDone: boolean;
+  phase: "requesting" | "confirmed";
+};
+
+export type ConnectivityIssuePhase = "checking" | "confirmed";
+
 interface AppUiState {
   activeDeviceId: string | null;
   activeOnboardingClaimToken: string | null;
   activeOnboardingRestoreSource: OnboardingRestoreSource | null;
   activeOnboardingSessionId: string | null;
   connectivityIssueByDevice: Record<
-    string,
-    | {
-        lastSeenAt: string | null;
-        lastSnapshotAt: string | null;
-        lastSyncAt: string | null;
-        markedAt: number;
+      string,
+      | {
+    lastSeenAt: string | null;
+    lastSnapshotAt: string | null;
+    lastSyncAt: string | null;
+    markedAt: number;
+    phase: ConnectivityIssuePhase;
       }
     | undefined
   >;
   hasHydrated: boolean;
   pendingBoardEditorOpen: boolean;
-  pendingTodayStateByDevice: Record<string, boolean | undefined>;
+  pendingTodayStateByDevice: Record<string, PendingTodayState | undefined>;
   recoveryNeededRevisionByDevice: Record<string, number | undefined>;
   clearBoardEditorOpen: () => void;
   clearConnectivityIssue: (deviceId: string) => void;
   clearOnboardingSession: () => void;
   clearPendingTodayState: (deviceId: string) => void;
+  markPendingTodayStateConfirmed: (deviceId: string) => void;
   clearRuntimeConflictRecovery: (deviceId: string) => void;
   markConnectivityIssue: (
     deviceId: string,
@@ -34,6 +43,7 @@ interface AppUiState {
       lastSeenAt: string | null;
       lastSnapshotAt: string | null;
       lastSyncAt: string | null;
+      phase?: ConnectivityIssuePhase;
     },
   ) => void;
   markRuntimeConflictRecovery: (deviceId: string, params: { recoveryState?: DeviceRecoveryState; runtimeRevision: number }) => void;
@@ -116,9 +126,27 @@ export const useAppUiStore = create<AppUiState>()(
               lastSnapshotAt: params.lastSnapshotAt,
               lastSyncAt: params.lastSyncAt,
               markedAt: Date.now(),
+              phase: params.phase ?? "checking",
             },
           },
         })),
+      markPendingTodayStateConfirmed: (deviceId) =>
+        set((state) => {
+          const current = state.pendingTodayStateByDevice[deviceId];
+          if (!current || current.phase === "confirmed") {
+            return state;
+          }
+
+          return {
+            pendingTodayStateByDevice: {
+              ...state.pendingTodayStateByDevice,
+              [deviceId]: {
+                ...current,
+                phase: "confirmed",
+              },
+            },
+          };
+        }),
       markRuntimeConflictRecovery: (deviceId, params) =>
         set((state) => {
           const nextRevision = Math.max(0, params.runtimeRevision);
@@ -163,7 +191,10 @@ export const useAppUiStore = create<AppUiState>()(
         set((state) => ({
           pendingTodayStateByDevice: {
             ...state.pendingTodayStateByDevice,
-            [deviceId]: isDone,
+            [deviceId]: {
+              isDone,
+              phase: "requesting",
+            },
           },
         })),
     }),

@@ -50,10 +50,10 @@ const stateStyle: Record<
   },
   pendingSync: {
     background: withAlpha(theme.colors.bgElevated, 0.98),
-    border: withAlpha(theme.colors.accentAmber, 0.24),
+    border: withAlpha(theme.colors.accentAmber, 0.18),
     icon: "checkmark",
     iconColor: theme.colors.accentAmber,
-    shadow: withAlpha(theme.colors.accentAmber, 0.22),
+    shadow: withAlpha(theme.colors.accentAmber, 0.16),
   },
   syncing: {
     background: withAlpha(theme.colors.bgElevated, 0.98),
@@ -88,17 +88,24 @@ export function PrimaryActionButton({ activeColor, state, onPress, size = 94, st
           iconColor: accent,
           shadow: withAlpha(accent, 0.34),
         }
-      : state === "pendingSync" || state === "syncing"
+      : state === "syncing"
         ? {
             ...defaultConfig,
             border: withAlpha(accent, 0.24),
             iconColor: accent,
             shadow: withAlpha(accent, 0.26),
           }
+        : state === "pendingSync"
+          ? {
+              ...defaultConfig,
+              border: withAlpha(accent, 0.18),
+              iconColor: accent,
+              shadow: withAlpha(accent, 0.18),
+            }
         : defaultConfig;
 
   useEffect(() => {
-    if (state === "pendingSync" || state === "syncing") {
+    if (state === "syncing") {
       pulseScale.value = withRepeat(
         withSequence(withTiming(1.14, { duration: 700 }), withTiming(1, { duration: 700 })),
         -1,

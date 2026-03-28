@@ -92,6 +92,12 @@ export function CloudRealtimeProvider({ children }: PropsWithChildren) {
           schema: "public",
           table: "device_runtime_snapshots",
         }, invalidateDevices)
+        .on("postgres_changes", {
+          event: "*",
+          filter: `device_id=eq.${deviceId}`,
+          schema: "public",
+          table: "device_day_states",
+        }, invalidateDevices)
         .subscribe();
       channels.push(channel);
     }
