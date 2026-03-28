@@ -14,8 +14,8 @@ Last updated: March 27, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: `T-045` publish blocker remediation and release-candidate rerun
-- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices. None of them replace the blocked `T-045` artifact gate.
+- Next brief: `T-049` final iOS release-candidate polish and baseline lock
+- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. The old `T-045` artifact gate is no longer the active blocker.
 
 ## Stage Notes
 
@@ -49,10 +49,11 @@ Last updated: March 27, 2026
 - `T-042` is now accepted on `codex/s4-app-update-status-surfaces`: the minimum owner-facing firmware status/update surface is real, and the remaining Meditation rejection is recorded as a board-baseline issue rather than a UI-slice blocker.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the minimum operator rollout and rollback path is real.
 - `T-044` is now accepted on `codex/s4-release-candidate-validation`: the release-candidate pass is complete and the blocker list is explicit.
-- `T-045` is now blocked on `codex/s4-release-candidate-remediation`: the active RC cohort is corrected and Android is deferred, but the branch still needs one finished installable iOS artifact for baseline `dce8541`.
+- `T-045` is now closed on `codex/s4-release-candidate-remediation`: the active RC cohort is corrected, Android is deferred, and the previously missing iOS EAS artifacts for baseline `dce8541` are now finished.
 - `T-046` is now accepted on `codex/s4-rc-easy-ui-cleanup`: the temporary celebration-preview controls are removed from device settings and the branch stayed within the intended easy UI cleanup scope.
 - `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the Friends actions redesign, adjacent RC UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are preserved together as a bounded user-guided slice.
 - `T-048` is now accepted on `codex/s4-home-confirmation-latency`: the Home command-confirmation path is materially tighter, the stale-refresh truth gap is fixed, and the unplug-and-pull-to-refresh proof is complete.
+- `T-049` is now ready: the next gate is not artifact production but final iOS RC polish and baseline lock before one fresh submission candidate build.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.
