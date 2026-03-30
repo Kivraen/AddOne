@@ -220,12 +220,14 @@ Current result:
 - passed:
   - `fw-beta-20260327-05` remains the active beta release and its immutable artifact still returns `HTTP 200`
   - `AO_B0CBD8CFABB0` remains on `2.0.0-beta.3` with backend-visible `succeeded` OTA state on `fw-beta-20260327-05`
+  - `AO_A4F00F767008` was recovered on March 30, 2026 to `2.0.0-beta.3` with backend-visible `succeeded` OTA state on `fw-beta-20260327-05`
   - both beta boards still have per-device MQTT credential rows and recent `last_seen_at` heartbeats in the hosted beta backend
 - failed and blocking:
-  - `AO_A4F00F767008` is still on `2.0.0-beta.1` and still rejects `begin_firmware_update` with `Unsupported command kind.`
   - no finished installable build exists for the accepted March 27, 2026 release-candidate baseline; the latest finished iOS internal build is from March 18, 2026, the latest finished iOS store build is from March 20, 2026, and there are still no finished Android builds
 - non-blocking operational risk:
   - `https://gateway-beta.addone.studio/health` still is not a usable public health target because it returns `HTTP 404`; keep on-host checks until that route is repaired
+- cohort note:
+  - `AO_A4F00F767008` is recovered but intentionally remains outside the active ship cohort
 
 Auth note for the next iOS RC build:
 - the app’s sign-in surface now assumes a 6-digit email code flow with neutral AddOne copy
