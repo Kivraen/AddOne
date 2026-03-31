@@ -114,6 +114,14 @@ export default function DeviceRecoveryRoute() {
       : controller.manualWifiEntry || controller.networks.length === 0
         ? "manual"
         : "picker";
+  const recoveryHeaderStepLabel =
+    controller.stage === "failure" || controller.stage === "intro" || controller.stage === "join_device_ap"
+      ? "Step 1 of 3"
+      : showRecoveryHomeWifiStage
+        ? "Step 2 of 3"
+        : controller.stage === "reconnecting_board" || controller.stage === "restoring_board" || controller.stage === "success"
+          ? "Step 3 of 3"
+          : undefined;
 
   useEffect(() => {
     setSuppressInitialSceneAnimation(false);
@@ -274,7 +282,7 @@ export default function DeviceRecoveryRoute() {
         bottomOverlay={recoveryBottomAction ? <SetupBottomActionBar>{recoveryBottomAction}</SetupBottomActionBar> : undefined}
         contentContainerStyle={{ flexGrow: 1 }}
         contentMaxWidth={theme.layout.narrowContentWidth}
-        header={<SetupRouteHeader label="Recovery" onClose={closeRecoveryScreen} title="AddOne" />}
+        header={<SetupRouteHeader onClose={closeRecoveryScreen} stepLabel={recoveryHeaderStepLabel} />}
         scroll
       >
         <SetupFeedbackOverlay
@@ -349,7 +357,7 @@ export default function DeviceRecoveryRoute() {
           {showRecoveryHomeWifiStage ? (
             <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_home_wifi">
               <SetupStageLayout>
-                <StepHeader step={2} subtitle="Choose the Wi‑Fi network your board should use." title="Home Wi‑Fi" />
+                <StepHeader step={2} subtitle="Choose the Wi‑Fi network your board should use." title="Choose Wi‑Fi" />
                 <SetupStageSwap gap={RECOVERY_FIELD_GAP} swapKey={`recovery_home_wifi_${recoveryHomeWifiStageState}`}>
                   {controller.stage === "scan_home_wifi" ? (
                     <SetupWifiScanState />

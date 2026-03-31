@@ -49,13 +49,10 @@ import { AddOneDevice } from "@/types/addone";
 
 const HOME_INSIGHT_MAX_LINES = 3;
 const HOME_INSIGHT_PANEL_HEIGHT = theme.typography.micro.lineHeight + theme.typography.body.lineHeight * HOME_INSIGHT_MAX_LINES + 18;
-const HOME_INSIGHT_TRANSITION_DURATION = 360;
-const HOME_INSIGHT_ENTRY_OFFSET = 16;
-const HOME_INSIGHT_EXIT_OFFSET = 10;
+const HOME_INSIGHT_TRANSITION_DURATION = 1180;
+const HOME_METRIC_VALUE_TRANSITION_DURATION = 520;
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15_000;
 const HOME_PRIMARY_ACTION_SIZE = 156;
-const HOME_PRIMARY_ACTION_ANCHOR_RATIO = 0.5;
-const HOME_PRIMARY_ACTION_BOTTOM_GAP = 16;
 const HOME_PRIMARY_ACTION_TOP_GAP = 72;
 const HOME_PULL_REFRESH_TRIGGER = 84;
 
@@ -120,6 +117,55 @@ function withPendingTodayState(device: AddOneDevice, pendingTodayState?: boolean
   return {
     ...device,
     days,
+  };
+}
+
+function currentWeekCompletedCount(device: Pick<AddOneDevice, "days" | "today">) {
+  return device.days[device.today.weekIndex].slice(0, device.today.dayIndex + 1).filter(Boolean).length;
+}
+
+function isCurrentWeekSuccessful(device: Pick<AddOneDevice, "days" | "today" | "weeklyTarget">) {
+  return currentWeekCompletedCount(device) >= device.weeklyTarget;
+}
+
+function withProjectedSummaryMetrics(
+  device: AddOneDevice,
+  options?: {
+    pendingTodayState?: boolean;
+  },
+): AddOneDevice {
+  const projectedDevice = withPendingTodayState(device, options?.pendingTodayState);
+  const todayWeekIndex = device.today.weekIndex;
+  const todayDayIndex = device.today.dayIndex;
+  const baseTodayState = device.days[todayWeekIndex]?.[todayDayIndex];
+  const projectedTodayState = projectedDevice.days[todayWeekIndex]?.[todayDayIndex];
+  const baseWeekSuccessful = isCurrentWeekSuccessful(device);
+  const projectedWeekSuccessful = isCurrentWeekSuccessful(projectedDevice);
+
+  let recordedDaysTotal = device.recordedDaysTotal;
+  let successfulWeeksTotal = device.successfulWeeksTotal;
+
+  if (options?.pendingTodayState !== undefined && baseTodayState !== undefined && projectedTodayState !== undefined) {
+    if (baseTodayState !== projectedTodayState) {
+      recordedDaysTotal += projectedTodayState ? 1 : -1;
+    }
+
+    if (baseWeekSuccessful !== projectedWeekSuccessful) {
+      successfulWeeksTotal += projectedWeekSuccessful ? 1 : -1;
+    }
+  }
+
+  if (
+    projectedDevice.recordedDaysTotal === recordedDaysTotal &&
+    projectedDevice.successfulWeeksTotal === successfulWeeksTotal
+  ) {
+    return projectedDevice;
+  }
+
+  return {
+    ...projectedDevice,
+    recordedDaysTotal,
+    successfulWeeksTotal,
   };
 }
 
@@ -229,19 +275,109 @@ function MetricTile({ label, value }: { label: string; value: string }) {
       >
         {label}
       </Text>
-      <Text
-        numberOfLines={1}
-        style={{
-          color: theme.colors.textPrimary,
-          fontFamily: theme.typography.title.fontFamily,
-          fontSize: 22,
-          lineHeight: 26,
-          fontVariant: ["tabular-nums"],
-          textAlign: "center",
-        }}
-      >
-        {value}
-      </Text>
+      <AnimatedMetricValue value={value} />
+    </View>
+  );
+}
+
+function MetricValueText({ value }: { value: string }) {
+  return (
+    <Text
+      numberOfLines={1}
+      style={{
+        color: theme.colors.textPrimary,
+        fontFamily: theme.typography.title.fontFamily,
+        fontSize: 22,
+        lineHeight: 26,
+        fontVariant: ["tabular-nums"],
+        textAlign: "center",
+      }}
+    >
+      {value}
+    </Text>
+  );
+}
+
+function AnimatedMetricValue({ value }: { value: string }) {
+  const [currentValue, setCurrentValue] = useState(value);
+  const [outgoingValue, setOutgoingValue] = useState<string | null>(null);
+  const transitionProgress = useSharedValue(1);
+  const transitionTokenRef = useRef(0);
+
+  const clearOutgoingValue = (token: number) => {
+    if (transitionTokenRef.current === token) {
+      setOutgoingValue(null);
+    }
+  };
+
+  useEffect(() => {
+    if (value === currentValue) {
+      return;
+    }
+
+    const nextToken = transitionTokenRef.current + 1;
+    transitionTokenRef.current = nextToken;
+
+    cancelAnimation(transitionProgress);
+    setOutgoingValue(currentValue);
+    setCurrentValue(value);
+    transitionProgress.value = 0;
+    transitionProgress.value = withTiming(
+      1,
+      {
+        duration: HOME_METRIC_VALUE_TRANSITION_DURATION,
+        easing: Easing.inOut(Easing.cubic),
+      },
+      (finished) => {
+        if (finished) {
+          runOnJS(clearOutgoingValue)(nextToken);
+        }
+      },
+    );
+  }, [currentValue, transitionProgress, value]);
+
+  useEffect(
+    () => () => {
+      cancelAnimation(transitionProgress);
+    },
+    [transitionProgress],
+  );
+
+  const outgoingStyle = useAnimatedStyle(() => ({
+    opacity: outgoingValue ? interpolate(transitionProgress.value, [0, 0.44, 1], [1, 0, 0]) : 0,
+  }));
+
+  const incomingStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(transitionProgress.value, [0, 0.52, 1], [0, 0, 1]),
+  }));
+
+  const metricValueLayerStyle = {
+    position: "absolute" as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: "center" as const,
+  };
+
+  return (
+    <View
+      style={{
+        alignSelf: "stretch",
+        height: 26,
+        overflow: "hidden",
+        position: "relative",
+        justifyContent: "center",
+      }}
+    >
+      {outgoingValue ? (
+        <Animated.View pointerEvents="none" style={[metricValueLayerStyle, outgoingStyle]}>
+          <MetricValueText value={outgoingValue} />
+        </Animated.View>
+      ) : null}
+      <Animated.View pointerEvents="none" style={[metricValueLayerStyle, incomingStyle]}>
+        <MetricValueText value={currentValue} />
+      </Animated.View>
     </View>
   );
 }
@@ -250,34 +386,28 @@ function insightKey(insight: HomeInsight) {
   return `${insight.eyebrow}:${insight.message}`;
 }
 
-function HomeInsightCopy({ insight }: { insight: HomeInsight }) {
+function insightSectionTitle(insight: HomeInsight) {
+  if (insight.eyebrow === "Weekly target" || insight.eyebrow === "This week") {
+    return "This week";
+  }
+
+  return insight.eyebrow;
+}
+
+function HomeInsightMessage({ message }: { message: string }) {
   return (
-    <>
-      <Text
-        style={{
-          color: theme.colors.textTertiary,
-          fontFamily: theme.typography.micro.fontFamily,
-          fontSize: theme.typography.micro.fontSize,
-          lineHeight: theme.typography.micro.lineHeight,
-          letterSpacing: theme.typography.micro.letterSpacing,
-          textTransform: "uppercase",
-        }}
-      >
-        {insight.eyebrow}
-      </Text>
-      <Text
-        ellipsizeMode="tail"
-        numberOfLines={HOME_INSIGHT_MAX_LINES}
-        style={{
-          color: theme.colors.textSecondary,
-          fontFamily: theme.typography.body.fontFamily,
-          fontSize: theme.typography.body.fontSize,
-          lineHeight: theme.typography.body.lineHeight,
-        }}
-      >
-        {insight.message}
-      </Text>
-    </>
+    <Text
+      ellipsizeMode="tail"
+      numberOfLines={HOME_INSIGHT_MAX_LINES}
+      style={{
+        color: theme.colors.textSecondary,
+        fontFamily: theme.typography.body.fontFamily,
+        fontSize: theme.typography.body.fontSize,
+        lineHeight: theme.typography.body.lineHeight,
+      }}
+    >
+      {message}
+    </Text>
   );
 }
 
@@ -375,7 +505,7 @@ function HomeInsightPanel({ insight }: { insight: HomeInsight }) {
       1,
       {
         duration: HOME_INSIGHT_TRANSITION_DURATION,
-        easing: Easing.bezier(0.22, 1, 0.36, 1),
+        easing: Easing.inOut(Easing.cubic),
       },
       (finished) => {
         if (finished) {
@@ -393,24 +523,14 @@ function HomeInsightPanel({ insight }: { insight: HomeInsight }) {
   );
 
   const incomingStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(transitionProgress.value, [0, 0.16, 1], [0, 0, 1]),
-    transform: [
-      { translateY: interpolate(transitionProgress.value, [0, 1], [HOME_INSIGHT_ENTRY_OFFSET, 0]) },
-      { scale: interpolate(transitionProgress.value, [0, 1], [0.985, 1]) },
-    ],
+    opacity: interpolate(transitionProgress.value, [0, 0.7, 1], [0, 0, 1]),
   }));
 
   const outgoingStyle = useAnimatedStyle(() => ({
-    opacity: outgoingInsight ? interpolate(transitionProgress.value, [0, 0.58, 1], [1, 0.42, 0]) : 0,
-    transform: [
-      { translateY: interpolate(transitionProgress.value, [0, 1], [0, -HOME_INSIGHT_EXIT_OFFSET]) },
-      { scale: interpolate(transitionProgress.value, [0, 1], [1, 0.988]) },
-    ],
+    opacity: outgoingInsight ? interpolate(transitionProgress.value, [0, 0.58, 1], [1, 0, 0]) : 0,
   }));
 
-  const insightLayerStyle = {
-    gap: 6,
-    justifyContent: "center" as const,
+  const messageLayerStyle = {
     position: "absolute" as const,
     top: 0,
     right: 0,
@@ -422,18 +542,37 @@ function HomeInsightPanel({ insight }: { insight: HomeInsight }) {
     <View
       style={{
         height: HOME_INSIGHT_PANEL_HEIGHT,
-        overflow: "hidden",
-        position: "relative",
+        gap: 6,
       }}
     >
-      {outgoingInsight ? (
-        <Animated.View pointerEvents="none" style={[insightLayerStyle, outgoingStyle]}>
-          <HomeInsightCopy insight={outgoingInsight} />
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.micro.fontFamily,
+          fontSize: theme.typography.micro.fontSize,
+          lineHeight: theme.typography.micro.lineHeight,
+          letterSpacing: theme.typography.micro.letterSpacing,
+          textTransform: "uppercase",
+        }}
+      >
+        {insightSectionTitle(insight)}
+      </Text>
+      <View
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        {outgoingInsight ? (
+          <Animated.View pointerEvents="none" style={[messageLayerStyle, outgoingStyle]}>
+            <HomeInsightMessage message={outgoingInsight.message} />
+          </Animated.View>
+        ) : null}
+        <Animated.View pointerEvents="none" style={[messageLayerStyle, incomingStyle]}>
+          <HomeInsightMessage message={currentInsight.message} />
         </Animated.View>
-      ) : null}
-      <Animated.View pointerEvents="none" style={[insightLayerStyle, incomingStyle]}>
-        <HomeInsightCopy insight={currentInsight} />
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -628,8 +767,6 @@ export function HomeScreen() {
   const staleRefreshKeyRef = useRef<string | null>(null);
   const reachabilityProbeKeyRef = useRef<string | null>(null);
   const pullRefreshDistanceRef = useRef(0);
-  const weeklyTargetAnchorRef = useRef<View>(null);
-  const [weeklyTargetBottom, setWeeklyTargetBottom] = useState<number | null>(null);
 
   useEffect(() => {
     if (!pendingBoardEditorOpen || !activeDevice || !isDeviceControlReady(activeDevice)) {
@@ -645,7 +782,9 @@ export function HomeScreen() {
       return null;
     }
 
-    return withPendingTodayState(activeDevice, activePendingTodayState);
+    return withProjectedSummaryMetrics(activeDevice, {
+      pendingTodayState: activePendingTodayState,
+    });
   }, [activeDevice, activePendingTodayState]);
   const headerStatusState = effectiveDevice ? headerConnectionState(effectiveDevice) : null;
   const claimedSessionIsFresh = useMemo(() => {
@@ -656,43 +795,9 @@ export function HomeScreen() {
     const claimedAtMs = new Date(onboardingSession.claimedAt).getTime();
     return Number.isFinite(claimedAtMs) && Date.now() - claimedAtMs < CLAIMED_SESSION_DEVICE_GRACE_MS;
   }, [onboardingSession?.claimedAt, onboardingSession?.status]);
-  const measureWeeklyTargetAnchor = () => {
-    if (!weeklyTargetAnchorRef.current) {
-      return;
-    }
-
-    weeklyTargetAnchorRef.current.measureInWindow((_x, y) => {
-      if (!Number.isFinite(y)) {
-        return;
-      }
-
-      setWeeklyTargetBottom((currentBottom) => {
-        if (currentBottom !== null && Math.abs(currentBottom - y) < 1) {
-          return currentBottom;
-        }
-
-        return y;
-      });
-    });
-  };
   const safeAreaHeight = height - insets.top - insets.bottom;
   const fallbackBottomPadding = 32;
-  const tabBarTop = safeAreaHeight - Math.max(theme.layout.tabScrollBottom - insets.bottom, 0);
-  const primaryActionBottomPadding =
-    weeklyTargetBottom === null
-      ? fallbackBottomPadding
-      : (() => {
-          const weeklyTargetBottomWithinSafeArea = weeklyTargetBottom - insets.top;
-          const minTop = weeklyTargetBottomWithinSafeArea + HOME_PRIMARY_ACTION_TOP_GAP;
-          const maxTop = tabBarTop - HOME_PRIMARY_ACTION_SIZE - HOME_PRIMARY_ACTION_BOTTOM_GAP;
-
-          if (maxTop <= minTop) {
-            return Math.max(safeAreaHeight - (minTop + HOME_PRIMARY_ACTION_SIZE), fallbackBottomPadding);
-          }
-
-          const buttonTop = minTop + (maxTop - minTop) * HOME_PRIMARY_ACTION_ANCHOR_RATIO;
-          return Math.max(safeAreaHeight - (buttonTop + HOME_PRIMARY_ACTION_SIZE), fallbackBottomPadding);
-        })();
+  const primaryActionBottomPadding = fallbackBottomPadding;
   const homeBottomInset = HOME_PRIMARY_ACTION_SIZE + primaryActionBottomPadding + HOME_PRIMARY_ACTION_TOP_GAP;
   const contentMinHeight = Math.max(0, height - insets.top - homeBottomInset - theme.layout.scrollTop);
 
@@ -769,21 +874,6 @@ export function HomeScreen() {
     refreshRuntimeSnapshot,
     staleRefreshInFlight,
   ]);
-
-  useEffect(() => {
-    if (!effectiveDevice) {
-      setWeeklyTargetBottom(null);
-      return;
-    }
-
-    const frameId = requestAnimationFrame(() => {
-      measureWeeklyTargetAnchor();
-    });
-
-    return () => {
-      cancelAnimationFrame(frameId);
-    };
-  }, [effectiveDevice, height]);
 
   const palette = useMemo(
     () => (effectiveDevice ? getMergedPalette(effectiveDevice.paletteId, effectiveDevice.customPalette) : null),
@@ -917,9 +1007,7 @@ export function HomeScreen() {
   const device = effectiveDevice;
   const stats = visibleBoardStats(device);
   const todayWeekday = formatWeekdayFromLocalDate(device.logicalToday);
-  const currentWeekCompleted = device.days[device.today.weekIndex]
-    .slice(0, device.today.dayIndex + 1)
-    .filter(Boolean).length;
+  const currentWeekCompleted = currentWeekCompletedCount(device);
   const habitWeeksTotal = totalHabitWeeks(device);
   const isTodayAwaitingMirror = activePendingTodayPhase === "confirmed";
   const isTodayAwaitingDeviceConfirmation = activePendingTodayState !== undefined && !isTodayAwaitingMirror;
@@ -1105,17 +1193,6 @@ export function HomeScreen() {
         <View style={{ gap: 12 }}>
           <View style={{ height: 1, backgroundColor: dividerColor }} />
           <HomeInsightPanel insight={insight} />
-          <View
-            ref={weeklyTargetAnchorRef}
-            collapsable={false}
-            onLayout={() => {
-              requestAnimationFrame(() => {
-                measureWeeklyTargetAnchor();
-              });
-            }}
-            pointerEvents="none"
-            style={{ height: 1, opacity: 0 }}
-          />
         </View>
       </View>
     </ScreenScrollView>

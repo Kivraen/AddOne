@@ -13,6 +13,7 @@ enum class RecoveryVisualStage : uint8_t {
   WifiConnected = 2,
   CloudConnected = 3,
   RestoreApplied = 4,
+  Failed = 5,
 };
 
 enum class ResetHoldVisualStage : uint8_t {
@@ -39,8 +40,10 @@ public:
                           const String& paletteCustomJson,
                           BoardFrame& outFrame) const;
   void buildTrackingFrame(const HabitTracker& tracker, const DeviceSettingsState& settings, BoardFrame& outFrame) const;
+  void playStartupAnimation(uint8_t brightness);
   void renderQaPattern(QaLedPattern pattern, uint8_t brightness, unsigned long elapsedMs);
   void renderFrame(const BoardFrame& frame, uint8_t brightness);
+  void renderOnboardingHoldState(bool wifiConnected, uint8_t brightness);
   void renderResetHoldState(ResetHoldVisualStage stage, uint8_t brightness);
   void render(const HabitTracker& tracker, const DeviceSettingsState& settings, const tm* localNow, uint8_t brightness);
   void renderRecoveryState(RecoveryVisualStage stage, uint8_t brightness);

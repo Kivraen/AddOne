@@ -195,6 +195,7 @@ export function useDevices() {
   const demoActiveDeviceId = useAddOneStore((state) => state.activeDeviceId);
   const setDemoActiveDevice = useAddOneStore((state) => state.setActiveDevice);
   const cloudActiveDeviceId = useAppUiStore((state) => state.activeDeviceId);
+  const hiddenRemovingDeviceIds = useAppUiStore((state) => state.hiddenRemovingDeviceIds);
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
   const clearConnectivityIssue = useAppUiStore((state) => state.clearConnectivityIssue);
@@ -215,7 +216,9 @@ export function useDevices() {
     refetchOnWindowFocus: true,
   });
 
-  const baseDevices = mode === "demo" ? demoDevices : devicesQuery.data ?? [];
+  const allDevices = mode === "demo" ? demoDevices : devicesQuery.data ?? [];
+  const baseDevices =
+    mode === "cloud" ? allDevices.filter((device) => !hiddenRemovingDeviceIds[device.id]) : allDevices;
   const devices = baseDevices.map((device) => {
     const recoveryNeededRevision = recoveryNeededRevisionByDevice[device.id];
     if (
@@ -354,6 +357,7 @@ export function useDevices() {
   return {
     activeDevice,
     activeDeviceId: activeDevice?.id ?? null,
+    allDevices,
     devices: effectiveDevices,
     isAuthenticated,
     isLoading: mode === "cloud" ? devicesQuery.isLoading : false,
@@ -367,12 +371,15 @@ export function useDeviceActions() {
   const { mode, user, userEmail } = useAuth();
   const queryClient = useQueryClient();
   const clearConnectivityIssue = useAppUiStore((state) => state.clearConnectivityIssue);
+  const clearHiddenRemovingDevice = useAppUiStore((state) => state.clearHiddenRemovingDevice);
   const clearPendingTodayState = useAppUiStore((state) => state.clearPendingTodayState);
   const clearRuntimeConflictRecovery = useAppUiStore((state) => state.clearRuntimeConflictRecovery);
+  const hideRemovingDevice = useAppUiStore((state) => state.hideRemovingDevice);
   const markConnectivityIssue = useAppUiStore((state) => state.markConnectivityIssue);
   const markPendingTodayStateConfirmed = useAppUiStore((state) => state.markPendingTodayStateConfirmed);
   const markRuntimeConflictRecovery = useAppUiStore((state) => state.markRuntimeConflictRecovery);
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
+  const setActiveDeviceId = useAppUiStore((state) => state.setActiveDeviceId);
   const [isAwaitingSettingsConfirmation, setIsAwaitingSettingsConfirmation] = useState(false);
   const [deviceRemovalState, setDeviceRemovalState] = useState<{
     deadlineAt: string | null;
@@ -713,25 +720,41 @@ export function useDeviceActions() {
   ) => {
     const timeoutMs = options.timeoutMs ?? 20_000;
     const startedAt = Date.now();
-    let lastRefreshAt = 0;
 
     while (Date.now() - startedAt < timeoutMs) {
-      const latestDevices = getCachedDevices();
-      if (!latestDevices.some((device) => device.id === deviceId)) {
+      try {
+        if (!user?.id) {
+          return;
+        }
+
+        const latestDevices = await fetchOwnedDevices({ userEmail, userId: user.id });
+        if (!latestDevices.some((device) => device.id === deviceId)) {
+          return;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!isTransientNetworkFailureMessage(message)) {
+          throw error;
+        }
+      }
+
+      await sleep(LIVE_WAIT_REFRESH_MS);
+    }
+
+    try {
+      if (!user?.id) {
         return;
       }
 
-      if (Date.now() - lastRefreshAt >= LIVE_WAIT_REFRESH_MS) {
-        void invalidateCloudDevices();
-        lastRefreshAt = Date.now();
+      const finalDevices = await fetchOwnedDevices({ userEmail, userId: user.id });
+      if (!finalDevices.some((device) => device.id === deviceId)) {
+        return;
       }
-
-      await sleep(LIVE_WAIT_CACHE_POLL_MS);
-    }
-
-    const finalDevices = await loadLatestDevices();
-    if (!finalDevices.some((device) => device.id === deviceId)) {
-      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isTransientNetworkFailureMessage(message)) {
+        throw error;
+      }
     }
 
     const failure = await readCommandFailure(options.commandId);
@@ -1003,6 +1026,13 @@ export function useDeviceActions() {
       }
 
       const remoteReset = targetDevice.isLive;
+      const nextActiveDeviceId = devices.find((device) => device.id !== targetDevice.id)?.id ?? null;
+
+      hideRemovingDevice(targetDevice.id);
+      clearConnectivityIssue(targetDevice.id);
+      clearPendingTodayState(targetDevice.id);
+      clearRuntimeConflictRecovery(targetDevice.id);
+      setActiveDeviceId(nextActiveDeviceId);
       setDeviceRemovalState({
         deadlineAt: null,
         deviceId: targetDevice.id,
@@ -1016,29 +1046,46 @@ export function useDeviceActions() {
           requestId: makeClientEventId(),
         });
 
-        if (result.mode === "remote_reset_remove") {
-          setDeviceRemovalState({
-            deadlineAt: result.removal_deadline_at,
-            deviceId: targetDevice.id,
-            phase: "waiting_for_board",
-          });
-        }
-
-        await waitForDeviceAbsence(targetDevice.id, {
-          commandId: result.command_id ?? null,
-          errorMessage: remoteReset
-            ? "The device did not leave this account in time."
-            : "The device is still attached to this account.",
-          timeoutMs: remoteReset ? 40_000 : 8_000,
-        });
         useAppUiStore.getState().clearOnboardingSession();
+
+        void (async () => {
+          try {
+            if (result.mode === "remote_reset_remove") {
+              setDeviceRemovalState({
+                deadlineAt: result.removal_deadline_at,
+                deviceId: targetDevice.id,
+                phase: "waiting_for_board",
+              });
+            }
+
+            await waitForDeviceAbsence(targetDevice.id, {
+              commandId: result.command_id ?? null,
+              errorMessage: remoteReset
+                ? "The device did not leave this account in time."
+                : "The device is still attached to this account.",
+              timeoutMs: remoteReset ? 40_000 : 8_000,
+            });
+            clearHiddenRemovingDevice(targetDevice.id);
+            await invalidateCloudDevices();
+          } catch (error) {
+            console.warn("Device removal confirmation is still pending", error);
+          } finally {
+            setDeviceRemovalState({
+              deadlineAt: null,
+              deviceId: null,
+              phase: "idle",
+            });
+          }
+        })();
+      } catch (error) {
+        clearHiddenRemovingDevice(targetDevice.id);
         void invalidateCloudDevices();
-      } finally {
         setDeviceRemovalState({
           deadlineAt: null,
           deviceId: null,
           phase: "idle",
         });
+        throw error;
       }
     },
     previewCelebration: async (params?: CelebrationPreviewRequest | string) => {
@@ -1210,7 +1257,6 @@ export function useDeviceActions() {
             markPendingTodayStateConfirmed(targetDevice.id);
             clearConnectivityIssue(targetDevice.id);
             clearRuntimeConflictRecovery(targetDevice.id);
-            void invalidateCloudDevices();
             logTodayToggleTrace(traceId, traceStartedAt, "app confirmation complete");
 
             void mirrorWait.then((mirrorResult) => {
@@ -1240,7 +1286,6 @@ export function useDeviceActions() {
               clearPendingTodayState(targetDevice.id);
               clearConnectivityIssue(targetDevice.id);
               clearRuntimeConflictRecovery(targetDevice.id);
-              void invalidateCloudDevices();
               logTodayToggleTrace(traceId, traceStartedAt, "app confirmation complete");
               return;
             }
@@ -1265,7 +1310,6 @@ export function useDeviceActions() {
             clearPendingTodayState(targetDevice.id);
             clearConnectivityIssue(targetDevice.id);
             clearRuntimeConflictRecovery(targetDevice.id);
-            void invalidateCloudDevices();
             logTodayToggleTrace(traceId, traceStartedAt, "app confirmation complete");
             return;
           }

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { InteractionManager } from "react-native";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { useRoutedDevice } from "@/components/devices/device-route-context";
@@ -128,7 +129,14 @@ export default function DeviceSettingsOverviewRoute() {
           onPress: () => {
             void factoryResetAndRemove(device.id).then(
               () => {
-                router.replace("/");
+                InteractionManager.runAfterInteractions(() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                    return;
+                  }
+
+                  router.replace("/");
+                });
               },
               (error: unknown) => {
                 Alert.alert(

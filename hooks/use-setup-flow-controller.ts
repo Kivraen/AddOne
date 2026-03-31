@@ -23,7 +23,7 @@ import {
   SetupFlowStage,
 } from "@/types/addone";
 
-const RECONNECT_POLL_MS = 2_000;
+const RECONNECT_POLL_MS = 1_000;
 const WIFI_RECONNECT_TIMEOUT_MS = 90_000;
 const RESTORE_TIMEOUT_MS = 45_000;
 const RECONNECT_AP_FAILURE_GRACE_MS = 7_000;
@@ -583,16 +583,17 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
           }
 
           if (info.provisioning_state === "ready") {
+            const reportedProvisioningFailure = Boolean(info.last_failure_reason);
             const withinFailureGraceWindow =
               !!lastProvisioningSubmitAtMs && Date.now() - lastProvisioningSubmitAtMs < RECONNECT_AP_FAILURE_GRACE_MS;
-            if (withinFailureGraceWindow) {
+            if (withinFailureGraceWindow && !reportedProvisioningFailure) {
               logSetupFlowEvent(flow, "reconnect_ap_failure_ignored_during_grace", {
                 message: info.last_failure_reason ?? null,
               });
               return;
             }
 
-            if (!hasSeenActiveProvisioningSinceSubmit) {
+            if (!hasSeenActiveProvisioningSinceSubmit && !reportedProvisioningFailure) {
               logSetupFlowEvent(flow, "reconnect_ap_failure_ignored_before_active_attempt", {
                 message: info.last_failure_reason ?? null,
               });

@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, InteractionManager, Pressable, Text, View } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 import { ScreenFrame } from "@/components/layout/screen-frame";
 import {
@@ -22,6 +24,7 @@ import {
   SetupTextField as TextField,
   SetupWifiScanState,
 } from "@/components/setup/setup-flow";
+import { OnboardingHandoffAnimation } from "@/components/setup/onboarding-handoff-animation";
 import { PalettePreviewBoard } from "@/components/settings/palette-color-editor";
 import { SettingsSwatchStrip } from "@/components/settings/device-settings-scaffold";
 import { ChoicePill } from "@/components/ui/choice-pill";
@@ -48,10 +51,7 @@ import {
   HABIT_NAME_MAX_LENGTH,
   MINIMUM_GOAL_MAX_LENGTH,
   MINIMUM_GOAL_PLACEHOLDER,
-  normalizeHabitNameForSave,
   normalizeMinimumGoalForSave,
-  resolveHabitNameDraft,
-  resolveMinimumGoalDraft,
 } from "@/lib/habit-details";
 import { captureOnboardingRestoreSource } from "@/lib/onboarding-restore";
 import { useAppUiStore } from "@/store/app-ui-store";
@@ -59,9 +59,9 @@ import { AddOneDevice, BoardPalette, RestoreChoice, SetupFlowStage } from "@/typ
 
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15000;
 const ONBOARDING_FIELD_GAP = 16;
-const SETUP_FEEDBACK_OVERLAY_MS = 5000;
 const ONBOARDING_DEVICE_REFRESH_MS = 1500;
 const ONBOARDING_TOTAL_STEPS = 4;
+const ONBOARDING_HANDOFF_EXIT_DELAY_MS = 180;
 
 type ClaimedFlowStep = "habit" | "board" | "welcome";
 type OnboardingStage = Exclude<SetupFlowStage, "success"> | "restore" | "habit" | "board" | "welcome" | "finishing_board";
@@ -90,6 +90,28 @@ function makeRequestId() {
     `${(Math.floor(Math.random() * 4) + 8).toString(16)}${randomHexSegment(3)}`,
     randomHexSegment(12),
   ].join("-");
+}
+
+function normalizeOnboardingText(value?: string | null) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function resolveOnboardingHabitNameInput(value?: string | null) {
+  const normalized = normalizeOnboardingText(value);
+  if (!normalized || normalized.toLowerCase() === "addone" || normalized === DEFAULT_HABIT_NAME) {
+    return "";
+  }
+
+  return normalized;
+}
+
+function resolveOnboardingMinimumGoalInput(value?: string | null) {
+  const normalized = normalizeMinimumGoalForSave(value);
+  if (!normalized || normalized === MINIMUM_GOAL_PLACEHOLDER) {
+    return "";
+  }
+
+  return normalized;
 }
 
 function OnboardingPaletteOption({
@@ -191,24 +213,29 @@ export default function OnboardingScreen() {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [claimedFlowStep, setClaimedFlowStep] = useState<ClaimedFlowStep>("habit");
   const [isFinishingSetup, setIsFinishingSetup] = useState(false);
-  const [habitNameInput, setHabitNameInput] = useState(resolveHabitNameDraft(activeDevice?.name));
-  const [minimumGoalInput, setMinimumGoalInput] = useState(resolveMinimumGoalDraft(activeDeviceMinimumGoal));
-  const [weeklyTarget, setWeeklyTarget] = useState(activeDevice?.weeklyTarget ?? DEFAULT_WEEKLY_TARGET);
+  const [habitNameInput, setHabitNameInput] = useState("");
+  const [minimumGoalInput, setMinimumGoalInput] = useState("");
+  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
   const [timezoneInput, setTimezoneInput] = useState(phoneTimezoneResolution.resolvedValue);
-  const [paletteId, setPaletteId] = useState(activeDevice?.paletteId ?? "classic");
-  const [customPalette, setCustomPalette] = useState<Partial<BoardPalette>>(sanitizeCustomPalette(activeDevice?.customPalette));
+  const [paletteId, setPaletteId] = useState("classic");
+  const [customPalette, setCustomPalette] = useState<Partial<BoardPalette>>(sanitizeCustomPalette());
   const [restoreChoice, setRestoreChoice] = useState<RestoreChoice | null>(null);
   const [autoStartPending, setAutoStartPending] = useState(false);
   const [hasEditedSetupDraft, setHasEditedSetupDraft] = useState(false);
+  const [hasAttemptedHabitContinue, setHasAttemptedHabitContinue] = useState(false);
   const [suppressInitialSceneAnimation, setSuppressInitialSceneAnimation] = useState(true);
+  const [isBoardHandoffSettled, setIsBoardHandoffSettled] = useState(false);
   const [transientFeedback, setTransientFeedback] = useState<{
     body: string;
     title: string;
     tone: "error" | "neutral" | "success";
   } | null>(null);
-  const normalizedHabitName = normalizeHabitNameForSave(habitNameInput);
+  const normalizedHabitName = normalizeOnboardingText(habitNameInput);
   const normalizedMinimumGoal = normalizeMinimumGoalForSave(minimumGoalInput);
-  const savedMinimumGoal = normalizedMinimumGoal || MINIMUM_GOAL_PLACEHOLDER;
+  const savedMinimumGoal = normalizedMinimumGoal;
+  const isHabitStepReady = normalizedHabitName.length > 0 && normalizedMinimumGoal.length > 0;
+  const habitNameInvalid = hasAttemptedHabitContinue && normalizedHabitName.length === 0;
+  const minimumGoalInvalid = hasAttemptedHabitContinue && normalizedMinimumGoal.length === 0;
   const localRestoreSource =
     session?.deviceId && activeOnboardingRestoreSource?.sourceDeviceId === session.deviceId
       ? activeOnboardingRestoreSource
@@ -219,12 +246,21 @@ export default function OnboardingScreen() {
       return;
     }
 
-    setHabitNameInput(resolveHabitNameDraft(localRestoreSource.settings.name));
-    setMinimumGoalInput(resolveMinimumGoalDraft(localRestoreSource.settings.dailyMinimum));
+    setHabitNameInput(resolveOnboardingHabitNameInput(localRestoreSource.settings.name));
+    setMinimumGoalInput(resolveOnboardingMinimumGoalInput(localRestoreSource.settings.dailyMinimum));
     setWeeklyTarget(localRestoreSource.settings.weeklyTarget || DEFAULT_WEEKLY_TARGET);
     setTimezoneInput(localRestoreSource.settings.timezone || phoneTimezoneResolution.resolvedValue);
     setPaletteId(localRestoreSource.settings.paletteId);
     setCustomPalette(sanitizeCustomPalette(localRestoreSource.settings.customPalette));
+  }
+
+  function resetOnboardingDraftInputs() {
+    setHabitNameInput("");
+    setMinimumGoalInput("");
+    setWeeklyTarget(DEFAULT_WEEKLY_TARGET);
+    setTimezoneInput(phoneTimezoneResolution.resolvedValue);
+    setPaletteId("classic");
+    setCustomPalette(sanitizeCustomPalette());
   }
 
   useEffect(() => {
@@ -242,8 +278,16 @@ export default function OnboardingScreen() {
       return;
     }
 
-    setHabitNameInput(resolveHabitNameDraft(activeDevice.name));
-    setMinimumGoalInput(resolveMinimumGoalDraft(activeDeviceMinimumGoal));
+    if (!session.deviceId || activeDevice.id !== session.deviceId) {
+      return;
+    }
+
+    if (restoreChoice !== "restore") {
+      return;
+    }
+
+    setHabitNameInput(resolveOnboardingHabitNameInput(activeDevice.name));
+    setMinimumGoalInput(resolveOnboardingMinimumGoalInput(activeDeviceMinimumGoal));
     setWeeklyTarget((currentTarget) => {
       if (activeDevice.weeklyTarget === 5 && currentTarget === DEFAULT_WEEKLY_TARGET) {
         return DEFAULT_WEEKLY_TARGET;
@@ -254,26 +298,17 @@ export default function OnboardingScreen() {
     setTimezoneInput(activeDevice.timezone || phoneTimezoneResolution.resolvedValue);
     setPaletteId(activeDevice.paletteId);
     setCustomPalette(sanitizeCustomPalette(activeDevice.customPalette));
-  }, [activeDevice, activeDeviceMinimumGoal, hasEditedSetupDraft, phoneTimezoneResolution.resolvedValue, session?.status]);
+  }, [activeDevice, activeDeviceMinimumGoal, hasEditedSetupDraft, phoneTimezoneResolution.resolvedValue, restoreChoice, session?.deviceId, session?.status]);
 
   useEffect(() => {
+    resetOnboardingDraftInputs();
     setRestoreChoice(null);
     setClaimedFlowStep("habit");
     setIsFinishingSetup(false);
     setHasEditedSetupDraft(false);
+    setHasAttemptedHabitContinue(false);
+    setIsBoardHandoffSettled(false);
   }, [session?.id]);
-
-  useEffect(() => {
-    if (!transientFeedback) {
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      setTransientFeedback(null);
-    }, SETUP_FEEDBACK_OVERLAY_MS);
-
-    return () => clearTimeout(timeoutId);
-  }, [transientFeedback]);
 
   useEffect(() => {
     if (session?.status !== "claimed" || areDevicesLoading) {
@@ -416,32 +451,16 @@ export default function OnboardingScreen() {
       : controller.manualWifiEntry || controller.networks.length === 0
         ? "manual"
         : "picker";
-  const onboardingHeaderTitle =
-    activeStage === "intro" && !showImmediateJoinApStage
-      ? setupError
-        ? "Couldn’t start setup"
-        : "Preparing setup"
-      : activeStage === "failure"
-        ? controller.terminalFailure?.title ?? "Restart setup"
-        : activeStage === "join_device_ap" || showImmediateJoinApStage
-          ? "Join AddOne Wi‑Fi"
-          : showHomeWifiStage
-            ? "Home Wi‑Fi"
-            : activeStage === "reconnecting_board"
-              ? "Connecting your board"
-              : activeStage === "restoring_board"
-                ? "Loading your board"
-                : activeStage === "restore"
-                  ? "Restore your last board?"
-                  : activeStage === "habit"
-                    ? "Set up your habit"
-                    : activeStage === "board"
-                      ? "Finish the board"
-                      : activeStage === "finishing_board"
-                        ? "Opening your board"
-                        : activeStage === "welcome"
-                          ? "Your board is ready"
-                          : "Setup";
+  const onboardingHeaderStepLabel =
+    activeStage === "intro" || activeStage === "failure" || activeStage === "join_device_ap" || showImmediateJoinApStage
+      ? `Step 1 of ${ONBOARDING_TOTAL_STEPS}`
+      : showHomeWifiStage || activeStage === "reconnecting_board" || activeStage === "restoring_board"
+        ? `Step 2 of ${ONBOARDING_TOTAL_STEPS}`
+        : activeStage === "habit"
+          ? `Step 3 of ${ONBOARDING_TOTAL_STEPS}`
+          : activeStage === "board"
+            ? `Step 4 of ${ONBOARDING_TOTAL_STEPS}`
+            : undefined;
 
   useEffect(() => {
     if (controller.stage !== "reconnecting_board" && controller.stage !== "restoring_board") {
@@ -481,6 +500,29 @@ export default function OnboardingScreen() {
     setCustomPalette(buildResolvedPaletteCustom(nextPaletteId));
   }
 
+  function dismissBoardOnboardingVisual(deviceId?: string | null) {
+    if (!deviceId) {
+      return;
+    }
+
+    void refreshRuntimeSnapshot(deviceId, {
+      errorMessage: "The board did not leave onboarding mode in time.",
+      timeoutMs: 6500,
+    }).catch((error) => {
+      console.warn("[onboarding] dismissBoardOnboardingVisual failed", error);
+    });
+  }
+
+  function completeOnboardingRouteHome() {
+    clearLocalOnboardingSession();
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/");
+  }
+
   async function handleFinishSetup() {
     if (!claimedDeviceReady || !activeDevice) {
       return;
@@ -498,21 +540,36 @@ export default function OnboardingScreen() {
         habitName: normalizedHabitName,
         weeklyTarget,
       });
-      if (restoreChoice === "fresh") {
-        await refreshRuntimeSnapshot(activeDevice.id);
-      }
+      setIsBoardHandoffSettled(false);
       setIsFinishingSetup(false);
       setClaimedFlowStep("welcome");
+      void refreshRuntimeSnapshot(activeDevice.id, {
+        errorMessage: "The board did not leave onboarding mode in time.",
+        timeoutMs: 6500,
+      })
+        .catch((error) => {
+          console.warn("[onboarding] finish refreshRuntimeSnapshot failed", error);
+        })
+        .finally(() => {
+          setIsBoardHandoffSettled(true);
+        });
     } catch (error) {
       setIsFinishingSetup(false);
       setSetupError(error instanceof Error ? error.message : "Failed to finish setup.");
     }
   }
 
-  function handleOpenBoard() {
-    clearLocalOnboardingSession();
-    router.replace("/");
-  }
+  useEffect(() => {
+    if (activeStage !== "welcome" || !isBoardHandoffSettled) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      completeOnboardingRouteHome();
+    }, ONBOARDING_HANDOFF_EXIT_DELAY_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [activeStage, isBoardHandoffSettled]);
 
   async function handleRestorePreviousBoard() {
     if (!claimedDeviceReady || !activeDevice) {
@@ -546,11 +603,28 @@ export default function OnboardingScreen() {
     setSetupError(null);
     setClaimedFlowStep("habit");
     setHasEditedSetupDraft(false);
+    setHasAttemptedHabitContinue(false);
+  }
+
+  function handleContinueFromHabitStep() {
+    if (!isHabitStepReady) {
+      setHasAttemptedHabitContinue(true);
+      return;
+    }
+
+    setHasAttemptedHabitContinue(false);
+    setSetupError(null);
+    setTransientFeedback(null);
+    setClaimedFlowStep("board");
   }
 
   async function handleCloseOnboarding() {
     setAutoStartPending(false);
     setSetupError(null);
+
+    if (session?.status === "claimed" && activeDevice?.id === session.deviceId) {
+      dismissBoardOnboardingVisual(activeDevice.id);
+    }
 
     const shouldClearTerminalSession =
       activeStage === "welcome" ||
@@ -630,10 +704,7 @@ export default function OnboardingScreen() {
                     <ActionButton
                       disabled={isSavingSettings}
                       label="Continue"
-                      onPress={() => {
-                        setSetupError(null);
-                        setClaimedFlowStep("board");
-                      }}
+                      onPress={handleContinueFromHabitStep}
                     />
                   )
                 : activeStage === "board"
@@ -644,40 +715,41 @@ export default function OnboardingScreen() {
                         onPress={() => void handleFinishSetup()}
                       />
                     )
-                  : activeStage === "welcome"
-                    ? <ActionButton label="Go to my board" onPress={handleOpenBoard} />
                   : null;
+  const showHandoffOverlay = activeStage === "finishing_board" || activeStage === "welcome";
 
   return (
-    <ScreenFrame
-      bottomOverlay={onboardingBottomAction ? <SetupBottomActionBar>{onboardingBottomAction}</SetupBottomActionBar> : undefined}
-      contentContainerStyle={{ flexGrow: 1 }}
-      contentMaxWidth={theme.layout.narrowContentWidth}
-      header={<SetupRouteHeader onClose={() => void handleCloseOnboarding()} title={onboardingHeaderTitle} />}
-      scroll
-    >
-      <SetupFeedbackOverlay
-        body={controller.overlay?.body ?? transientFeedback?.body}
-        dismissible
-        onClose={() => {
-          controller.dismissOverlay();
-          setTransientFeedback(null);
-        }}
-        title={controller.overlay?.title ?? transientFeedback?.title ?? "Status"}
-        tone={controller.overlay?.tone ?? transientFeedback?.tone ?? "neutral"}
-        visible={!!controller.overlay || !!transientFeedback}
-      />
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
+      <StatusBar style="light" />
+      <ScreenFrame
+        bottomOverlay={onboardingBottomAction ? <SetupBottomActionBar>{onboardingBottomAction}</SetupBottomActionBar> : undefined}
+        contentContainerStyle={{ flexGrow: 1 }}
+        contentMaxWidth={theme.layout.narrowContentWidth}
+        header={<SetupRouteHeader onClose={() => void handleCloseOnboarding()} stepLabel={onboardingHeaderStepLabel} />}
+        scroll
+      >
+        <SetupFeedbackOverlay
+          body={controller.overlay?.body ?? transientFeedback?.body}
+          dismissible
+          onClose={() => {
+            controller.dismissOverlay();
+            setTransientFeedback(null);
+          }}
+          title={controller.overlay?.title ?? transientFeedback?.title ?? "Status"}
+          tone={controller.overlay?.tone ?? transientFeedback?.tone ?? "neutral"}
+          visible={!!controller.overlay || !!transientFeedback}
+        />
 
-      <WifiNetworkPicker
-        isScanning={controller.isScanningNetworks}
-        networks={controller.networks}
-        onClose={() => controller.setPickerVisible(false)}
-        onSelect={(network) => controller.selectWifiNetwork(network.ssid)}
-        selectedSsid={controller.draft.wifiSsid}
-        visible={controller.pickerVisible}
-      />
+        <WifiNetworkPicker
+          isScanning={controller.isScanningNetworks}
+          networks={controller.networks}
+          onClose={() => controller.setPickerVisible(false)}
+          onSelect={(network) => controller.selectWifiNetwork(network.ssid)}
+          selectedSsid={controller.draft.wifiSsid}
+          visible={controller.pickerVisible}
+        />
 
-      <View style={{ gap: 6 }}>
+        <View style={{ gap: 6 }}>
         {activeStage === "intro" && !showImmediateJoinApStage ? (
           <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="intro">
             <SetupStageLayout>
@@ -782,7 +854,7 @@ export default function OnboardingScreen() {
                 hideTitle
                 step={2}
                 subtitle="Choose the Wi‑Fi network your board should use."
-                title="Home Wi‑Fi"
+                title="Choose Wi‑Fi"
                 totalSteps={ONBOARDING_TOTAL_STEPS}
               />
 
@@ -919,7 +991,10 @@ export default function OnboardingScreen() {
         ) : null}
 
         {activeStage === "habit" ? (
-          <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="habit">
+          <SetupStageScene
+            disableEnter={suppressInitialSceneAnimation}
+            sceneKey={`habit_${session?.id ?? "none"}_${restoreChoice ?? "fresh"}`}
+          >
             <SetupStageLayout>
               <StepHeader hideTitle step={3} title="Set up your habit" totalSteps={ONBOARDING_TOTAL_STEPS} />
 
@@ -928,10 +1003,14 @@ export default function OnboardingScreen() {
                   <TextField
                     autoCapitalize="words"
                     disabled={isSavingSettings}
+                    invalid={habitNameInvalid}
                     maxLength={HABIT_NAME_MAX_LENGTH}
                     onChangeText={(value) => {
                       setHasEditedSetupDraft(true);
                       setHabitNameInput(value);
+                      if (hasAttemptedHabitContinue && normalizeOnboardingText(value).length > 0) {
+                        setHasAttemptedHabitContinue(normalizedMinimumGoal.length === 0);
+                      }
                     }}
                     placeholder="Habit Name"
                     value={habitNameInput}
@@ -941,10 +1020,14 @@ export default function OnboardingScreen() {
                     <TextField
                       autoCapitalize="sentences"
                       disabled={isSavingSettings}
+                      invalid={minimumGoalInvalid}
                       maxLength={MINIMUM_GOAL_MAX_LENGTH}
                       onChangeText={(value) => {
                         setHasEditedSetupDraft(true);
                         setMinimumGoalInput(value);
+                        if (hasAttemptedHabitContinue && normalizeMinimumGoalForSave(value).length > 0) {
+                          setHasAttemptedHabitContinue(normalizedHabitName.length === 0);
+                        }
                       }}
                       placeholder="15 minutes exercise a day"
                       trailingAccessory={
@@ -1073,75 +1156,28 @@ export default function OnboardingScreen() {
           </SetupStageScene>
         ) : null}
 
-        {activeStage === "finishing_board" ? (
-          <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="finishing_board">
-            <SetupStageLayout>
-              <StepHeader
-                hideTitle
-                step={4}
-                subtitle="Saving the last details and loading the first live snapshot."
-                title="Opening your board"
-                totalSteps={ONBOARDING_TOTAL_STEPS}
-              />
-              <View style={{ alignItems: "center", flex: 1, gap: 12, justifyContent: "center", paddingVertical: 18 }}>
-                <ActivityIndicator color={theme.colors.textPrimary} />
-                <BodyText>Hold here for a moment while the board finishes setup.</BodyText>
-              </View>
-            </SetupStageLayout>
-          </SetupStageScene>
-        ) : null}
+        </View>
+      </ScreenFrame>
 
-        {activeStage === "welcome" ? (
-          <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="welcome">
-            <SetupStageLayout>
-              <StepHeader eyebrow="Ready" hideTitle title="Your board is ready" />
-
-              <View style={{ alignItems: "center", flex: 1, gap: 22, justifyContent: "center", paddingVertical: 18 }}>
-                <View
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 88,
-                    height: 88,
-                    borderRadius: 44,
-                    borderWidth: 1,
-                    borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-                    backgroundColor: withAlpha(theme.colors.bgBase, 0.56),
-                    boxShadow: `0px 20px 44px ${withAlpha(theme.colors.bgBase, 0.22)}`,
-                  }}
-                >
-                  <Ionicons color={previewPalette?.dayOn ?? theme.colors.textPrimary} name="checkmark" size={34} />
-                </View>
-
-                <View style={{ alignItems: "center", gap: 8 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      fontFamily: theme.typography.title.fontFamily,
-                      fontSize: theme.typography.title.fontSize,
-                      lineHeight: theme.typography.title.lineHeight,
-                      textAlign: "center",
-                    }}
-                  >
-                    Setup is done.
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontFamily: theme.typography.body.fontFamily,
-                      fontSize: theme.typography.body.fontSize,
-                      lineHeight: theme.typography.body.lineHeight,
-                      textAlign: "center",
-                    }}
-                  >
-                    On Home, tap the main board button to record your first day.
-                  </Text>
-                </View>
-              </View>
-            </SetupStageLayout>
-          </SetupStageScene>
-        ) : null}
-      </View>
-    </ScreenFrame>
+      {showHandoffOverlay ? (
+        <Animated.View
+          entering={FadeIn.duration(240)}
+          exiting={FadeOut.duration(180)}
+          pointerEvents="auto"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#000000",
+          }}
+        >
+          <OnboardingHandoffAnimation />
+        </Animated.View>
+      ) : null}
+    </View>
   );
 }

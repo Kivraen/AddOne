@@ -83,6 +83,7 @@ private:
   bool bootReadyForTracking_() const;
   unsigned long captureBootHoldDurationWithFeedback_();
   void clearPendingFriendCelebrationSenderStateLocked_();
+  void dismissOnboardingVisual_(bool playExitAnimation = false);
   void performFactoryReset_(const char* reason, bool allowReconnectForCloudReport = false);
   static void syncTaskEntry_(void* context);
   bool copyRuntimeSnapshotPayload_(String& boardDaysJson,
@@ -110,6 +111,7 @@ private:
   void processFactoryQaCommand_(const String& line);
   void processRealtimeCommands_();
   bool prepareTrackerForCurrentTime_();
+  bool renderOnboardingVisualIfActive_(uint8_t brightness);
   bool renderRecoveryVisualIfActive_(uint8_t brightness);
   void resetWifiReconnectPolicy_();
   void setRecoveryVisualStage_(RecoveryVisualStage stage);
@@ -168,6 +170,8 @@ private:
   bool lastWifiConnected_ = false;
   bool wifiReconnectAttemptActive_ = false;
   bool wifiReconnectExhausted_ = false;
+  bool onboardingVisualActive_ = false;
+  unsigned long onboardingVisualActivatedAtMs_ = 0;
   bool recoveryVisualActive_ = false;
   uint8_t wifiReconnectAttemptCount_ = 0;
   RecoveryVisualStage recoveryVisualStage_ = RecoveryVisualStage::PortalReady;

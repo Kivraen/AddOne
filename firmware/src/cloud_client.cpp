@@ -77,10 +77,12 @@ String generateDeviceAuthToken() {
 
 void CloudClient::begin(const DeviceIdentity& identity) {
   identity_ = &identity;
+  authTokenProvisioningSuspended_ = false;
 }
 
 void CloudClient::clearPersistedDeviceAuthToken() {
   deviceAuthToken_ = "";
+  authTokenProvisioningSuspended_ = true;
 
   Preferences prefs;
   prefs.begin(kCloudPrefsNamespace, false);
@@ -675,6 +677,10 @@ bool CloudClient::ensureDeviceAuthToken_() {
   prefs.begin(kCloudPrefsNamespace, false);
   deviceAuthToken_ = prefs.getString(kDeviceAuthTokenKey, "");
   if (deviceAuthToken_.isEmpty()) {
+    if (authTokenProvisioningSuspended_) {
+      prefs.end();
+      return false;
+    }
     deviceAuthToken_ = generateDeviceAuthToken();
     prefs.putString(kDeviceAuthTokenKey, deviceAuthToken_);
   }

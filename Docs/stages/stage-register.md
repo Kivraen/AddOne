@@ -14,7 +14,7 @@ Last updated: March 27, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: `T-049` final iOS release-candidate polish and baseline lock
+- Next brief: continue `T-049` final iOS release-candidate polish and baseline lock from its checkpoint on `codex/s4-final-ios-rc-polish`
 - Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. The old `T-045` artifact gate is no longer the active blocker, and `T-050` is queued as the last planned user-facing polish slice after `T-049`.
 
 ## Stage Notes
@@ -53,7 +53,7 @@ Last updated: March 27, 2026
 - `T-046` is now accepted on `codex/s4-rc-easy-ui-cleanup`: the temporary celebration-preview controls are removed from device settings and the branch stayed within the intended easy UI cleanup scope.
 - `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the Friends actions redesign, adjacent RC UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are preserved together as a bounded user-guided slice.
 - `T-048` is now accepted on `codex/s4-home-confirmation-latency`: the Home command-confirmation path is materially tighter, the stale-refresh truth gap is fixed, and the unplug-and-pull-to-refresh proof is complete.
-- `T-049` is now ready: the next gate is not artifact production but final iOS RC polish and baseline lock before one fresh submission candidate build.
+- `T-049` is now in progress on `codex/s4-final-ios-rc-polish`: substantial polish is checkpointed, but the branch is still not a locked RC baseline because the Home today-toggle and KPI consistency path needs one narrower regression pass.
 - `T-050` is now ready behind `T-049`: the first-device onboarding and setup journey should be polished as the last major product-facing slice before the final iOS RC build and submission prep.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.

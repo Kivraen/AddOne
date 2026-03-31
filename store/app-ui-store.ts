@@ -28,15 +28,18 @@ interface AppUiState {
     | undefined
   >;
   hasHydrated: boolean;
+  hiddenRemovingDeviceIds: Record<string, true | undefined>;
   pendingBoardEditorOpen: boolean;
   pendingTodayStateByDevice: Record<string, PendingTodayState | undefined>;
   recoveryNeededRevisionByDevice: Record<string, number | undefined>;
   clearBoardEditorOpen: () => void;
   clearConnectivityIssue: (deviceId: string) => void;
+  clearHiddenRemovingDevice: (deviceId: string) => void;
   clearOnboardingSession: () => void;
   clearPendingTodayState: (deviceId: string) => void;
   markPendingTodayStateConfirmed: (deviceId: string) => void;
   clearRuntimeConflictRecovery: (deviceId: string) => void;
+  hideRemovingDevice: (deviceId: string) => void;
   markConnectivityIssue: (
     deviceId: string,
     params: {
@@ -68,6 +71,7 @@ export const useAppUiStore = create<AppUiState>()(
       ...PERSISTED_APP_UI_STATE,
       connectivityIssueByDevice: {},
       hasHydrated: false,
+      hiddenRemovingDeviceIds: {},
       pendingBoardEditorOpen: false,
       pendingTodayStateByDevice: {},
       clearBoardEditorOpen: () =>
@@ -83,6 +87,16 @@ export const useAppUiStore = create<AppUiState>()(
           const next = { ...state.connectivityIssueByDevice };
           delete next[deviceId];
           return { connectivityIssueByDevice: next };
+        }),
+      clearHiddenRemovingDevice: (deviceId) =>
+        set((state) => {
+          if (!(deviceId in state.hiddenRemovingDeviceIds)) {
+            return state;
+          }
+
+          const next = { ...state.hiddenRemovingDeviceIds };
+          delete next[deviceId];
+          return { hiddenRemovingDeviceIds: next };
         }),
       clearOnboardingSession: () =>
         set((state) => {
@@ -161,6 +175,19 @@ export const useAppUiStore = create<AppUiState>()(
             },
           };
         }),
+      hideRemovingDevice: (deviceId) =>
+        set((state) => {
+          if (state.hiddenRemovingDeviceIds[deviceId]) {
+            return state;
+          }
+
+          return {
+            hiddenRemovingDeviceIds: {
+              ...state.hiddenRemovingDeviceIds,
+              [deviceId]: true,
+            },
+          };
+        }),
       requestBoardEditorOpen: () =>
         set({
           pendingBoardEditorOpen: true,
@@ -220,6 +247,7 @@ export async function resetPersistedAppUiState() {
     ...PERSISTED_APP_UI_STATE,
     connectivityIssueByDevice: {},
     hasHydrated: true,
+    hiddenRemovingDeviceIds: {},
     pendingBoardEditorOpen: false,
     pendingTodayStateByDevice: {},
     recoveryNeededRevisionByDevice: {},

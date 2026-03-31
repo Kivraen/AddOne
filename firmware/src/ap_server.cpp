@@ -142,6 +142,7 @@ void ApServer::begin(const DeviceIdentity& identity, ProvisioningStore& provisio
   provisioningStore_ = &provisioningStore;
   provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
   completedProvisioning_ = false;
+  failureVisualPending_ = false;
   provisioningAttemptStartedAtMs_ = 0;
   lastFailureReason_ = "";
 
@@ -180,6 +181,12 @@ void ApServer::begin(const DeviceIdentity& identity, ProvisioningStore& provisio
   Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
 }
 
+bool ApServer::consumeFailureVisualPending() {
+  const bool pending = failureVisualPending_;
+  failureVisualPending_ = false;
+  return pending;
+}
+
 bool ApServer::isWifiConnected() const {
   return WiFi.status() == WL_CONNECTED;
 }
@@ -208,6 +215,7 @@ void ApServer::loop() {
       if (lastFailureReason_.isEmpty()) {
         lastFailureReason_ = "The device could not join that Wi‑Fi in time. Check the password and try again.";
       }
+      failureVisualPending_ = true;
       resetProvisioningAttempt_();
     }
   }
@@ -235,6 +243,7 @@ void ApServer::resetForRecovery() {
 
   provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
   completedProvisioning_ = false;
+  failureVisualPending_ = false;
   provisioningAttemptStartedAtMs_ = 0;
   lastFailureReason_ = "";
 }

@@ -2,15 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { ReactNode, useEffect } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from "react-native";
+import LottieView from "lottie-react-native";
 import Animated, {
-  Easing,
   FadeIn,
   FadeOut,
   LinearTransition,
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
   withTiming,
 } from "react-native-reanimated";
 
@@ -32,9 +28,6 @@ const SETUP_SCENE_LAYOUT_MS = 240;
 const SETUP_SWAP_ENTER_MS = 180;
 const SETUP_SWAP_EXIT_MS = 120;
 const SETUP_SWAP_LAYOUT_MS = 180;
-const SETUP_WIFI_SCAN_LOOP_MS = 1800;
-const SETUP_WIFI_SCAN_RING_SIZE = 152;
-const SETUP_WIFI_SCAN_ORBIT_RADIUS = 54;
 
 export function SetupActionButton({
   disabled = false,
@@ -57,18 +50,11 @@ export function SetupActionButton({
         minHeight: 56,
         borderRadius: theme.radius.card,
         borderCurve: "continuous",
-        borderWidth: 1,
-        borderColor: secondary
-          ? withAlpha(theme.colors.textPrimary, pressed ? 0.14 : 0.1)
-          : withAlpha(theme.colors.textPrimary, pressed ? 0.16 : 0.12),
         backgroundColor: secondary
           ? withAlpha(theme.colors.bgElevated, pressed ? 0.98 : 0.9)
           : pressed
             ? withAlpha(theme.colors.textPrimary, 0.92)
             : theme.colors.textPrimary,
-        boxShadow: secondary
-          ? `0px 14px 30px ${withAlpha(theme.colors.bgBase, 0.18)}`
-          : `0px 18px 34px ${withAlpha(theme.colors.bgBase, 0.22)}`,
         opacity: disabled ? 0.45 : 1,
         paddingHorizontal: 18,
         transform: [{ scale: pressed ? 0.988 : 1 }],
@@ -131,13 +117,15 @@ export function SetupInlineButton({
 export function SetupRouteHeader({
   label,
   onClose,
+  stepLabel,
   title,
 }: {
   label?: string;
   onClose: () => void;
+  stepLabel?: string;
   title?: string;
 }) {
-  const hasBrandContent = Boolean(label || title);
+  const hasBrandContent = Boolean(stepLabel || label || title);
   const isTitleOnly = Boolean(title && !label);
 
   return (
@@ -151,33 +139,39 @@ export function SetupRouteHeader({
     >
       {hasBrandContent ? (
         <View style={{ flex: 1, gap: label ? 6 : 0, paddingRight: 16 }}>
-          {label ? (
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontFamily: theme.typography.micro.fontFamily,
-                fontSize: theme.typography.micro.fontSize,
-                lineHeight: theme.typography.micro.lineHeight,
-                letterSpacing: theme.typography.micro.letterSpacing,
-                textTransform: "uppercase",
-              }}
-            >
-              {label}
-            </Text>
-          ) : null}
-          {title ? (
-            <Text
-              style={{
-                color: isTitleOnly ? theme.colors.textPrimary : withAlpha(theme.colors.textPrimary, 0.82),
-                fontFamily: isTitleOnly ? theme.typography.display.fontFamily : theme.typography.title.fontFamily,
-                fontSize: isTitleOnly ? 26 : 22,
-                lineHeight: isTitleOnly ? 30 : 24,
-                letterSpacing: isTitleOnly ? -0.5 : -0.25,
-              }}
-            >
-              {title}
-            </Text>
-          ) : null}
+          {stepLabel ? (
+            <SetupStageChip align="start" label={stepLabel} />
+          ) : (
+            <>
+              {label ? (
+                <Text
+                  style={{
+                    color: theme.colors.textTertiary,
+                    fontFamily: theme.typography.micro.fontFamily,
+                    fontSize: theme.typography.micro.fontSize,
+                    lineHeight: theme.typography.micro.lineHeight,
+                    letterSpacing: theme.typography.micro.letterSpacing,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {label}
+                </Text>
+              ) : null}
+              {title ? (
+                <Text
+                  style={{
+                    color: isTitleOnly ? theme.colors.textPrimary : withAlpha(theme.colors.textPrimary, 0.82),
+                    fontFamily: isTitleOnly ? theme.typography.display.fontFamily : theme.typography.title.fontFamily,
+                    fontSize: isTitleOnly ? 26 : 22,
+                    lineHeight: isTitleOnly ? 30 : 24,
+                    letterSpacing: isTitleOnly ? -0.5 : -0.25,
+                  }}
+                >
+                  {title}
+                </Text>
+              ) : null}
+            </>
+          )}
         </View>
       ) : null}
       <IconButton icon="close-outline" iconSize={16} onPress={onClose} size={36} />
@@ -272,29 +266,19 @@ export function SetupBottomActionBar({
       }}
     >
       <View style={{ alignSelf: "center", maxWidth, width: "100%" }}>
-        <BlurView
-          intensity={24}
-          tint="dark"
+        <View
           style={{
-            overflow: "hidden",
-            borderRadius: theme.radius.hero,
-            borderCurve: "continuous",
-            borderWidth: 1,
-            borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-            backgroundColor: withAlpha(theme.colors.bgBase, 0.42),
+            paddingBottom: 8,
           }}
         >
           <View
             style={{
               gap: 12,
-              paddingHorizontal: 14,
-              paddingTop: 14,
-              paddingBottom: 8,
             }}
           >
             {children}
           </View>
-        </BlurView>
+        </View>
       </View>
     </View>
   );
@@ -305,60 +289,6 @@ export function SetupWifiScanState({
 }: {
   subtitle?: string;
 }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, {
-        duration: SETUP_WIFI_SCAN_LOOP_MS,
-        easing: Easing.linear,
-      }),
-      -1,
-      false,
-    );
-  }, [progress]);
-
-  const outerRingStyle = useAnimatedStyle(() => {
-    const scale = interpolate(progress.value, [0, 1], [0.78, 1.08]);
-    const opacity = interpolate(progress.value, [0, 0.7, 1], [0.24, 0.08, 0]);
-
-    return {
-      opacity,
-      transform: [{ scale }],
-    };
-  });
-
-  const innerRingStyle = useAnimatedStyle(() => {
-    const shifted = (progress.value + 0.35) % 1;
-    const scale = interpolate(shifted, [0, 1], [0.68, 0.98]);
-    const opacity = interpolate(shifted, [0, 0.7, 1], [0.18, 0.06, 0]);
-
-    return {
-      opacity,
-      transform: [{ scale }],
-    };
-  });
-
-  const centerPulseStyle = useAnimatedStyle(() => {
-    const scale = interpolate(progress.value, [0, 0.5, 1], [0.96, 1.04, 0.96]);
-    const opacity = interpolate(progress.value, [0, 0.5, 1], [0.82, 1, 0.82]);
-
-    return {
-      opacity,
-      transform: [{ scale }],
-    };
-  });
-
-  const orbitDotStyle = useAnimatedStyle(() => {
-    const angle = progress.value * Math.PI * 2 - Math.PI / 2;
-    const translateX = Math.cos(angle) * SETUP_WIFI_SCAN_ORBIT_RADIUS;
-    const translateY = Math.sin(angle) * SETUP_WIFI_SCAN_ORBIT_RADIUS;
-
-    return {
-      transform: [{ translateX }, { translateY }],
-    };
-  });
-
   return (
     <View
       style={{
@@ -366,7 +296,7 @@ export function SetupWifiScanState({
         flex: 1,
         justifyContent: "center",
         paddingBottom: 4,
-        paddingTop: 28,
+        paddingTop: 52,
       }}
     >
       <View
@@ -380,79 +310,29 @@ export function SetupWifiScanState({
         <View
           style={{
             alignItems: "center",
-            height: 176,
+            height: 220,
             justifyContent: "center",
-            width: 176,
+            width: 220,
           }}
         >
-          <Animated.View
-            style={[
-              {
-                position: "absolute",
-                height: SETUP_WIFI_SCAN_RING_SIZE,
-                width: SETUP_WIFI_SCAN_RING_SIZE,
-                borderRadius: SETUP_WIFI_SCAN_RING_SIZE / 2,
-                borderWidth: 1,
-                borderColor: withAlpha(theme.colors.accentAmber, 0.22),
-                backgroundColor: withAlpha(theme.colors.accentAmber, 0.03),
-              },
-              outerRingStyle,
-            ]}
-          />
-          <Animated.View
-            style={[
-              {
-                position: "absolute",
-                height: SETUP_WIFI_SCAN_RING_SIZE - 28,
-                width: SETUP_WIFI_SCAN_RING_SIZE - 28,
-                borderRadius: (SETUP_WIFI_SCAN_RING_SIZE - 28) / 2,
-                borderWidth: 1,
-                borderColor: withAlpha(theme.colors.textPrimary, 0.12),
-              },
-              innerRingStyle,
-            ]}
-          />
-
-          <Animated.View
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              height: 96,
-              width: 96,
-              borderRadius: 48,
-              backgroundColor: withAlpha(theme.colors.bgElevated, 0.72),
-              borderWidth: 1,
-              borderColor: withAlpha(theme.colors.textPrimary, 0.08),
-              boxShadow: `0px 16px 36px ${withAlpha(theme.colors.bgBase, 0.24)}`,
-            }}
-            pointerEvents="none"
-          >
-            <Animated.View style={centerPulseStyle}>
-              <Ionicons color={theme.colors.accentAmber} name="wifi" size={42} />
-            </Animated.View>
-          </Animated.View>
-
           <View
-            pointerEvents="none"
             style={{
-              position: "absolute",
               alignItems: "center",
               justifyContent: "center",
-              height: 176,
-              width: 176,
+              height: 220,
+              width: 220,
+              marginTop: 14,
             }}
+            pointerEvents="none"
           >
-            <Animated.View
-              style={[
-                {
-                  height: 12,
-                  width: 12,
-                  borderRadius: 6,
-                  backgroundColor: theme.colors.accentAmber,
-                  boxShadow: `0px 0px 18px ${withAlpha(theme.colors.accentAmber, 0.45)}`,
-                },
-                orbitDotStyle,
-              ]}
+            <LottieView
+              autoPlay
+              loop
+              source={require("../../assets/animations/wifi-connection.json")}
+              style={{
+                height: 220,
+                width: 220,
+              }}
             />
           </View>
         </View>
@@ -535,6 +415,7 @@ export function SetupBodyText({
         fontFamily: theme.typography.body.fontFamily,
         fontSize: theme.typography.body.fontSize,
         lineHeight: theme.typography.body.lineHeight,
+        textAlign: "center",
       }}
     >
       {children}
@@ -542,11 +423,17 @@ export function SetupBodyText({
   );
 }
 
-function SetupStageChip({ label }: { label: string }) {
+function SetupStageChip({
+  align = "center",
+  label,
+}: {
+  align?: "center" | "start";
+  label: string;
+}) {
   return (
     <View
       style={{
-        alignSelf: "center",
+        alignSelf: align === "start" ? "flex-start" : "center",
         borderRadius: theme.radius.full,
         borderWidth: 1,
         borderColor: withAlpha(theme.colors.textPrimary, 0.08),
@@ -574,11 +461,13 @@ function SetupStageChip({ label }: { label: string }) {
 export function SetupStatusCard({
   body,
   icon,
+  trailingAccessory,
   title,
   tone = "neutral",
 }: {
   body: string;
   icon?: ReactNode;
+  trailingAccessory?: ReactNode;
   title?: string;
   tone?: SetupStatusTone;
 }) {
@@ -601,7 +490,7 @@ export function SetupStatusCard({
           }
         : {
             border: withAlpha(theme.colors.textPrimary, 0.08),
-            fill: withAlpha(theme.colors.textPrimary, 0.04),
+            fill: withAlpha(theme.colors.bgElevated, 0.92),
             icon: theme.colors.textSecondary,
             title: theme.colors.textPrimary,
             body: theme.colors.textSecondary,
@@ -622,20 +511,23 @@ export function SetupStatusCard({
     >
       {(icon || title) ? (
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-          {icon ? <View style={{ alignItems: "center", justifyContent: "center" }}>{icon}</View> : null}
-          {title ? (
-            <Text
-              style={{
-                color: toneColors.title,
-                flex: 1,
-                fontFamily: theme.typography.label.fontFamily,
-                fontSize: theme.typography.label.fontSize,
-                lineHeight: theme.typography.label.lineHeight,
-              }}
-            >
-              {title}
-            </Text>
-          ) : null}
+          <View style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 10 }}>
+            {icon ? <View style={{ alignItems: "center", justifyContent: "center" }}>{icon}</View> : null}
+            {title ? (
+              <Text
+                style={{
+                  color: toneColors.title,
+                  flex: 1,
+                  fontFamily: theme.typography.label.fontFamily,
+                  fontSize: theme.typography.label.fontSize,
+                  lineHeight: theme.typography.label.lineHeight,
+                }}
+              >
+                {title}
+              </Text>
+            ) : null}
+          </View>
+          {trailingAccessory}
         </View>
       ) : null}
       <Text
@@ -703,51 +595,56 @@ export function SetupFeedbackOverlay({
         style={{
           alignItems: "center",
           flex: 1,
-          justifyContent: "center",
+          justifyContent: "flex-start",
           paddingHorizontal: 22,
-          paddingVertical: 22,
+          paddingTop: 176,
+          paddingBottom: 22,
         }}
       >
-        <BlurView
-          intensity={28}
-          tint="dark"
+        <Pressable
+          disabled={!dismissible}
+          onPress={() => onClose?.()}
           style={{
             position: "absolute",
             top: 0,
             right: 0,
             bottom: 0,
             left: 0,
-          }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
-          }}
-        />
-        <GlassCard
-          style={{
-            width: "100%",
-            gap: 14,
-            paddingHorizontal: 18,
-            paddingVertical: 18,
-            backgroundColor: withAlpha(theme.colors.bgElevated, 0.78),
-            borderColor: withAlpha(theme.colors.textPrimary, 0.12),
-            boxShadow: `0px 22px 64px ${withAlpha(theme.colors.bgBase, 0.34)}`,
           }}
         >
-          {dismissible ? (
-            <View style={{ alignItems: "flex-end" }}>
-              <IconButton icon="close-outline" onPress={() => onClose?.()} />
-            </View>
-          ) : null}
-          <SetupStatusCard body={body} title={title} tone={tone} />
-        </GlassCard>
+          <BlurView
+            intensity={28}
+            tint="dark"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
+            }}
+          />
+        </Pressable>
+        <View style={{ width: "100%", maxWidth: theme.layout.narrowContentWidth }}>
+          <SetupStatusCard
+            body={body}
+            title={title}
+            tone={tone}
+            trailingAccessory={
+              dismissible ? <IconButton icon="close-outline" onPress={() => onClose?.()} size={32} /> : undefined
+            }
+          />
+        </View>
       </View>
     </Modal>
   );
@@ -930,25 +827,32 @@ export function SetupStepHeader({
   title: string;
   totalSteps?: number;
 }) {
-  const headerLabel = step ? `Step ${step} of ${totalSteps}` : eyebrow;
-  const headerGap = hideTitle ? 22 : 16;
-  const chipSpacing = hideTitle
+  const contextualLabel = step ? `Step ${step} of ${totalSteps}` : eyebrow;
+  const titleSpacing = hideTitle || contextualLabel
     ? {
         paddingTop: 18,
-        paddingBottom: 26,
+        paddingBottom: subtitle ? 8 : 0,
       }
-    : {
-        paddingBottom: 28,
-      };
+    : undefined;
 
   return (
-    <View style={{ gap: headerGap }}>
-      {headerLabel ? (
-        <View style={chipSpacing}>
-          <SetupStageChip label={headerLabel} />
-        </View>
-      ) : null}
-      {!hideTitle ? (
+    <View style={{ gap: subtitle ? 12 : 0 }}>
+      <View style={titleSpacing}>
+        {contextualLabel && !step ? (
+          <Text
+            style={{
+              color: theme.colors.textTertiary,
+              fontFamily: theme.typography.micro.fontFamily,
+              fontSize: theme.typography.micro.fontSize,
+              lineHeight: theme.typography.micro.lineHeight,
+              letterSpacing: theme.typography.micro.letterSpacing,
+              textAlign: "center",
+              textTransform: "uppercase",
+            }}
+          >
+            {contextualLabel}
+          </Text>
+        ) : null}
         <Text
           style={{
             color: theme.colors.textPrimary,
@@ -956,11 +860,12 @@ export function SetupStepHeader({
             fontSize: 32,
             lineHeight: 36,
             letterSpacing: -0.9,
+            textAlign: "center",
           }}
         >
           {title}
         </Text>
-      ) : null}
+      </View>
       {subtitle ? <SetupBodyText>{subtitle}</SetupBodyText> : null}
     </View>
   );
@@ -1146,6 +1051,7 @@ export function SetupPasswordField({
 export function SetupTextField({
   autoCapitalize = "none",
   disabled = false,
+  invalid = false,
   maxLength,
   onChangeText,
   placeholder,
@@ -1155,6 +1061,7 @@ export function SetupTextField({
 }: {
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   disabled?: boolean;
+  invalid?: boolean;
   maxLength?: number;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -1162,6 +1069,9 @@ export function SetupTextField({
   trailingAccessory?: ReactNode;
   value: string;
 }) {
+  const borderColor = invalid ? withAlpha(theme.colors.statusErrorMuted, 0.76) : withAlpha(theme.colors.textPrimary, 0.14);
+  const backgroundColor = invalid ? withAlpha(theme.colors.statusErrorMuted, 0.08) : withAlpha(theme.colors.bgBase, 0.78);
+
   if (trailingAccessory) {
     return (
       <View
@@ -1173,8 +1083,8 @@ export function SetupTextField({
           borderRadius: theme.radius.card,
           borderCurve: "continuous",
           borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.14),
-          backgroundColor: withAlpha(theme.colors.bgBase, 0.78),
+          borderColor,
+          backgroundColor,
           boxShadow: `0px 12px 28px ${withAlpha(theme.colors.bgBase, 0.18)}`,
           opacity: disabled ? 0.6 : 1,
           paddingLeft: 16,
@@ -1220,8 +1130,8 @@ export function SetupTextField({
         borderRadius: theme.radius.card,
         borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: withAlpha(theme.colors.textPrimary, 0.14),
-        backgroundColor: withAlpha(theme.colors.bgBase, 0.78),
+        borderColor,
+        backgroundColor,
         boxShadow: `0px 12px 28px ${withAlpha(theme.colors.bgBase, 0.18)}`,
         color: theme.colors.textPrimary,
         fontFamily: theme.typography.body.fontFamily,

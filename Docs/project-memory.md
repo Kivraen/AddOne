@@ -64,7 +64,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
 - Next brief: `T-049` final iOS release-candidate polish and baseline lock
-- Current execution task: first run `T-049` to finalize sign-in/auth copy, align Expo SDK 55 patch dependencies, and fold the accepted `T-046` through `T-048` app fixes into one explicit iOS RC baseline; then run `T-050` as the final user-facing polish pass on first-device onboarding and setup before the next build
+- Current execution task: continue `T-049` from the checkpoint on `codex/s4-final-ios-rc-polish` to finish the remaining Home today-toggle and KPI consistency regression work, then lock one explicit iOS RC baseline; after that, run `T-050` as the final user-facing polish pass on first-device onboarding and setup before the next build
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, and `T-048` is now accepted as the Home confirmation-latency follow-up. They are now direct inputs to the final ship baseline rather than side work waiting behind a blocked artifact gate.
 
 ## Current Blockers
@@ -100,7 +100,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-046` is now accepted on `codex/s4-rc-easy-ui-cleanup`: the temporary celebration-preview controls were removed from the device settings overview, and the slice stayed within the intended UI-only scope.
 - `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the user-guided Friends controls redesign, the adjacent Home and settings UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are now checkpointed together as a bounded RC UI iteration slice.
 - `T-048` is now accepted on `codex/s4-home-confirmation-latency`: the Home command-confirmation path, stale reload truth, owner realtime invalidation, and Home-only offline refresh behavior are all tightened, and the final unplug-and-pull-to-refresh proof is now complete.
-- `T-049` is now the active next execution brief: the final iOS RC still needs one explicit polished app baseline before submission work begins, because the finished `dce8541` build does not yet include the accepted later RC fixes, the final auth copy cleanup, or Expo SDK 55 patch alignment.
+- `T-049` is now in progress on `codex/s4-final-ios-rc-polish`: substantial sign-in, onboarding, firmware, and Home polish is checkpointed, dependency alignment has been exercised, and the remaining unfinished area is the Home today-toggle and KPI consistency path before the branch can be treated as the locked RC baseline.
 - `T-050` is now queued immediately after `T-049`: the first-device onboarding and setup journey is working, but it is still too raw in pacing, hierarchy, copy, and completion tone for a store-facing release and should be the last major product-facing polish slice before the final iOS RC build.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.

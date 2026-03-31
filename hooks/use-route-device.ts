@@ -2,6 +2,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo } from "react";
 
 import { useDevices } from "@/hooks/use-devices";
+import { useAppUiStore } from "@/store/app-ui-store";
 
 function normalizeRouteParam(value?: string | string[] | null) {
   if (Array.isArray(value)) {
@@ -13,20 +14,26 @@ function normalizeRouteParam(value?: string | string[] | null) {
 
 export function useRouteDevice() {
   const params = useLocalSearchParams<{ deviceId?: string | string[] }>();
-  const { activeDeviceId, devices, isLoading, setActiveDevice } = useDevices();
+  const { activeDeviceId, allDevices, devices, isLoading, setActiveDevice } = useDevices();
+  const hiddenRemovingDeviceIds = useAppUiStore((state) => state.hiddenRemovingDeviceIds);
   const deviceId = normalizeRouteParam(params.deviceId);
-  const device = useMemo(
+  const visibleDevice = useMemo(
     () => (deviceId ? devices.find((candidate) => candidate.id === deviceId) ?? null : null),
     [deviceId, devices],
   );
+  const hiddenRemovingDevice = useMemo(
+    () => (deviceId && hiddenRemovingDeviceIds[deviceId] ? allDevices.find((candidate) => candidate.id === deviceId) ?? null : null),
+    [allDevices, deviceId, hiddenRemovingDeviceIds],
+  );
+  const device = visibleDevice ?? hiddenRemovingDevice ?? null;
 
   useEffect(() => {
-    if (!device?.id || activeDeviceId === device.id) {
+    if (!visibleDevice?.id || activeDeviceId === visibleDevice.id) {
       return;
     }
 
-    setActiveDevice(device.id);
-  }, [activeDeviceId, device?.id, setActiveDevice]);
+    setActiveDevice(visibleDevice.id);
+  }, [activeDeviceId, setActiveDevice, visibleDevice?.id]);
 
   return {
     device,

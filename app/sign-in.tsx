@@ -1,10 +1,8 @@
-import { Image } from "expo-image";
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Pressable,
   Text,
   TextInput,
@@ -13,6 +11,7 @@ import {
 } from "react-native";
 
 import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
+import { AddOneLogoWordmark } from "@/components/branding/addone-logo";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,7 +19,8 @@ import { withAlpha } from "@/lib/color";
 
 const IS_IOS = process.env.EXPO_OS === "ios";
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
-const SIGN_IN_LOGO = require("../assets/branding/sign-in-logo.png");
+const OTP_CODE_LENGTH = 6;
+const OTP_PLACEHOLDER = "123456";
 
 function SectionCopy({ children, tone = "secondary", textAlign = "left" }: { children: string; tone?: "primary" | "secondary" | "error"; textAlign?: "left" | "center" }) {
   const color =
@@ -95,11 +95,27 @@ function formatOtpVerificationError(error: string) {
   return error;
 }
 
+function getAuthFieldStyle({ focused = false, readOnly = false }: { focused?: boolean; readOnly?: boolean }) {
+  return {
+    borderRadius: theme.radius.sheet,
+    borderWidth: focused ? 1.5 : 1,
+    borderColor: focused
+      ? withAlpha(theme.colors.textPrimary, 0.28)
+      : readOnly
+        ? withAlpha(theme.colors.textPrimary, 0.14)
+        : withAlpha(theme.colors.textPrimary, 0.18),
+    backgroundColor: readOnly
+      ? withAlpha(theme.colors.bgStrong, 0.78)
+      : withAlpha(theme.colors.bgSurface, 0.86),
+  };
+}
+
 export default function SignInScreen() {
   const { isSendingOtp, isVerifyingOtp, mode, pendingEmail, sendEmailOtp, status, verifyEmailOtp } = useAuth();
   const [email, setEmail] = useState(pendingEmail ?? "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<"email" | "otp" | null>(null);
   const [step, setStep] = useState<"email" | "otp">("email");
   const [resendCooldown, setResendCooldown] = useState(0);
   const { height: windowHeight } = useWindowDimensions();
@@ -108,11 +124,21 @@ export default function SignInScreen() {
   const isOtpStep = step === "otp";
   const isResendBlocked = resendCooldown > 0;
   const trimmedEmail = email.trim().toLowerCase();
-  const emailStepTopOffset = Math.max(theme.spacing[40], Math.round((windowHeight - 120) * 0.18));
+  const signInContentMinHeight = Math.max(560, windowHeight - 160);
   const emailButtonLabel = trimmedEmail ? "Send code" : "Type your email to continue";
   const isSubmitDisabled = isOtpStep
-    ? normalizedCode.length < 6 || isVerifyingOtp
+    ? normalizedCode.length < OTP_CODE_LENGTH || isVerifyingOtp
     : !trimmedEmail || isSendingOtp || isResendBlocked;
+  const isPrimaryActionEnabled = !isSubmitDisabled;
+  const primaryActionBackground = isPrimaryActionEnabled
+    ? theme.colors.textPrimary
+    : withAlpha(theme.colors.bgElevated, 0.94);
+  const primaryActionBorderColor = isPrimaryActionEnabled
+    ? "transparent"
+    : withAlpha(theme.colors.textPrimary, 0.12);
+  const primaryActionTextColor = isPrimaryActionEnabled
+    ? theme.colors.textInverse
+    : withAlpha(theme.colors.textPrimary, 0.68);
 
   useEffect(() => {
     if (resendCooldown <= 0) {
@@ -158,7 +184,7 @@ export default function SignInScreen() {
 
   async function handleVerifyOtp() {
     const nextEmail = email.trim().toLowerCase();
-    if (!nextEmail || normalizedCode.length < 6 || isVerifyingOtp) {
+    if (!nextEmail || normalizedCode.length < OTP_CODE_LENGTH || isVerifyingOtp) {
       return;
     }
 
@@ -179,26 +205,6 @@ export default function SignInScreen() {
     return <Redirect href="/" />;
   }
 
-  const logo = (
-    <View
-      style={{
-        alignItems: "center",
-        paddingBottom: 12,
-        paddingHorizontal: theme.layout.pagePadding,
-      }}
-    >
-      <Image
-        contentFit="contain"
-        source={SIGN_IN_LOGO}
-        style={{
-          height: 44,
-          opacity: 0.92,
-          width: 220,
-        }}
-      />
-    </View>
-  );
-
   return (
     <>
       <Stack.Screen
@@ -217,16 +223,32 @@ export default function SignInScreen() {
       />
 
       <ScreenScrollView
-        bottomInset={120}
-        bottomOverlay={logo}
+        bottomInset={theme.layout.scrollBottom}
         contentContainerStyle={{ flexGrow: 1 }}
         contentMaxWidth={theme.layout.narrowContentWidth}
       >
-        <KeyboardAvoidingView behavior={IS_IOS ? "padding" : undefined} keyboardVerticalOffset={16} style={{ flex: 1 }}>
-          <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-            <View style={{ flex: 1, minHeight: "100%" }}>
-              <ScreenSection style={{ flex: 1, justifyContent: "center", gap: 24, paddingTop: 24, paddingBottom: 0 }}>
-                <View style={{ gap: 24, paddingTop: isOtpStep ? 0 : emailStepTopOffset }}>
+        <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
+          <View style={{ flex: 1, minHeight: signInContentMinHeight }}>
+            <ScreenSection style={{ flex: 1, gap: 0, paddingTop: 8, paddingBottom: 0 }}>
+              <View style={{ flex: isOtpStep ? 0.18 : 0.24 }} />
+
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingBottom: theme.spacing[20],
+                }}
+              >
+                <AddOneLogoWordmark color="#FFFFFF" opacity={0.9} width={172} />
+              </View>
+
+              <View style={{ flex: isOtpStep ? 0.42 : 0.52 }} />
+
+              <View
+                style={{
+                  paddingBottom: theme.spacing[24],
+                }}
+              >
+                <View style={{ gap: 24 }}>
                   {isOtpStep ? (
                     <View style={{ alignItems: "center" }}>
                       <Text
@@ -241,9 +263,9 @@ export default function SignInScreen() {
                       >
                         Check your email
                       </Text>
-                      <SectionCopy textAlign="center">{`Enter the 6-digit code sent to ${trimmedEmail}.`}</SectionCopy>
+                      <SectionCopy textAlign="center">{`Enter the ${OTP_CODE_LENGTH}-digit code sent to ${trimmedEmail}.`}</SectionCopy>
                     </View>
-                  ) : null}
+                    ) : null}
 
                   <GlassCard
                     style={
@@ -285,25 +307,30 @@ export default function SignInScreen() {
                           setEmail(value);
                           setError(null);
                         }}
+                        onFocus={() => {
+                          setFocusedField("email");
+                        }}
+                        onBlur={() => {
+                          setFocusedField((current) => (current === "email" ? null : current));
+                        }}
                         onSubmitEditing={() => {
                           void handleSendOtp();
                         }}
                         placeholder="Email"
                         placeholderTextColor={theme.colors.textMuted}
                         returnKeyType="send"
-                        style={{
-                          borderRadius: theme.radius.sheet,
-                          borderWidth: 1,
-                          borderColor: theme.materials.panel.border,
-                          backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
-                          color: theme.colors.textPrimary,
-                          fontFamily: theme.typography.body.fontFamily,
-                          fontSize: theme.typography.body.fontSize,
-                          lineHeight: theme.typography.body.lineHeight,
-                          paddingHorizontal: 16,
-                          paddingVertical: 18,
-                          textAlign: "center",
-                        }}
+                        style={[
+                          getAuthFieldStyle({ focused: focusedField === "email" }),
+                          {
+                            color: theme.colors.textPrimary,
+                            fontFamily: theme.typography.body.fontFamily,
+                            fontSize: theme.typography.body.fontSize,
+                            lineHeight: theme.typography.body.lineHeight,
+                            paddingHorizontal: 16,
+                            paddingVertical: 18,
+                            textAlign: "center",
+                          },
+                        ]}
                         value={email}
                       />
                     ) : (
@@ -319,22 +346,21 @@ export default function SignInScreen() {
                             keyboardType="email-address"
                             placeholder="Email"
                             placeholderTextColor={theme.colors.textMuted}
-                            style={{
-                              borderRadius: theme.radius.sheet,
-                              borderWidth: 1,
-                              borderColor: theme.materials.panel.border,
-                              backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
-                            color: theme.colors.textPrimary,
-                            fontFamily: theme.typography.body.fontFamily,
-                            fontSize: theme.typography.body.fontSize,
-                            lineHeight: theme.typography.body.lineHeight,
-                            opacity: 0.72,
-                            paddingHorizontal: 16,
-                            paddingVertical: 16,
-                            textAlign: "center",
-                          }}
-                          value={email}
-                        />
+                            style={[
+                              getAuthFieldStyle({ readOnly: true }),
+                              {
+                                color: theme.colors.textPrimary,
+                                fontFamily: theme.typography.body.fontFamily,
+                                fontSize: theme.typography.body.fontSize,
+                                lineHeight: theme.typography.body.lineHeight,
+                                opacity: 0.72,
+                                paddingHorizontal: 16,
+                                paddingVertical: 16,
+                                textAlign: "center",
+                              },
+                            ]}
+                            value={email}
+                          />
                         </View>
 
                         <TextInput
@@ -342,31 +368,36 @@ export default function SignInScreen() {
                           autoComplete="one-time-code"
                           autoCorrect={false}
                           blurOnSubmit
+                          inputAccessoryViewButtonLabel=""
+                          inputMode="numeric"
                           keyboardType={IS_IOS ? "number-pad" : "numeric"}
+                          maxLength={OTP_CODE_LENGTH}
                           onChangeText={(value) => {
-                            setCode(value);
+                            setCode(value.replace(/\D+/g, "").slice(0, OTP_CODE_LENGTH));
                             setError(null);
                           }}
-                          onSubmitEditing={() => {
-                            void handleVerifyOtp();
+                          onFocus={() => {
+                            setFocusedField("otp");
                           }}
-                          placeholder="123456"
+                          onBlur={() => {
+                            setFocusedField((current) => (current === "otp" ? null : current));
+                          }}
+                          placeholder={OTP_PLACEHOLDER}
                           placeholderTextColor={theme.colors.textMuted}
-                          returnKeyType="done"
-                          style={{
-                            borderRadius: theme.radius.sheet,
-                            borderWidth: 1,
-                            borderColor: theme.materials.panel.border,
-                            backgroundColor: withAlpha(theme.colors.bgBase, 0.2),
-                            color: theme.colors.textPrimary,
-                            fontFamily: theme.typography.display.fontFamily,
-                            fontSize: theme.typography.title.fontSize,
-                            letterSpacing: 2,
-                            lineHeight: theme.typography.title.lineHeight,
-                            paddingHorizontal: 16,
-                            paddingVertical: 18,
-                            textAlign: "center",
-                          }}
+                          style={[
+                            getAuthFieldStyle({ focused: focusedField === "otp" }),
+                            {
+                              color: theme.colors.textPrimary,
+                              fontFamily: theme.typography.display.fontFamily,
+                              fontSize: theme.typography.title.fontSize,
+                              fontVariant: ["tabular-nums"],
+                              letterSpacing: 2,
+                              lineHeight: theme.typography.title.lineHeight,
+                              paddingHorizontal: 16,
+                              paddingVertical: 18,
+                              textAlign: "center",
+                            },
+                          ]}
                           textContentType="oneTimeCode"
                           value={code}
                         />
@@ -386,29 +417,25 @@ export default function SignInScreen() {
                       style={{
                         alignItems: "center",
                         alignSelf: "stretch",
-                        borderColor: isOtpStep ? "transparent" : theme.materials.panel.border,
-                        borderWidth: isOtpStep ? 0 : 1,
+                        borderColor: primaryActionBorderColor,
+                        borderWidth: isPrimaryActionEnabled ? 0 : 1,
                         justifyContent: "center",
                         minHeight: 58,
                         borderRadius: theme.radius.sheet,
-                        backgroundColor: isOtpStep
-                          ? isSubmitDisabled
-                            ? withAlpha(theme.colors.textPrimary, 0.12)
-                            : theme.colors.textPrimary
-                          : "transparent",
-                        opacity: isSubmitDisabled ? 0.6 : 1,
+                        backgroundColor: primaryActionBackground,
+                        boxShadow: isPrimaryActionEnabled ? theme.shadows.panel : undefined,
                         paddingHorizontal: 0,
                       }}
                     >
                       {isSendingOtp || isVerifyingOtp ? (
-                        <ActivityIndicator color={isOtpStep ? theme.colors.textInverse : theme.colors.textPrimary} />
+                        <ActivityIndicator color={primaryActionTextColor} />
                       ) : (
                         <Text
                           style={{
-                            color: isOtpStep ? theme.colors.textInverse : theme.colors.textPrimary,
+                            color: primaryActionTextColor,
                             fontFamily: theme.typography.label.fontFamily,
-                            fontSize: isOtpStep ? 18 : 18,
-                            lineHeight: isOtpStep ? 22 : 22,
+                            fontSize: 18,
+                            lineHeight: 22,
                           }}
                         >
                           {isOtpStep ? "Continue" : emailButtonLabel}
@@ -476,12 +503,32 @@ export default function SignInScreen() {
                       </View>
                     ) : null}
                   </GlassCard>
-
                 </View>
-              </ScreenSection>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
+              </View>
+
+              <View style={{ flex: isOtpStep ? 1.16 : 1.34 }} />
+
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingBottom: theme.spacing[12],
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.colors.textMuted,
+                    fontFamily: theme.typography.body.fontFamily,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    textAlign: "center",
+                  }}
+                >
+                  Simple idea taken seriously
+                </Text>
+              </View>
+            </ScreenSection>
+          </View>
+        </Pressable>
       </ScreenScrollView>
     </>
   );

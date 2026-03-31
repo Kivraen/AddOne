@@ -42,28 +42,30 @@ const PALETTE_PREVIEW_TODAY = {
   dayIndex: 4,
 } as const;
 
+const PALETTE_PREVIEW_WEEKLY_TARGET = 3;
+
 const PALETTE_PREVIEW_WEEKS: boolean[][] = [
-  [true, true, false, true, true, false, false],
-  [true, true, false, true, false, true, false],
-  [true, true, true, false, true, false, false],
-  [true, true, false, true, true, false, false],
-  [true, false, true, true, false, false, true],
-  [true, true, true, false, true, false, false],
-  [true, true, false, false, true, false, true],
+  [true, false, true, true, false, false, false],
   [true, true, false, true, false, false, true],
-  [true, false, true, true, false, true, false],
-  [true, true, true, false, false, false, true],
-  [true, true, false, true, false, false, true],
+  [false, true, true, false, true, false, true],
   [true, false, true, false, true, true, false],
-  [true, true, true, true, false, false, true],
-  [true, true, true, false, true, true, true],
-  [true, true, false, true, true, true, true],
-  [true, false, true, true, true, true, true],
-  [true, true, true, true, true, true, false],
-  [true, false, false, true, false, false, false],
-  [true, false, true, false, false, false, false],
-  [false, true, false, true, false, false, false],
-  [true, true, false, false, true, false, false],
+  [true, true, false, false, true, false, true],
+  [false, true, true, true, false, true, false],
+  [true, false, false, true, true, false, true],
+  [true, true, true, false, true, false, true],
+  [false, true, false, true, true, true, false],
+  [true, false, true, true, false, false, false],
+  [false, true, true, false, true, false, false],
+  [true, false, false, true, false, true, true],
+  [false, true, false, true, true, true, true],
+  [true, true, false, false, true, true, false],
+  [false, false, true, true, false, true, false],
+  [true, false, false, false, true, false, false],
+  [false, true, true, false, false, true, false],
+  [true, false, true, false, false, false, true],
+  [false, true, false, false, false, false, false],
+  [true, false, false, true, false, true, false],
+  [false, false, true, false, true, false, true],
 ];
 
 function buildPalettePreviewDevice(device: AddOneDevice): AddOneDevice {
@@ -72,7 +74,7 @@ function buildPalettePreviewDevice(device: AddOneDevice): AddOneDevice {
     0,
   );
   const successfulWeeksTotal = PALETTE_PREVIEW_WEEKS.slice(1).filter(
-    (week) => week.filter(Boolean).length >= device.weeklyTarget,
+    (week) => week.filter(Boolean).length >= PALETTE_PREVIEW_WEEKLY_TARGET,
   ).length;
 
   return {
@@ -87,6 +89,7 @@ function buildPalettePreviewDevice(device: AddOneDevice): AddOneDevice {
     recordedDaysTotal,
     successfulWeeksTotal,
     today: { ...PALETTE_PREVIEW_TODAY },
+    weeklyTarget: PALETTE_PREVIEW_WEEKLY_TARGET,
   };
 }
 

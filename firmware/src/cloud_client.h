@@ -145,4 +145,5 @@ private:
   String mqttBrokerPassword_{};
   String mqttBrokerUsername_{};
   const DeviceIdentity* identity_ = nullptr;
+  bool authTokenProvisioningSuspended_ = false;
 };

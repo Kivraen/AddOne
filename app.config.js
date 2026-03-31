@@ -10,6 +10,11 @@ module.exports = {
     orientation: "default",
     userInterfaceStyle: "dark",
     icon: "./assets/branding/app-icon.png",
+    splash: {
+      backgroundColor: "#000000",
+      image: "./assets/branding/app-icon.png",
+      resizeMode: "contain",
+    },
     assetBundlePatterns: ["**/*"],
     experiments: {
       typedRoutes: true,

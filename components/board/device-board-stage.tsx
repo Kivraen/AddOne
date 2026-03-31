@@ -122,7 +122,7 @@ export function DeviceBoardStage({
           }}
         >
           <LinearGradient
-            colors={[withAlpha(theme.colors.textPrimary, 0.04), "transparent", withAlpha(theme.colors.bgBase, 0.08)]}
+            colors={[withAlpha(theme.colors.textPrimary, 0.014), "transparent", withAlpha(theme.colors.bgBase, 0.026)]}
             end={{ x: 0.8, y: 1 }}
             start={{ x: 0.1, y: 0 }}
             style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}

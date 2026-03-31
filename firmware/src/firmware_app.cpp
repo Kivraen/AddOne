@@ -13,8 +13,8 @@ constexpr unsigned long kRuntimeSnapshotSyncIntervalMs = 250;
 constexpr unsigned long kHeartbeatIntervalMs = 60000;
 constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
 constexpr unsigned long kRecoveryCommandCooldownMs = 15000;
-constexpr unsigned long kRecoveryVisualCloudGraceMs = 15000;
 constexpr unsigned long kRecoveryVisualCompletionMs = 1800;
+constexpr unsigned long kRecoveryVisualFailureMs = 1100;
 constexpr unsigned long kFactoryResetReconnectTimeoutMs = 6000;
 constexpr unsigned long kFactoryResetReconnectPollMs = 100;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
@@ -229,6 +229,8 @@ const char* recoveryVisualStageName(RecoveryVisualStage stage) {
       return "CloudConnected";
     case RecoveryVisualStage::RestoreApplied:
       return "RestoreApplied";
+    case RecoveryVisualStage::Failed:
+      return "Failed";
     default:
       return "Unknown";
   }
@@ -464,6 +466,8 @@ void FirmwareApp::begin() {
   Serial.printf("Current reset epoch: %lu\n", static_cast<unsigned long>(provisioningStore_.resetEpoch()));
   Serial.printf("Confirmed OTA release: %s\n",
                 otaClient_.confirmedReleaseId().isEmpty() ? "(none)" : otaClient_.confirmedReleaseId().c_str());
+
+  boardRenderer_.playStartupAnimation(deviceSettings_.resolveBrightness(ambientLight_.normalized01()));
 
   if (recoveryRequestedAtBoot_ || provisioningStore_.hasPendingClaim() || !bootReadyForTracking_()) {
     enterState_(FirmwareState::SetupRecovery);
@@ -742,7 +746,13 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
   if (nextState == FirmwareState::Tracking) {
     runtimeSnapshotDirty_ = true;
   }
+  if (nextState != FirmwareState::Tracking && nextState != FirmwareState::TimeInvalid) {
+    onboardingVisualActive_ = false;
+    onboardingVisualActivatedAtMs_ = 0;
+  }
   if (nextState == FirmwareState::SetupRecovery) {
+    onboardingVisualActive_ = false;
+    onboardingVisualActivatedAtMs_ = 0;
     recoveryVisualActive_ = true;
     recoveryVisualStage_ = RecoveryVisualStage::PortalReady;
     recoveryVisualUntilMs_ = 0;
@@ -760,6 +770,22 @@ void FirmwareApp::enterState_(FirmwareState nextState) {
 
 void FirmwareApp::markRuntimeSnapshotDirty_() {
   runtimeSnapshotDirty_ = true;
+}
+
+void FirmwareApp::dismissOnboardingVisual_(bool playExitAnimation) {
+  if (!onboardingVisualActive_) {
+    return;
+  }
+
+  if (playExitAnimation) {
+    boardRenderer_.playStartupAnimation(deviceSettings_.resolveBrightness(ambientLight_.normalized01()));
+  }
+
+  const unsigned long visibleForMs =
+      onboardingVisualActivatedAtMs_ > 0 ? millis() - onboardingVisualActivatedAtMs_ : 0;
+  onboardingVisualActive_ = false;
+  onboardingVisualActivatedAtMs_ = 0;
+  Serial.printf("Onboarding visual dismissed after %lu ms.\n", visibleForMs);
 }
 
 void FirmwareApp::clearPendingFriendCelebrationSenderStateLocked_() {
@@ -820,6 +846,15 @@ void FirmwareApp::startRecoveryVisualCompletion_() {
   recoveryVisualStage_ = RecoveryVisualStage::RestoreApplied;
   recoveryVisualUntilMs_ = millis() + kRecoveryVisualCompletionMs;
   Serial.printf("Recovery visual -> %s\n", recoveryVisualStageName(recoveryVisualStage_));
+}
+
+bool FirmwareApp::renderOnboardingVisualIfActive_(uint8_t brightness) {
+  if (!onboardingVisualActive_) {
+    return false;
+  }
+
+  boardRenderer_.renderOnboardingHoldState(WiFi.status() == WL_CONNECTED, brightness);
+  return true;
 }
 
 bool FirmwareApp::renderRecoveryVisualIfActive_(uint8_t brightness) {
@@ -1340,6 +1375,9 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   }
 
   if (command.kind == "request_runtime_snapshot") {
+    if (onboardingVisualActive_) {
+      dismissOnboardingVisual_(true);
+    }
     if (!hasAuthoritativeTime_()) {
       failureReason = "Authoritative time is unavailable.";
       return false;
@@ -1827,17 +1865,32 @@ void FirmwareApp::tickSetupRecovery_() {
   }
 
   if (apServer_.isRunning()) {
-    if (apServer_.provisioningState() == ProvisioningContract::ProvisioningState::Busy) {
-      setRecoveryVisualStage_(RecoveryVisualStage::CredentialsReceived);
-    } else {
-      setRecoveryVisualStage_(RecoveryVisualStage::PortalReady);
-    }
     apServer_.loop();
   }
 
+  if (apServer_.consumeFailureVisualPending()) {
+    setRecoveryVisualStage_(RecoveryVisualStage::Failed);
+    recoveryVisualUntilMs_ = millis() + kRecoveryVisualFailureMs;
+  }
+
+  const bool recoveryFailureFlashActive =
+      recoveryVisualStage_ == RecoveryVisualStage::Failed &&
+      recoveryVisualUntilMs_ > 0 &&
+      millis() < recoveryVisualUntilMs_;
+
   const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-  if (!apServer_.isRunning() && (apServer_.hasCompletedProvisioning() || apServer_.isWifiConnected() || WiFi.status() == WL_CONNECTED)) {
-    setRecoveryVisualStage_(RecoveryVisualStage::WifiConnected);
+  if (!recoveryFailureFlashActive) {
+    if (apServer_.isRunning()) {
+      if (apServer_.provisioningState() == ProvisioningContract::ProvisioningState::Busy) {
+        setRecoveryVisualStage_(RecoveryVisualStage::CredentialsReceived);
+      } else {
+        setRecoveryVisualStage_(RecoveryVisualStage::PortalReady);
+      }
+    }
+
+    if (!apServer_.isRunning() && (apServer_.hasCompletedProvisioning() || apServer_.isWifiConnected() || WiFi.status() == WL_CONNECTED)) {
+      setRecoveryVisualStage_(RecoveryVisualStage::WifiConnected);
+    }
   }
   boardRenderer_.renderRecoveryState(recoveryVisualStage_, brightness);
 
@@ -1883,8 +1936,9 @@ void FirmwareApp::tickSetupRecovery_() {
     provisioningStore_.clearPendingClaim();
     provisioningStore_.markReadyForTracking();
     markRuntimeSnapshotDirty_();
-    setRecoveryVisualStage_(RecoveryVisualStage::CloudConnected);
-    recoveryVisualUntilMs_ = millis() + kRecoveryVisualCloudGraceMs;
+    startRecoveryVisualCompletion_();
+    onboardingVisualActive_ = true;
+    onboardingVisualActivatedAtMs_ = millis();
     ignoreRecoveryCommandsUntilMs_ = millis() + kRecoveryCommandCooldownMs;
     if (hasAuthoritativeTime_()) {
       if (prepareTrackerForCurrentTime_()) {
@@ -1921,7 +1975,14 @@ void FirmwareApp::tickTracking_() {
         markRuntimeSnapshotDirty_();
       }
 
-      if (buttonInput_.consumeShortPress()) {
+      const bool shortPress = buttonInput_.consumeShortPress();
+      if (onboardingVisualActive_) {
+        if (shortPress) {
+          dismissOnboardingVisual_(false);
+        }
+        while (buttonInput_.consumeShortPress()) {
+        }
+      } else if (shortPress) {
         bool isDone = false;
         const int8_t weekSuccessBefore = habitTracker_.currentWeekSuccess();
         if (habitTracker_.queueLocalToggleToday(logicalNow, isDone)) {
@@ -1946,13 +2007,17 @@ void FirmwareApp::tickTracking_() {
 
       const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
       if (!renderRecoveryVisualIfActive_(brightness)) {
-        boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
+        if (!renderOnboardingVisualIfActive_(brightness)) {
+          boardRenderer_.render(habitTracker_, deviceSettings_.current(), &logicalNow, brightness);
+        }
       }
       xSemaphoreGive(stateMutex_);
     }
   } else {
     const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-    boardRenderer_.renderTimeErrorState(false, WiFi.status() == WL_CONNECTED, brightness);
+    if (!renderOnboardingVisualIfActive_(brightness)) {
+      boardRenderer_.renderTimeErrorState(false, WiFi.status() == WL_CONNECTED, brightness);
+    }
   }
 
   if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
@@ -2099,6 +2164,12 @@ void FirmwareApp::tickTimeInvalid_() {
     recoveryRequestedAtRuntime_ = true;
   }
 
+  if (onboardingVisualActive_ && buttonInput_.consumeShortPress()) {
+    dismissOnboardingVisual_(false);
+  }
+  while (onboardingVisualActive_ && buttonInput_.consumeShortPress()) {
+  }
+
   if (tickWifiReconnectPolicy_(false)) {
     recoveryRequestedAtRuntime_ = true;
   }
@@ -2125,7 +2196,9 @@ void FirmwareApp::tickTimeInvalid_() {
   }
 
   const uint8_t brightness = deviceSettings_.resolveBrightness(ambientLight_.normalized01());
-  boardRenderer_.renderTimeErrorState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
+  if (!renderOnboardingVisualIfActive_(brightness)) {
+    boardRenderer_.renderTimeErrorState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
+  }
 
   if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
     enterWifiRecoveryMode_();

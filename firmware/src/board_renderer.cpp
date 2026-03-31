@@ -10,11 +10,22 @@ const CRGB kRecoveryCenterColor = CRGB(70, 146, 255);
 const CRGB kRecoveryCompletedColor = CRGB(88, 176, 255);
 const CRGB kRecoveryActiveColor = CRGB(246, 249, 255);
 const CRGB kRecoverySuccessColor = CRGB(120, 224, 138);
+const CRGB kOnboardingLogoColor = CRGB(242, 244, 247);
+const CRGB kStartupCheckColors[4] = {
+    CRGB(255, 50, 150),
+    CRGB(50, 255, 200),
+    CRGB(200, 255, 50),
+    CRGB(255, 150, 50),
+};
 const CRGB kResetRecoveryReadyColor = CRGB(60, 214, 215);
-const CRGB kResetFactoryReadyColor = CRGB(255, 108, 84);
+const CRGB kResetFactoryReadyColor = CRGB::Red;
 const CRGB kWifiReadyColor = CRGB(199, 144, 74);
 const CRGB kWifiConnectedColor = CRGB(143, 211, 106);
 const CRGB kTimeErrorColor = CRGB(228, 110, 88);
+constexpr unsigned long kStartupPixelDelayMs = 120;
+constexpr unsigned long kStartupHoldMs = 2000;
+constexpr uint8_t kStartupFadeStep = 2;
+constexpr unsigned long kStartupFadeDelayMs = 40;
 constexpr uint8_t kDigitRows = 5;
 constexpr uint8_t kDigitCols = 3;
 constexpr uint8_t kClockTopRow = 1;
@@ -38,11 +49,28 @@ struct RecoveryPixel {
   uint8_t col;
 };
 
+const RecoveryPixel kStartupCheckPixels[4] = {
+    {4, 9},
+    {5, 10},
+    {4, 11},
+    {3, 12},
+};
+
 CRGB pulseColor(const CRGB& base, uint8_t minScale, uint8_t maxScale) {
   CRGB result = base;
   const uint16_t phase = static_cast<uint16_t>((millis() / 16UL) % 512UL);
   const uint16_t triangle = phase < 256U ? phase : (511U - phase);
   const uint8_t scale = static_cast<uint8_t>(minScale + ((static_cast<uint16_t>(maxScale - minScale) * triangle) / 255U));
+  result.nscale8_video(scale);
+  return result;
+}
+
+CRGB smoothPulseColor(const CRGB& base, uint8_t minScale, uint8_t maxScale, unsigned long cadenceMs) {
+  CRGB result = base;
+  const unsigned long safeCadenceMs = cadenceMs == 0 ? 1 : cadenceMs;
+  const uint8_t wave = sin8(static_cast<uint8_t>((millis() / safeCadenceMs) & 0xffU));
+  const uint8_t scale = static_cast<uint8_t>(
+      minScale + ((static_cast<uint16_t>(maxScale - minScale) * wave) / 255U));
   result.nscale8_video(scale);
   return result;
 }
@@ -63,6 +91,30 @@ void BoardRenderer::begin() {
   FastLED.setMaxPowerInVoltsAndMilliamps(static_cast<uint8_t>(Config::kLedVoltageMv / 1000),
                                          Config::kLedCurrentLimitMa);
   FastLED.setBrightness(min<uint8_t>(Config::kDefaultBrightness, Config::kSafeMaxBrightness));
+  clear_();
+  FastLED.show();
+}
+
+void BoardRenderer::playStartupAnimation(uint8_t brightness) {
+  clear_();
+  FastLED.setBrightness(brightness);
+  FastLED.show();
+
+  for (uint8_t index = 0; index < 4; ++index) {
+    const RecoveryPixel& pixel = kStartupCheckPixels[index];
+    setPixel_(pixel.row, pixel.col, kStartupCheckColors[index]);
+    FastLED.show();
+    delay(kStartupPixelDelayMs);
+  }
+
+  delay(kStartupHoldMs);
+
+  for (int level = static_cast<int>(brightness); level >= 0; level -= kStartupFadeStep) {
+    FastLED.setBrightness(static_cast<uint8_t>(level));
+    FastLED.show();
+    delay(kStartupFadeDelayMs);
+  }
+
   clear_();
   FastLED.show();
 }
@@ -403,36 +455,39 @@ void BoardRenderer::renderRecoveryState(RecoveryVisualStage stage, uint8_t brigh
 
   const uint8_t centerRow = Config::kPanelRows / 2;
   const uint8_t centerCol = Config::kPanelCols / 2;
-  const RecoveryPixel petals[4] = {
-      {centerRow, static_cast<uint8_t>(centerCol - 1)},
-      {static_cast<uint8_t>(centerRow - 1), centerCol},
-      {centerRow, static_cast<uint8_t>(centerCol + 1)},
-      {static_cast<uint8_t>(centerRow + 1), centerCol},
-  };
+  CRGB centerColor = CRGB::Black;
 
-  setPixel_(centerRow, centerCol, pulseColor(kRecoveryCenterColor, 132, 255));
-
-  if (stage == RecoveryVisualStage::RestoreApplied) {
-    for (const RecoveryPixel& petal : petals) {
-      setPixel_(petal.row, petal.col, pulseColor(kRecoverySuccessColor, 160, 255));
-    }
-    FastLED.setBrightness(brightness);
-    FastLED.show();
-    return;
+  switch (stage) {
+    case RecoveryVisualStage::PortalReady:
+      centerColor = CRGB(70, 146, 255);
+      break;
+    case RecoveryVisualStage::CredentialsReceived:
+      centerColor = smoothPulseColor(kRecoveryCenterColor, 12, 255, 6UL);
+      break;
+    case RecoveryVisualStage::WifiConnected:
+    case RecoveryVisualStage::CloudConnected:
+    case RecoveryVisualStage::RestoreApplied:
+      centerColor = kRecoverySuccessColor;
+      break;
+    case RecoveryVisualStage::Failed:
+      centerColor = CRGB::Red;
+      break;
+    default:
+      centerColor = CRGB(70, 146, 255);
+      break;
   }
 
-  const int8_t activeIndex =
-      stage == RecoveryVisualStage::CredentialsReceived ? 0 :
-      stage == RecoveryVisualStage::WifiConnected ? 1 :
-      stage == RecoveryVisualStage::CloudConnected ? 2 : -1;
+  setPixel_(centerRow, centerCol, centerColor);
 
-  for (uint8_t index = 0; index < 4; ++index) {
-    const RecoveryPixel& petal = petals[index];
-    if (static_cast<int8_t>(index) < activeIndex) {
-      setPixel_(petal.row, petal.col, kRecoveryCompletedColor);
-    } else if (static_cast<int8_t>(index) == activeIndex) {
-      setPixel_(petal.row, petal.col, pulseColor(kRecoveryActiveColor, 150, 255));
-    }
+  FastLED.setBrightness(brightness);
+  FastLED.show();
+}
+
+void BoardRenderer::renderOnboardingHoldState(bool wifiConnected, uint8_t brightness) {
+  (void)wifiConnected;
+  clear_();
+  for (const RecoveryPixel& pixel : kStartupCheckPixels) {
+    setPixel_(pixel.row, pixel.col, kOnboardingLogoColor);
   }
 
   FastLED.setBrightness(brightness);

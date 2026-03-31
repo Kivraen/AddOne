@@ -65,6 +65,9 @@ type DeviceHistoryMetricRow = {
   recorded_days_total: number | null;
   successful_weeks_total: number | null;
 };
+
+const lastKnownOwnedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
+const lastKnownOwnedDevicesById: Record<string, AddOneDevice | undefined> = {};
 type DeviceFirmwareUpdateSummaryRow = {
   availability_reason: string | null;
   available_firmware_version: string | null;
@@ -567,7 +570,75 @@ function overlayProjectedTodayState(device: AddOneDevice, dayStates: DeviceDaySt
   };
 }
 
-async function fetchOwnedDeviceHistoryMetrics() {
+function currentWeekCompletedCount(device: Pick<AddOneDevice, "days" | "today">) {
+  return device.days[device.today.weekIndex].slice(0, device.today.dayIndex + 1).filter(Boolean).length;
+}
+
+function isCurrentWeekSuccessful(device: Pick<AddOneDevice, "days" | "today" | "weeklyTarget">) {
+  return currentWeekCompletedCount(device) >= device.weeklyTarget;
+}
+
+function reconcileOwnedDeviceSummaryMetrics(device: AddOneDevice) {
+  const previousDevice = lastKnownOwnedDevicesById[device.id];
+  if (!previousDevice) {
+    lastKnownOwnedDevicesById[device.id] = device;
+    return device;
+  }
+
+  const isSameTodaySlot =
+    previousDevice.logicalToday === device.logicalToday &&
+    previousDevice.today.weekIndex === device.today.weekIndex &&
+    previousDevice.today.dayIndex === device.today.dayIndex;
+
+  if (!isSameTodaySlot) {
+    lastKnownOwnedDevicesById[device.id] = device;
+    return device;
+  }
+
+  const previousTodayState = previousDevice.days[previousDevice.today.weekIndex]?.[previousDevice.today.dayIndex];
+  const currentTodayState = device.days[device.today.weekIndex]?.[device.today.dayIndex];
+
+  if (
+    previousTodayState === undefined ||
+    currentTodayState === undefined ||
+    previousTodayState === currentTodayState
+  ) {
+    lastKnownOwnedDevicesById[device.id] = device;
+    return device;
+  }
+
+  let recordedDaysTotal = device.recordedDaysTotal;
+  let successfulWeeksTotal = device.successfulWeeksTotal;
+  let adjusted = false;
+
+  if (device.recordedDaysTotal === previousDevice.recordedDaysTotal) {
+    recordedDaysTotal += currentTodayState ? 1 : -1;
+    adjusted = true;
+  }
+
+  const previousWeekSuccessful = isCurrentWeekSuccessful(previousDevice);
+  const currentWeekSuccessful = isCurrentWeekSuccessful(device);
+  if (
+    previousWeekSuccessful !== currentWeekSuccessful &&
+    device.successfulWeeksTotal === previousDevice.successfulWeeksTotal
+  ) {
+    successfulWeeksTotal += currentWeekSuccessful ? 1 : -1;
+    adjusted = true;
+  }
+
+  if (!adjusted) {
+    lastKnownOwnedDevicesById[device.id] = device;
+    return device;
+  }
+
+  return {
+    ...device,
+    recordedDaysTotal,
+    successfulWeeksTotal,
+  };
+}
+
+async function fetchOwnedDeviceHistoryMetrics(deviceIds: string[]) {
   const supabase = ensureSupabase();
   const { data, error } = await (supabase.rpc as any)("list_device_history_metrics_for_user");
 
@@ -576,14 +647,23 @@ async function fetchOwnedDeviceHistoryMetrics() {
   }
 
   if (error && isTransientNetworkFailureMessage(error.message)) {
-    return [] as DeviceHistoryMetricRow[];
+    return deviceIds.flatMap((deviceId) => {
+      const cachedMetrics = lastKnownOwnedHistoryMetricsByDevice[deviceId];
+      return cachedMetrics ? [cachedMetrics] : [];
+    });
   }
 
-  return assertData(
+  const rows = assertData(
     error,
     (data ?? []) as DeviceHistoryMetricRow[],
     "Failed to load device history metrics.",
   );
+
+  for (const row of rows) {
+    lastKnownOwnedHistoryMetricsByDevice[row.device_id] = row;
+  }
+
+  return rows;
 }
 
 async function fetchProfiles(userIds: string[], options?: { allowEmptyOnTransientFailure?: boolean }) {
@@ -784,7 +864,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
 
   const [snapshots, historyMetrics] = await Promise.all([
     fetchLatestRuntimeSnapshots(deviceIds),
-    fetchOwnedDeviceHistoryMetrics(),
+    fetchOwnedDeviceHistoryMetrics(deviceIds),
   ]);
   const metricsByDevice = historyMetrics.reduce<Record<string, DeviceHistoryMetricRow>>((accumulator, row) => {
     accumulator[row.device_id] = row;
@@ -794,7 +874,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
     mapDeviceRowToAppDevice({
       currentUserName,
       device: membership.device as DeviceRow,
-      metrics: metricsByDevice[membership.device_id] ?? null,
+      metrics: metricsByDevice[membership.device_id] ?? lastKnownOwnedHistoryMetricsByDevice[membership.device_id] ?? null,
       membership,
       snapshot: resolveAuthoritativeSnapshotForDevice(membership.device as DeviceRow, snapshots),
     }),
@@ -802,7 +882,26 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
   const todayStateDates = Array.from(new Set(provisionalDevices.map((device) => device.logicalToday).filter(Boolean)));
   const dayStates = await fetchDeviceDayStatesForLocalDates(deviceIds, todayStateDates);
 
-  return provisionalDevices.map((device) => overlayProjectedTodayState(device, dayStates));
+  return provisionalDevices.map((device) => {
+    const projectedDevice = overlayProjectedTodayState(device, dayStates);
+    const reconciledDevice = reconcileOwnedDeviceSummaryMetrics(projectedDevice);
+    const previousDevice = lastKnownOwnedDevicesById[device.id];
+    const hasSettledSummaryMetrics =
+      !previousDevice ||
+      previousDevice.logicalToday !== projectedDevice.logicalToday ||
+      previousDevice.today.weekIndex !== projectedDevice.today.weekIndex ||
+      previousDevice.today.dayIndex !== projectedDevice.today.dayIndex ||
+      previousDevice.days[previousDevice.today.weekIndex]?.[previousDevice.today.dayIndex] ===
+        projectedDevice.days[projectedDevice.today.weekIndex]?.[projectedDevice.today.dayIndex] ||
+      previousDevice.recordedDaysTotal !== projectedDevice.recordedDaysTotal ||
+      previousDevice.successfulWeeksTotal !== projectedDevice.successfulWeeksTotal;
+
+    if (hasSettledSummaryMetrics) {
+      lastKnownOwnedDevicesById[device.id] = projectedDevice;
+    }
+
+    return reconciledDevice;
+  });
 }
 
 export async function fetchSharedBoards(userId: string) {

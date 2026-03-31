@@ -11,6 +11,7 @@
 class ApServer {
 public:
   void begin(const DeviceIdentity& identity, ProvisioningStore& provisioningStore);
+  bool consumeFailureVisualPending();
   bool hasCompletedProvisioning() const { return completedProvisioning_; }
   bool isWifiConnected() const;
   bool isRunning() const { return running_; }
@@ -41,6 +42,7 @@ private:
   ProvisioningContract::ProvisioningState provisioningState_ = ProvisioningContract::ProvisioningState::Ready;
   WebServer server_{80};
   bool completedProvisioning_ = false;
+  bool failureVisualPending_ = false;
   bool portalStarted_ = false;
   unsigned long provisioningAttemptStartedAtMs_ = 0;
   bool running_ = false;
