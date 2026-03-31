@@ -13,12 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import Animated, {
-  cancelAnimation,
   Easing,
-  FadeIn,
-  FadeOut,
-  interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -49,8 +44,6 @@ import { AddOneDevice } from "@/types/addone";
 
 const HOME_INSIGHT_MAX_LINES = 3;
 const HOME_INSIGHT_PANEL_HEIGHT = theme.typography.micro.lineHeight + theme.typography.body.lineHeight * HOME_INSIGHT_MAX_LINES + 18;
-const HOME_INSIGHT_TRANSITION_DURATION = 1180;
-const HOME_METRIC_VALUE_TRANSITION_DURATION = 520;
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15_000;
 const HOME_PRIMARY_ACTION_SIZE = 156;
 const HOME_PRIMARY_ACTION_TOP_GAP = 72;
@@ -147,11 +140,11 @@ function withProjectedSummaryMetrics(
 
   if (options?.pendingTodayState !== undefined && baseTodayState !== undefined && projectedTodayState !== undefined) {
     if (baseTodayState !== projectedTodayState) {
-      recordedDaysTotal += projectedTodayState ? 1 : -1;
+      recordedDaysTotal = Math.max(0, recordedDaysTotal + (projectedTodayState ? 1 : -1));
     }
 
     if (baseWeekSuccessful !== projectedWeekSuccessful) {
-      successfulWeeksTotal += projectedWeekSuccessful ? 1 : -1;
+      successfulWeeksTotal = Math.max(0, successfulWeeksTotal + (projectedWeekSuccessful ? 1 : -1));
     }
   }
 
@@ -275,7 +268,7 @@ function MetricTile({ label, value }: { label: string; value: string }) {
       >
         {label}
       </Text>
-      <AnimatedMetricValue value={value} />
+      <MetricValueText value={value} />
     </View>
   );
 }
@@ -296,94 +289,6 @@ function MetricValueText({ value }: { value: string }) {
       {value}
     </Text>
   );
-}
-
-function AnimatedMetricValue({ value }: { value: string }) {
-  const [currentValue, setCurrentValue] = useState(value);
-  const [outgoingValue, setOutgoingValue] = useState<string | null>(null);
-  const transitionProgress = useSharedValue(1);
-  const transitionTokenRef = useRef(0);
-
-  const clearOutgoingValue = (token: number) => {
-    if (transitionTokenRef.current === token) {
-      setOutgoingValue(null);
-    }
-  };
-
-  useEffect(() => {
-    if (value === currentValue) {
-      return;
-    }
-
-    const nextToken = transitionTokenRef.current + 1;
-    transitionTokenRef.current = nextToken;
-
-    cancelAnimation(transitionProgress);
-    setOutgoingValue(currentValue);
-    setCurrentValue(value);
-    transitionProgress.value = 0;
-    transitionProgress.value = withTiming(
-      1,
-      {
-        duration: HOME_METRIC_VALUE_TRANSITION_DURATION,
-        easing: Easing.inOut(Easing.cubic),
-      },
-      (finished) => {
-        if (finished) {
-          runOnJS(clearOutgoingValue)(nextToken);
-        }
-      },
-    );
-  }, [currentValue, transitionProgress, value]);
-
-  useEffect(
-    () => () => {
-      cancelAnimation(transitionProgress);
-    },
-    [transitionProgress],
-  );
-
-  const outgoingStyle = useAnimatedStyle(() => ({
-    opacity: outgoingValue ? interpolate(transitionProgress.value, [0, 0.44, 1], [1, 0, 0]) : 0,
-  }));
-
-  const incomingStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(transitionProgress.value, [0, 0.52, 1], [0, 0, 1]),
-  }));
-
-  const metricValueLayerStyle = {
-    position: "absolute" as const,
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    justifyContent: "center" as const,
-  };
-
-  return (
-    <View
-      style={{
-        alignSelf: "stretch",
-        height: 26,
-        overflow: "hidden",
-        position: "relative",
-        justifyContent: "center",
-      }}
-    >
-      {outgoingValue ? (
-        <Animated.View pointerEvents="none" style={[metricValueLayerStyle, outgoingStyle]}>
-          <MetricValueText value={outgoingValue} />
-        </Animated.View>
-      ) : null}
-      <Animated.View pointerEvents="none" style={[metricValueLayerStyle, incomingStyle]}>
-        <MetricValueText value={currentValue} />
-      </Animated.View>
-    </View>
-  );
-}
-
-function insightKey(insight: HomeInsight) {
-  return `${insight.eyebrow}:${insight.message}`;
 }
 
 function insightSectionTitle(insight: HomeInsight) {
@@ -475,69 +380,6 @@ function HomeBoardRefreshOverlay({ activeColor }: { activeColor: string }) {
 }
 
 function HomeInsightPanel({ insight }: { insight: HomeInsight }) {
-  const nextInsightKey = insightKey(insight);
-  const [currentInsight, setCurrentInsight] = useState<HomeInsight>(() => insight);
-  const [currentInsightKey, setCurrentInsightKey] = useState(() => nextInsightKey);
-  const [outgoingInsight, setOutgoingInsight] = useState<HomeInsight | null>(null);
-  const transitionProgress = useSharedValue(1);
-  const transitionTokenRef = useRef(0);
-
-  const clearOutgoingInsight = (token: number) => {
-    if (transitionTokenRef.current === token) {
-      setOutgoingInsight(null);
-    }
-  };
-
-  useEffect(() => {
-    if (nextInsightKey === currentInsightKey) {
-      return;
-    }
-
-    const nextToken = transitionTokenRef.current + 1;
-    transitionTokenRef.current = nextToken;
-
-    cancelAnimation(transitionProgress);
-    setOutgoingInsight(currentInsight);
-    setCurrentInsight(insight);
-    setCurrentInsightKey(nextInsightKey);
-    transitionProgress.value = 0;
-    transitionProgress.value = withTiming(
-      1,
-      {
-        duration: HOME_INSIGHT_TRANSITION_DURATION,
-        easing: Easing.inOut(Easing.cubic),
-      },
-      (finished) => {
-        if (finished) {
-          runOnJS(clearOutgoingInsight)(nextToken);
-        }
-      },
-    );
-  }, [currentInsight, currentInsightKey, insight, nextInsightKey, transitionProgress]);
-
-  useEffect(
-    () => () => {
-      cancelAnimation(transitionProgress);
-    },
-    [transitionProgress],
-  );
-
-  const incomingStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(transitionProgress.value, [0, 0.7, 1], [0, 0, 1]),
-  }));
-
-  const outgoingStyle = useAnimatedStyle(() => ({
-    opacity: outgoingInsight ? interpolate(transitionProgress.value, [0, 0.58, 1], [1, 0, 0]) : 0,
-  }));
-
-  const messageLayerStyle = {
-    position: "absolute" as const,
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  };
-
   return (
     <View
       style={{
@@ -560,18 +402,9 @@ function HomeInsightPanel({ insight }: { insight: HomeInsight }) {
       <View
         style={{
           flex: 1,
-          overflow: "hidden",
-          position: "relative",
         }}
       >
-        {outgoingInsight ? (
-          <Animated.View pointerEvents="none" style={[messageLayerStyle, outgoingStyle]}>
-            <HomeInsightMessage message={outgoingInsight.message} />
-          </Animated.View>
-        ) : null}
-        <Animated.View pointerEvents="none" style={[messageLayerStyle, incomingStyle]}>
-          <HomeInsightMessage message={currentInsight.message} />
-        </Animated.View>
+        <HomeInsightMessage message={insight.message} />
       </View>
     </View>
   );
@@ -1038,7 +871,6 @@ export function HomeScreen() {
       : headerStatusState === "offline"
           ? "Board looks offline. Open Recovery to reconnect Wi-Fi."
           : homeMinimumGoalLabel(device.dailyMinimum);
-  const headerContextKey = `${headerStatusState}:${headerContextMessage ?? "empty"}`;
   const handlePrimaryActionPress = () => {
     if (todayActionLockRef.current || isTodayToggleLocked) {
       return;
@@ -1138,26 +970,19 @@ export function HomeScreen() {
 
           <View style={{ justifyContent: "center", minHeight: 22 }}>
             {headerContextMessage ? (
-	              <Animated.View
-	                key={headerContextKey}
-	                entering={FadeIn.duration(180)}
-	                exiting={FadeOut.duration(140)}
-	                style={{ justifyContent: "center" }}
-	              >
-	                <Text
-	                  ellipsizeMode="tail"
-	                  numberOfLines={1}
-	                  style={{
-	                    color: theme.colors.textSecondary,
-	                    fontFamily: theme.typography.body.fontFamily,
-	                    fontSize: 14,
-	                    lineHeight: 20,
-	                    paddingRight: 4,
-	                  }}
-	                >
-	                  {headerContextMessage}
-	                </Text>
-	              </Animated.View>
+              <Text
+                ellipsizeMode="tail"
+                numberOfLines={1}
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.typography.body.fontFamily,
+                  fontSize: 14,
+                  lineHeight: 20,
+                  paddingRight: 4,
+                }}
+              >
+                {headerContextMessage}
+              </Text>
             ) : null}
           </View>
         </View>
@@ -1167,14 +992,7 @@ export function HomeScreen() {
             accentColor={theme.colors.accentAmber}
             cells={cells}
             palette={palette}
-            pendingPulse={
-              activePendingTodayState !== undefined
-                ? {
-                    col: device.today.weekIndex,
-                    row: device.today.dayIndex,
-                  }
-                : null
-            }
+            pendingPulse={null}
           />
           {manualRefreshInFlight ? <HomeBoardRefreshOverlay activeColor={deviceAccentColor} /> : null}
         </View>

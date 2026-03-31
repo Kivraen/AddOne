@@ -527,7 +527,19 @@ function resolveAuthoritativeSnapshotForDevice(device: DeviceRow, snapshots: Run
 }
 
 function selectProjectedTodayState(device: AddOneDevice, dayStates: DeviceDayStateRow[]) {
-  const matchingStates = dayStates.filter((row) => row.device_id === device.id && row.local_date === device.logicalToday);
+  const eraStartedAt = device.historyEraStartedAt ? new Date(device.historyEraStartedAt).getTime() : null;
+  const matchingStates = dayStates.filter((row) => {
+    if (row.device_id !== device.id || row.local_date !== device.logicalToday) {
+      return false;
+    }
+
+    if (eraStartedAt === null) {
+      return true;
+    }
+
+    const effectiveAt = row.effective_at ? new Date(row.effective_at).getTime() : Number.NaN;
+    return Number.isFinite(effectiveAt) && effectiveAt >= eraStartedAt;
+  });
   if (matchingStates.length === 0) {
     return null;
   }
@@ -612,7 +624,7 @@ function reconcileOwnedDeviceSummaryMetrics(device: AddOneDevice) {
   let adjusted = false;
 
   if (device.recordedDaysTotal === previousDevice.recordedDaysTotal) {
-    recordedDaysTotal += currentTodayState ? 1 : -1;
+    recordedDaysTotal = Math.max(0, recordedDaysTotal + (currentTodayState ? 1 : -1));
     adjusted = true;
   }
 
@@ -622,7 +634,7 @@ function reconcileOwnedDeviceSummaryMetrics(device: AddOneDevice) {
     previousWeekSuccessful !== currentWeekSuccessful &&
     device.successfulWeeksTotal === previousDevice.successfulWeeksTotal
   ) {
-    successfulWeeksTotal += currentWeekSuccessful ? 1 : -1;
+    successfulWeeksTotal = Math.max(0, successfulWeeksTotal + (currentWeekSuccessful ? 1 : -1));
     adjusted = true;
   }
 

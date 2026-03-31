@@ -57,34 +57,72 @@ function collectHistoryDraftUpdates(baseDevice: AddOneDevice, draftDevice: AddOn
   return updates;
 }
 
-function collectHabitStartBackfillUpdates(
+function collectPastWeekBackfillUpdates(
   draftDevice: AddOneDevice,
-  startInclusive: string | null,
-  endExclusive: string | null,
   explicitUpdates: HistoryDraftUpdate[],
 ): HistoryDraftUpdate[] {
-  if (!draftDevice.dateGrid || !startInclusive || !endExclusive || startInclusive >= endExclusive) {
+  if (!draftDevice.dateGrid) {
+    return [];
+  }
+
+  const habitStartLocalDate = resolveHabitStartLocalDate(draftDevice);
+  if (!habitStartLocalDate) {
     return [];
   }
 
   const explicitDates = new Set(explicitUpdates.map((update) => update.localDate));
   const updates: HistoryDraftUpdate[] = [];
 
-  for (let weekIndex = 0; weekIndex < draftDevice.dateGrid.length; weekIndex += 1) {
-    for (let dayIndex = 0; dayIndex < draftDevice.dateGrid[weekIndex].length; dayIndex += 1) {
-      const localDate = draftDevice.dateGrid[weekIndex]?.[dayIndex];
-      if (!localDate || localDate < startInclusive || localDate >= endExclusive || explicitDates.has(localDate)) {
-        continue;
-      }
-
-      updates.push({
-        isDone: draftDevice.days[weekIndex][dayIndex],
-        localDate,
-      });
+  for (let weekIndex = 1; weekIndex < draftDevice.dateGrid.length; weekIndex += 1) {
+    const weekDates = draftDevice.dateGrid[weekIndex] ?? [];
+    const weekDays = draftDevice.days[weekIndex] ?? [];
+    const weekHasAnyDone = weekDays.some(Boolean);
+    if (weekHasAnyDone) {
+      continue;
     }
+
+    const weekHasExplicitUpdate = weekDates.some((localDate) => !!localDate && explicitDates.has(localDate));
+    if (weekHasExplicitUpdate) {
+      continue;
+    }
+
+    const representativeDate = weekDates.find((localDate) => !!localDate && localDate >= habitStartLocalDate);
+    if (!representativeDate) {
+      continue;
+    }
+
+    updates.push({
+      isDone: false,
+      localDate: representativeDate,
+    });
   }
 
   return updates;
+}
+
+function applyHistoryDraftUpdates(device: AddOneDevice, updates: HistoryDraftUpdate[]) {
+  if (updates.length === 0 || !device.dateGrid) {
+    return device;
+  }
+
+  const days = device.days.map((week) => [...week]);
+
+  for (const update of updates) {
+    for (let weekIndex = 0; weekIndex < device.dateGrid.length; weekIndex += 1) {
+      const dayIndex = device.dateGrid[weekIndex]?.indexOf(update.localDate) ?? -1;
+      if (dayIndex < 0) {
+        continue;
+      }
+
+      days[weekIndex][dayIndex] = update.isDone;
+      break;
+    }
+  }
+
+  return {
+    ...device,
+    days,
+  };
 }
 
 function formatHistoryDateLabel(localDate: string) {
@@ -113,9 +151,10 @@ export default function DeviceHistoryRoute() {
   const [draftDevice, setDraftDevice] = useState(device);
   const [isDirty, setIsDirty] = useState(false);
   const [isOrientationReady, setIsOrientationReady] = useState(false);
-  const [pendingHabitStartBackfillEnd, setPendingHabitStartBackfillEnd] = useState<string | null>(null);
   const [isRefreshingAvailability, setIsRefreshingAvailability] = useState(false);
+  const [isPersistingHistorySession, setIsPersistingHistorySession] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [hasEnteredEditor, setHasEnteredEditor] = useState(false);
   const [boardViewport, setBoardViewport] = useState({ height: 0, width: 0 });
   const refreshDevicesRef = useRef(refreshDevices);
   const refreshRuntimeSnapshotRef = useRef(refreshRuntimeSnapshot);
@@ -131,6 +170,16 @@ export default function DeviceHistoryRoute() {
   useEffect(() => {
     refreshRuntimeSnapshotRef.current = refreshRuntimeSnapshot;
   }, [refreshRuntimeSnapshot]);
+
+  useEffect(() => {
+    if (canEditHistory) {
+      setHasEnteredEditor(true);
+    }
+  }, [canEditHistory]);
+
+  useEffect(() => {
+    setHasEnteredEditor(canEditHistory);
+  }, [canEditHistory, device.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -175,8 +224,10 @@ export default function DeviceHistoryRoute() {
     }, []),
   );
 
-  usePreventRemove(isSavingHistoryDraft || isUpdatingHabitStartDate || isDirty, ({ data }) => {
-    if (isSavingHistoryDraft || isUpdatingHabitStartDate) {
+  const isSaveInFlight = isPersistingHistorySession || isSavingHistoryDraft || isUpdatingHabitStartDate;
+
+  usePreventRemove(isSaveInFlight || isDirty, ({ data }) => {
+    if (isSaveInFlight) {
       Alert.alert("Saving history", "AddOne is still applying your history changes.");
       return;
     }
@@ -193,7 +244,6 @@ export default function DeviceHistoryRoute() {
           onPress: () => {
             setDraftDevice(baseDevice);
             setIsDirty(false);
-            setPendingHabitStartBackfillEnd(null);
             setStatusError(null);
             navigation.dispatch(data.action);
           },
@@ -267,23 +317,15 @@ export default function DeviceHistoryRoute() {
 
     setBaseDevice(device);
     setDraftDevice(device);
-    setPendingHabitStartBackfillEnd(null);
-  }, [deviceSyncKey, device, isDirty]);
+  }, [deviceSyncKey, device]);
 
   const palette = getMergedPalette(draftDevice.paletteId, draftDevice.customPalette);
+  const baseHabitStartLocalDate = resolveHabitStartLocalDate(baseDevice);
+  const draftHabitStartLocalDate = resolveHabitStartLocalDate(draftDevice);
+  const hasHabitStartChange = baseHabitStartLocalDate !== draftHabitStartLocalDate;
   const explicitUpdates = useMemo(() => collectHistoryDraftUpdates(baseDevice, draftDevice), [baseDevice, draftDevice]);
-  const backfillUpdates = useMemo(
-    () =>
-      collectHabitStartBackfillUpdates(
-        draftDevice,
-        resolveHabitStartLocalDate(draftDevice),
-        pendingHabitStartBackfillEnd,
-        explicitUpdates,
-      ),
-    [draftDevice, explicitUpdates, pendingHabitStartBackfillEnd],
-  );
-  const updates = useMemo(() => [...explicitUpdates, ...backfillUpdates], [backfillUpdates, explicitUpdates]);
-  const saveDisabled = !canEditHistory || isSavingHistoryDraft || isUpdatingHabitStartDate || updates.length === 0;
+  const canRenderEditor = canEditHistory || hasEnteredEditor;
+  const saveDisabled = !canEditHistory || isSaveInFlight || (!hasHabitStartChange && explicitUpdates.length === 0);
   const gridAvailableWidth = Math.max(320, boardViewport.width - 16 || width - 32);
   const gridAvailableHeight = Math.max(140, boardViewport.height - 16 || height - 64);
 
@@ -468,7 +510,7 @@ export default function DeviceHistoryRoute() {
   }
 
   function renderTopControls() {
-    if (!canEditHistory || !isLandscape) {
+    if (!canRenderEditor || !isLandscape) {
       return null;
     }
 
@@ -506,7 +548,7 @@ export default function DeviceHistoryRoute() {
         </Pressable>
 
         <Pressable
-          accessibilityLabel={isSavingHistoryDraft ? "Saving history" : isUpdatingHabitStartDate ? "Updating habit start" : "Save history"}
+          accessibilityLabel={isSaveInFlight ? "Saving history" : "Save history"}
           accessibilityRole="button"
           disabled={saveDisabled}
           onPress={() => void handleSave()}
@@ -520,7 +562,7 @@ export default function DeviceHistoryRoute() {
               lineHeight: theme.typography.label.lineHeight,
             }}
           >
-            {isUpdatingHabitStartDate ? "Updating…" : isSavingHistoryDraft ? "Saving…" : "Save"}
+            {isSaveInFlight ? "Saving…" : "Save"}
           </Text>
         </Pressable>
       </View>
@@ -532,55 +574,65 @@ export default function DeviceHistoryRoute() {
       return;
     }
 
+    setIsPersistingHistorySession(true);
     try {
       setStatusError(null);
-      await commitHistoryDraft(updates, baseDevice.runtimeRevision, device.id);
+      let nextBaseDevice = baseDevice;
+
+      if (hasHabitStartChange && draftHabitStartLocalDate) {
+        const refreshedDevice = await setActiveHabitStartDate(draftHabitStartLocalDate, device.id);
+        nextBaseDevice = refreshedDevice
+          ? {
+              ...refreshedDevice,
+              habitStartedOnLocal: draftHabitStartLocalDate,
+            }
+          : {
+              ...baseDevice,
+              habitStartedOnLocal: draftHabitStartLocalDate,
+            };
+      }
+
+      const nextExplicitUpdates = collectHistoryDraftUpdates(nextBaseDevice, draftDevice);
+      const updates = [...nextExplicitUpdates, ...collectPastWeekBackfillUpdates(draftDevice, nextExplicitUpdates)];
+
+      if (updates.length > 0) {
+        await commitHistoryDraft(updates, nextBaseDevice.runtimeRevision, device.id);
+      }
+
+      const savedDevice = applyHistoryDraftUpdates(
+        {
+          ...nextBaseDevice,
+          habitStartedOnLocal: draftHabitStartLocalDate ?? nextBaseDevice.habitStartedOnLocal,
+        },
+        updates,
+      );
+      setBaseDevice(savedDevice);
+      setDraftDevice(savedDevice);
       setIsDirty(false);
-      setPendingHabitStartBackfillEnd(null);
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : "Failed to save history on the device.");
+    } finally {
+      setIsPersistingHistorySession(false);
     }
   }
 
-  async function handleBackdateHabitStart(localDate: string, row: number, col: number) {
-    const previousStart = resolveHabitStartLocalDate(draftDevice);
-
-    try {
-      setStatusError(null);
-      await setActiveHabitStartDate(localDate, device.id);
-      setPendingHabitStartBackfillEnd((current) => {
-        if (!previousStart) {
-          return current;
-        }
-
-        if (!current || previousStart > current) {
-          return previousStart;
-        }
-
-        return current;
-      });
-      setBaseDevice((current) => ({
-        ...current,
-        habitStartedOnLocal: localDate,
-      }));
-      setDraftDevice((current) =>
-        toggleHistoryCellLocal(
-          {
-            ...current,
-            habitStartedOnLocal: localDate,
-          },
-          row,
-          col,
-        ),
-      );
-      setIsDirty(true);
-    } catch (error) {
-      setStatusError(error instanceof Error ? error.message : "Failed to move the habit start date.");
-    }
+  function handleBackdateHabitStart(localDate: string, row: number, col: number) {
+    setStatusError(null);
+    setDraftDevice((current) =>
+      toggleHistoryCellLocal(
+        {
+          ...current,
+          habitStartedOnLocal: localDate,
+        },
+        row,
+        col,
+      ),
+    );
+    setIsDirty(true);
   }
 
   function handleLockedCellPress(row: number, col: number) {
-    if (isSavingHistoryDraft || isUpdatingHabitStartDate) {
+    if (isSaveInFlight) {
       return;
     }
 
@@ -601,7 +653,7 @@ export default function DeviceHistoryRoute() {
         {
           text: `Move start to ${targetLabel}`,
           onPress: () => {
-            void handleBackdateHabitStart(localDate, row, col);
+            handleBackdateHabitStart(localDate, row, col);
           },
         },
       ],
@@ -613,7 +665,7 @@ export default function DeviceHistoryRoute() {
       <View style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
         <StatusBar hidden animated style="light" />
 
-        {!canEditHistory ? (
+        {!canRenderEditor ? (
           historyConnectionState === "checking" ? (
             renderCheckingState()
           ) : (
@@ -679,7 +731,7 @@ export default function DeviceHistoryRoute() {
                     mode="edit"
                     onLockedCellPress={handleLockedCellPress}
                     onCellPress={(row, col) => {
-                      if (isSavingHistoryDraft || isUpdatingHabitStartDate) {
+                      if (isSaveInFlight) {
                         return;
                       }
 

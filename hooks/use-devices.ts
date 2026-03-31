@@ -348,7 +348,12 @@ export function useDevices() {
         continue;
       }
 
-      if (getDayStateByLocalDate(matchingDevice, localDate) === pendingState.isDone) {
+      const currentTodayState = getDayStateByLocalDate(matchingDevice, localDate);
+      if (currentTodayState !== pendingState.isDone) {
+        continue;
+      }
+
+      if (pendingState.phase === "confirmed") {
         clearPendingTodayState(deviceId);
       }
     }
@@ -958,7 +963,7 @@ export function useDeviceActions() {
         habitName: string;
         weeklyTarget: number;
       }) => undefined,
-      setActiveHabitStartDate: async (_habitStartedOnLocal: string, _deviceId?: string) => undefined,
+      setActiveHabitStartDate: async (_habitStartedOnLocal: string, _deviceId?: string) => null as AddOneDevice | null,
       isUpdatingHabitStartDate: false,
       restoreBoardFromSnapshot: async (_source: OnboardingRestoreSource, _deviceId?: string) => undefined,
       toggleHistoryCell: demoActions.toggleHistoryCell,
@@ -981,23 +986,91 @@ export function useDeviceActions() {
         return;
       }
 
-      const result = await historyDraftMutation.mutateAsync({
-        baseRevision,
-        deviceId: targetDevice.id,
-        draftId: makeClientEventId(),
-        updates,
-      });
+      const applyDraft = async (revision: number) => {
+        const result = await historyDraftMutation.mutateAsync({
+          baseRevision: revision,
+          deviceId: targetDevice.id,
+          draftId: makeClientEventId(),
+          updates,
+        });
 
-      await waitForDeviceMatch(
-        targetDevice.id,
-        {
-          baseRevision,
-          commandId: result.command_id ?? null,
-          errorMessage: "The device did not confirm the saved history draft in time.",
-          requireRevisionAdvance: true,
-        },
-        (device) => deviceMatchesHistory(device, updates),
-      );
+        const mirrorWait = settlePromise(
+          waitForDeviceMatch(
+            targetDevice.id,
+            {
+              baseRevision: revision,
+              commandId: result.command_id ?? null,
+              errorMessage: "The device did not confirm the saved history draft in time.",
+              requireRevisionAdvance: true,
+            },
+            (device) => deviceMatchesHistory(device, updates),
+          ),
+        );
+        const commandAppliedWait = result.command_id
+          ? settlePromise(
+              waitForCommandApplied(result.command_id, {
+                errorMessage: "The device did not confirm the saved history draft in time.",
+              }),
+            )
+          : null;
+
+        const firstConfirmation = commandAppliedWait
+          ? await Promise.race([
+              mirrorWait.then((settled) => ({ kind: "mirror" as const, settled })),
+              commandAppliedWait.then((settled) => ({ kind: "command" as const, settled })),
+            ])
+          : { kind: "mirror" as const, settled: await mirrorWait };
+
+        if (firstConfirmation.settled.ok) {
+          if (firstConfirmation.kind === "mirror") {
+            return;
+          }
+
+          void mirrorWait.then((mirrorResult) => {
+            if (mirrorResult.ok) {
+              return;
+            }
+
+            void refreshRuntimeSnapshot(targetDevice.id, {
+              errorMessage: "The board saved the history draft, but the refreshed snapshot did not arrive in time.",
+              timeoutMs: 12_000,
+            }).catch((refreshError) => {
+              console.warn("History draft applied before the runtime snapshot caught up", refreshError);
+            });
+          });
+          return;
+        }
+
+        const fallbackConfirmation =
+          firstConfirmation.kind === "mirror"
+            ? commandAppliedWait
+              ? await commandAppliedWait
+              : null
+            : await mirrorWait;
+
+        if (fallbackConfirmation?.ok) {
+          return;
+        }
+
+        throw firstConfirmation.settled.error;
+      };
+
+      try {
+        await applyDraft(baseRevision);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!isRuntimeRevisionConflictError(message)) {
+          throw error;
+        }
+
+        const refreshedDevice = await resolveFreshLiveDevice(targetDevice.id);
+        if (refreshedDevice.runtimeRevision === baseRevision) {
+          throw error;
+        }
+
+        await applyDraft(refreshedDevice.runtimeRevision);
+      }
+
       clearConnectivityIssue(targetDevice.id);
       clearRuntimeConflictRecovery(targetDevice.id);
       void invalidateCloudDevices();
@@ -1119,6 +1192,7 @@ export function useDeviceActions() {
     }) => {
       const targetDevice = await resolveFreshLiveDevice(params?.deviceId);
       const baseRevision = targetDevice.runtimeRevision;
+      clearPendingTodayState(targetDevice.id);
       const result = await resetHistoryMutation.mutateAsync({
         dailyMinimum: params?.dailyMinimum ?? targetDevice.dailyMinimum,
         deviceId: targetDevice.id,
@@ -1139,10 +1213,12 @@ export function useDeviceActions() {
         (device) =>
           device.recordedDaysTotal === 0 &&
           device.successfulWeeksTotal === 0 &&
+          device.days.every((week) => week.every((day) => !day)) &&
           device.name === (params?.habitName ?? targetDevice.name) &&
           device.dailyMinimum === (params?.dailyMinimum ?? targetDevice.dailyMinimum) &&
           device.weeklyTarget === (params?.weeklyTarget ?? targetDevice.weeklyTarget),
       );
+      clearPendingTodayState(targetDevice.id);
       clearConnectivityIssue(targetDevice.id);
       clearRuntimeConflictRecovery(targetDevice.id);
       void invalidateCloudDevices();
@@ -1184,7 +1260,8 @@ export function useDeviceActions() {
         deviceId: targetDevice.id,
         habitStartedOnLocal,
       });
-      void invalidateCloudDevices();
+      await invalidateCloudDevices();
+      return resolveFreshLiveDevice(targetDevice.id);
     },
     restoreBoardFromSnapshot,
     toggleHistoryCell: async () => undefined,

@@ -1285,7 +1285,8 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
       return false;
     }
 
-    DynamicJsonDocument doc(4096);
+    const size_t payloadCapacity = command.payloadJson.length() * 2U + 2048U;
+    DynamicJsonDocument doc(payloadCapacity > 4096U ? payloadCapacity : 4096U);
     DeserializationError error = deserializeJson(doc, command.payloadJson);
     if (error) {
       failureReason = "Failed to parse history draft payload.";
@@ -1767,6 +1768,12 @@ void FirmwareApp::drainIncomingCommands_() {
     const bool applied = applyCloudCommand_(command, failureReason);
     const CloudClient::CommandAckStatus ackStatus =
         applied ? CloudClient::CommandAckStatus::Applied : CloudClient::CommandAckStatus::Failed;
+    if (!applied) {
+      Serial.printf("Command %s (%s) failed: %s\n",
+                    command.id.c_str(),
+                    command.kind.c_str(),
+                    failureReason.c_str());
+    }
     enqueuePendingAck_(command.id, ackStatus, failureReason);
   }
 }
