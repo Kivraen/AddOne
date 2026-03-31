@@ -355,6 +355,7 @@ function makePreviewBoard(
     syncState,
     lastSnapshotAt: new Date().toISOString(),
     weeklyTarget: 4,
+    weekTargets: null,
     paletteId,
     days: Array.from({ length: 21 }, (_, weekIndex) =>
       Array.from({ length: 7 }, (_, dayIndex) => activeByWeek[weekIndex]?.includes(dayIndex) ?? false),

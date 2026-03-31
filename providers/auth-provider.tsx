@@ -44,6 +44,15 @@ function parseAuthCallbackUrl(url: string) {
   };
 }
 
+function normalizeAuthRequestError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (message.toLowerCase().includes("network request failed")) {
+    return "No internet connection. Leave the AddOne Wi-Fi if you are still on it, then try again.";
+  }
+
+  return message || "The request could not be completed.";
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [status, setStatus] = useState<AuthStatus>(supabase ? "loading" : "demo");
@@ -161,23 +170,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setIsSendingOtp(true);
       setPendingEmail(email);
 
-      const emailRedirectTo = Linking.createURL("/auth/callback");
+      try {
+        const emailRedirectTo = Linking.createURL("/auth/callback");
 
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo,
-          shouldCreateUser: true,
-        },
-      });
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo,
+            shouldCreateUser: true,
+          },
+        });
 
-      setIsSendingOtp(false);
+        if (error) {
+          return error.message;
+        }
 
-      if (error) {
-        return error.message;
+        return null;
+      } catch (error) {
+        return normalizeAuthRequestError(error);
+      } finally {
+        setIsSendingOtp(false);
       }
-
-      return null;
     },
     async verifyEmailOtp({ email, token }) {
       if (!supabase) {
@@ -193,27 +206,31 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       setIsVerifyingOtp(true);
 
-      const attemptTypes = ["email", "signup"] as const;
-      let lastError: string | null = null;
+      try {
+        const attemptTypes = ["email", "signup"] as const;
+        let lastError: string | null = null;
 
-      for (const type of attemptTypes) {
-        const { error } = await supabase.auth.verifyOtp({
-          email: normalizedEmail,
-          token: normalizedToken,
-          type,
-        });
+        for (const type of attemptTypes) {
+          const { error } = await supabase.auth.verifyOtp({
+            email: normalizedEmail,
+            token: normalizedToken,
+            type,
+          });
 
-        if (!error) {
-          setPendingEmail(normalizedEmail);
-          setIsVerifyingOtp(false);
-          return null;
+          if (!error) {
+            setPendingEmail(normalizedEmail);
+            return null;
+          }
+
+          lastError = error.message;
         }
 
-        lastError = error.message;
+        return lastError ?? "Failed to verify the email code.";
+      } catch (error) {
+        return normalizeAuthRequestError(error);
+      } finally {
+        setIsVerifyingOtp(false);
       }
-
-      setIsVerifyingOtp(false);
-      return lastError ?? "Failed to verify the email code.";
     },
     async signOut() {
       if (!supabase) {

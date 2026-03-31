@@ -189,14 +189,6 @@ export function areSettingsDraftsEqual(left: DeviceSettingsDraft, right: DeviceS
 export function buildSettingsPatchFromDraft(base: DeviceSettingsDraft, draft: DeviceSettingsDraft): DeviceSettingsPatch | null {
   const patch: DeviceSettingsPatch = {};
 
-  if (draft.habitName.trim() !== base.habitName.trim()) {
-    patch.name = draft.habitName.trim();
-  }
-
-  if (draft.weeklyTarget !== base.weeklyTarget) {
-    patch.weekly_target = draft.weeklyTarget;
-  }
-
   if (draft.timezone.trim() !== base.timezone.trim()) {
     patch.timezone = draft.timezone.trim();
   }

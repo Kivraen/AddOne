@@ -87,6 +87,7 @@ private:
   void performFactoryReset_(const char* reason, bool allowReconnectForCloudReport = false);
   static void syncTaskEntry_(void* context);
   bool copyRuntimeSnapshotPayload_(String& boardDaysJson,
+                                   String& weekTargetsJson,
                                    String& settingsJson,
                                    HabitTracker::WeekDate& currentWeekStart,
                                    uint8_t& todayRow,

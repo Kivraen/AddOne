@@ -44,7 +44,7 @@ export function isCellBeforeHabitStart(entity: AddOneDevice | SharedBoard, row: 
 
 export function buildBoardCells(entity: AddOneDevice | SharedBoard): PixelCellState[][] {
   const cells = emptyBoard();
-  const { today, weeklyTarget, days } = entity;
+  const { today, weeklyTarget, days, weekTargets } = entity;
   const habitStartLocalDate = resolveHabitStartLocalDate(entity);
 
   for (let col = 0; col < BOARD_COLS; col += 1) {
@@ -72,7 +72,8 @@ export function buildBoardCells(entity: AddOneDevice | SharedBoard): PixelCellSt
     }
 
     if (visibleInEraDays > 0) {
-      if (completed >= weeklyTarget) {
+      const resolvedWeeklyTarget = weekTargets?.[col] ?? weeklyTarget;
+      if (completed >= resolvedWeeklyTarget) {
         cells[7][col] = "weekSuccess";
       } else if (isPastWeek) {
         cells[7][col] = "weekFail";
@@ -128,5 +129,5 @@ export function toggleToday(device: AddOneDevice): AddOneDevice {
 export function targetStatusLabel(device: AddOneDevice | SharedBoard): string {
   const currentWeekDays = device.days[device.today.weekIndex];
   const completed = currentWeekDays.slice(0, device.today.dayIndex + 1).filter(Boolean).length;
-  return `${completed}/${device.weeklyTarget} this week`;
+  return `${completed}/${device.weekTargets?.[device.today.weekIndex] ?? device.weeklyTarget} this week`;
 }

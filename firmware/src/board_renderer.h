@@ -36,6 +36,7 @@ public:
   void begin();
   bool buildSnapshotFrame(const String& boardDaysJson,
                           uint8_t weeklyTarget,
+                          const String& weekTargetsJson,
                           const char* palettePreset,
                           const String& paletteCustomJson,
                           BoardFrame& outFrame) const;

@@ -90,6 +90,7 @@ function buildPalettePreviewDevice(device: AddOneDevice): AddOneDevice {
     successfulWeeksTotal,
     today: { ...PALETTE_PREVIEW_TODAY },
     weeklyTarget: PALETTE_PREVIEW_WEEKLY_TARGET,
+    weekTargets: Array.from({ length: 21 }, () => PALETTE_PREVIEW_WEEKLY_TARGET),
   };
 }
 

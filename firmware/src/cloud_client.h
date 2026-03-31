@@ -114,6 +114,7 @@ public:
                               uint8_t todayRow,
                               uint8_t weeklyTarget,
                               const String& boardDaysJson,
+                              const String& weekTargetsJson,
                               const String& palettePreset,
                               const String& paletteCustomJson,
                               const String& emittedAt);
@@ -128,6 +129,7 @@ public:
                              const HabitTracker::WeekDate& currentWeekStart,
                              uint8_t todayRow,
                              const String& boardDaysJson,
+                             const String& weekTargetsJson,
                              const String& settingsJson,
                              const String& generatedAt);
 

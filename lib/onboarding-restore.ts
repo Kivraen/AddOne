@@ -8,6 +8,7 @@ export function captureOnboardingRestoreSource(device: AddOneDevice): Onboarding
     dateGrid: device.dateGrid?.map((week) => [...week]),
     days: device.days.map((week) => [...week]),
     logicalToday: device.logicalToday,
+    weekTargets: device.weekTargets ? [...device.weekTargets] : null,
     settings: {
       autoBrightness: device.autoBrightness,
       brightness: device.brightness,
@@ -29,14 +30,6 @@ export function captureOnboardingRestoreSource(device: AddOneDevice): Onboarding
 
 export function buildRestoreSettingsPatch(source: OnboardingRestoreSource, device: AddOneDevice): DeviceSettingsPatch | null {
   const patch: DeviceSettingsPatch = {};
-
-  if (source.settings.name.trim() !== device.name.trim()) {
-    patch.name = source.settings.name.trim();
-  }
-
-  if (source.settings.weeklyTarget !== device.weeklyTarget) {
-    patch.weekly_target = source.settings.weeklyTarget;
-  }
 
   if (source.settings.timezone.trim() !== device.timezone.trim()) {
     patch.timezone = source.settings.timezone.trim();

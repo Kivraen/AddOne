@@ -123,7 +123,7 @@ export default function DeviceSettingsRoutineRoute() {
             <View style={{ gap: SETTINGS_FIELD_GAP }}>
               <View style={{ gap: SETTINGS_HEADER_GAP }}>
                 <SettingsFieldLabel>Weekly target</SettingsFieldLabel>
-                <SettingsNote>Days that make a successful week.</SettingsNote>
+                <SettingsNote>Applies this week and future weeks. Past weeks stay the same.</SettingsNote>
               </View>
               <View
                 style={{

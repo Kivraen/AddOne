@@ -89,6 +89,7 @@ export interface AddOneDevice {
   lastSyncAt?: string | null;
   runtimeRevision: number;
   weeklyTarget: number;
+  weekTargets: number[] | null;
   weekStart: WeekStart;
   timezone: string;
   resetTime: string;
@@ -130,6 +131,7 @@ export interface BoardBackup {
   boardDays: boolean[][];
   currentWeekStart: string;
   historyEra?: number;
+  weekTargets?: number[] | null;
   todayRow: number;
   backedUpAt: string;
   sourceDeviceId: string | null;
@@ -152,6 +154,7 @@ export interface OnboardingRestoreSource {
   dateGrid?: string[][];
   days: boolean[][];
   logicalToday: string;
+  weekTargets: number[] | null;
   settings: {
     autoBrightness: boolean;
     brightness: number;
@@ -203,6 +206,7 @@ export interface SharedBoard {
   syncState: SyncState;
   lastSnapshotAt?: string | null;
   weeklyTarget: number;
+  weekTargets: number[] | null;
   paletteId: string;
   days: boolean[][];
   dateGrid?: string[][];

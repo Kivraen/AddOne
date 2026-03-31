@@ -163,6 +163,7 @@ bool RealtimeClient::publishFriendCelebrationReady(const String& deviceAuthToken
                                                    uint8_t todayRow,
                                                    uint8_t weeklyTarget,
                                                    const String& boardDaysJson,
+                                                   const String& weekTargetsJson,
                                                    const String& palettePreset,
                                                    const String& paletteCustomJson,
                                                    const String& emittedAt) {
@@ -193,6 +194,10 @@ bool RealtimeClient::publishFriendCelebrationReady(const String& deviceAuthToken
   payload += String(weeklyTarget);
   payload += ",\"board_days\":";
   payload += boardDaysJson;
+  if (!weekTargetsJson.isEmpty()) {
+    payload += ",\"week_targets\":";
+    payload += weekTargetsJson;
+  }
   payload += ",\"palette_preset\":\"";
   payload += escapeJson(palettePreset.isEmpty() ? String("classic") : palettePreset);
   payload += "\",\"palette_custom\":";
@@ -213,6 +218,7 @@ bool RealtimeClient::publishRuntimeSnapshot(const String& deviceAuthToken,
                                             const HabitTracker::WeekDate& currentWeekStart,
                                             uint8_t todayRow,
                                             const String& boardDaysJson,
+                                            const String& weekTargetsJson,
                                             const String& settingsJson,
                                             const String& generatedAt) {
   if (deviceAuthToken.isEmpty() || boardDaysJson.isEmpty()) {
@@ -240,6 +246,10 @@ bool RealtimeClient::publishRuntimeSnapshot(const String& deviceAuthToken,
   payload += String(todayRow);
   payload += ",\"board_days\":";
   payload += boardDaysJson;
+  if (!weekTargetsJson.isEmpty()) {
+    payload += ",\"week_targets\":";
+    payload += weekTargetsJson;
+  }
   payload += ",\"settings\":";
   payload += settingsJson.isEmpty() ? "{}" : settingsJson;
 
@@ -538,6 +548,7 @@ bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCom
   outCommand.settingsSync.hasTimezone = !payloadJson["timezone"].isNull();
   outCommand.settingsSync.hasBrightness = !payloadJson["brightness"].isNull();
   outCommand.settingsSync.hasWeeklyTarget = !payloadJson["weekly_target"].isNull();
+  outCommand.settingsSync.hasWeeklyTargetEffectiveWeekStart = !payloadJson["weekly_target_effective_week_start"].isNull();
   outCommand.settingsSync.ambientAuto = outCommand.settingsSync.hasAmbientAuto ? payloadJson["ambient_auto"].as<bool>() : true;
   outCommand.settingsSync.rewardEnabled = outCommand.settingsSync.hasRewardEnabled ? payloadJson["reward_enabled"].as<bool>() : false;
   outCommand.settingsSync.dayResetTime = payloadJson["day_reset_time"] | "";
@@ -553,6 +564,7 @@ bool RealtimeClient::parseCommand_(const String& payload, CloudClient::DeviceCom
   outCommand.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
   outCommand.settingsSync.rewardType = payloadJson["reward_type"] | "";
   outCommand.settingsSync.timezone = payloadJson["timezone"] | "";
+  outCommand.settingsSync.weeklyTargetEffectiveWeekStart = payloadJson["weekly_target_effective_week_start"] | "";
   outCommand.settingsSync.brightness = outCommand.settingsSync.hasBrightness ? payloadJson["brightness"].as<uint8_t>() : 70;
   outCommand.settingsSync.weeklyTarget =
       outCommand.settingsSync.hasWeeklyTarget ? payloadJson["weekly_target"].as<uint8_t>() : Config::kDefaultWeeklyMinimum;

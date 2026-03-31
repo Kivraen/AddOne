@@ -376,6 +376,7 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
       command.settingsSync.hasTimezone = !payloadJson["timezone"].isNull();
       command.settingsSync.hasBrightness = !payloadJson["brightness"].isNull();
       command.settingsSync.hasWeeklyTarget = !payloadJson["weekly_target"].isNull();
+      command.settingsSync.hasWeeklyTargetEffectiveWeekStart = !payloadJson["weekly_target_effective_week_start"].isNull();
 
       command.settingsSync.ambientAuto = command.settingsSync.hasAmbientAuto ? payloadJson["ambient_auto"].as<bool>() : true;
       command.settingsSync.rewardEnabled = command.settingsSync.hasRewardEnabled ? payloadJson["reward_enabled"].as<bool>() : false;
@@ -392,6 +393,7 @@ bool CloudClient::pullCommands(DeviceCommand* outCommands, size_t maxCommands, s
       command.settingsSync.rewardTrigger = payloadJson["reward_trigger"] | "";
       command.settingsSync.rewardType = payloadJson["reward_type"] | "";
       command.settingsSync.timezone = payloadJson["timezone"] | "";
+      command.settingsSync.weeklyTargetEffectiveWeekStart = payloadJson["weekly_target_effective_week_start"] | "";
       command.settingsSync.brightness =
           command.settingsSync.hasBrightness ? payloadJson["brightness"].as<uint8_t>() : 70;
       command.settingsSync.weeklyTarget = command.settingsSync.hasWeeklyTarget
@@ -414,6 +416,7 @@ bool CloudClient::queueFriendCelebration(const String& sourceLocalDate,
                                          uint8_t todayRow,
                                          uint8_t weeklyTarget,
                                          const String& boardDaysJson,
+                                         const String& weekTargetsJson,
                                          const String& palettePreset,
                                          const String& paletteCustomJson,
                                          const String& emittedAt) {
@@ -450,6 +453,10 @@ bool CloudClient::queueFriendCelebration(const String& sourceLocalDate,
   payload += String(weeklyTarget);
   payload += ",\"p_board_days\":";
   payload += boardDaysJson;
+  if (!weekTargetsJson.isEmpty()) {
+    payload += ",\"p_week_targets\":";
+    payload += weekTargetsJson;
+  }
   payload += ",\"p_palette_preset\":\"";
   payload += escapeJson(palettePreset.isEmpty() ? String("classic") : palettePreset);
   payload += "\",\"p_palette_custom\":";
@@ -608,6 +615,7 @@ bool CloudClient::uploadRuntimeSnapshot(uint32_t revision,
                                         const HabitTracker::WeekDate& currentWeekStart,
                                         uint8_t todayRow,
                                         const String& boardDaysJson,
+                                        const String& weekTargetsJson,
                                         const String& settingsJson,
                                         const String& generatedAt) {
   if (!identity_ || !isConfigured() || WiFi.status() != WL_CONNECTED || !ensureDeviceAuthToken_()) {
@@ -641,6 +649,10 @@ bool CloudClient::uploadRuntimeSnapshot(uint32_t revision,
   payload += String(todayRow);
   payload += ",\"p_board_days\":";
   payload += boardDaysJson;
+  if (!weekTargetsJson.isEmpty()) {
+    payload += ",\"p_week_targets\":";
+    payload += weekTargetsJson;
+  }
   payload += ",\"p_settings\":";
   payload += settingsJson.isEmpty() ? "{}" : settingsJson;
 

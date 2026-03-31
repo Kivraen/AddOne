@@ -65,6 +65,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
 - Next brief: `T-049` final iOS release-candidate polish and baseline lock
 - Current execution task: continue `T-049` from the checkpoint on `codex/s4-final-ios-rc-polish` to finish the remaining Home today-toggle and KPI consistency regression work, then lock one explicit iOS RC baseline; after that, run `T-050` as the final user-facing polish pass on first-device onboarding and setup before the next build
+- Parallel support slice: `T-054` is now in progress on `codex/s4-weekly-target-semantics-support` because weekly minimum changes widened into a real forward-only history semantics and security-hardening change; it must be validated separately from `T-049`
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, and `T-048` is now accepted as the Home confirmation-latency follow-up. They are now direct inputs to the final ship baseline rather than side work waiting behind a blocked artifact gate.
 
 ## Current Blockers
@@ -102,6 +103,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-048` is now accepted on `codex/s4-home-confirmation-latency`: the Home command-confirmation path, stale reload truth, owner realtime invalidation, and Home-only offline refresh behavior are all tightened, and the final unplug-and-pull-to-refresh proof is now complete.
 - `T-049` is now in progress on `codex/s4-final-ios-rc-polish`: substantial sign-in, onboarding, firmware, and Home polish is checkpointed, dependency alignment has been exercised, and the remaining unfinished area is the Home today-toggle and KPI consistency path before the branch can be treated as the locked RC baseline.
 - `T-050` is now queued immediately after `T-049`: the first-device onboarding and setup journey is working, but it is still too raw in pacing, hierarchy, copy, and completion tone for a store-facing release and should be the last major product-facing polish slice before the final iOS RC build.
+- `T-054` is now in progress on `codex/s4-weekly-target-semantics-support`: the weekly target model is being converted to forward-only semantics across backend, firmware, projection, and history-edit behavior, and the new `board_weekly_target_changes` table is hardened; the remaining gate is a focused manual regression matrix before acceptance.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.

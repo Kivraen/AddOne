@@ -30,6 +30,7 @@ export type Database = {
           source_snapshot_revision: number
           today_row: number
           updated_at: string
+          week_targets: Json | null
         }
         Insert: {
           backed_up_at?: string
@@ -46,6 +47,7 @@ export type Database = {
           source_snapshot_revision?: number
           today_row: number
           updated_at?: string
+          week_targets?: Json | null
         }
         Update: {
           backed_up_at?: string
@@ -62,6 +64,7 @@ export type Database = {
           source_snapshot_revision?: number
           today_row?: number
           updated_at?: string
+          week_targets?: Json | null
         }
         Relationships: [
           {
@@ -120,6 +123,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "board_habit_eras_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_weekly_target_changes: {
+        Row: {
+          board_id: string
+          created_at: string
+          effective_week_start: string
+          history_era: number
+          updated_at: string
+          weekly_target: number
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          effective_week_start: string
+          history_era: number
+          updated_at?: string
+          weekly_target: number
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          effective_week_start?: string
+          history_era?: number
+          updated_at?: string
+          weekly_target?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_weekly_target_changes_board_id_fkey"
             columns: ["board_id"]
             isOneToOne: false
             referencedRelation: "boards"
@@ -444,6 +482,7 @@ export type Database = {
           revision: number
           settings: Json
           today_row: number
+          week_targets: Json | null
         }
         Insert: {
           board_days: Json
@@ -457,6 +496,7 @@ export type Database = {
           revision: number
           settings?: Json
           today_row: number
+          week_targets?: Json | null
         }
         Update: {
           board_days?: Json
@@ -470,6 +510,7 @@ export type Database = {
           revision?: number
           settings?: Json
           today_row?: number
+          week_targets?: Json | null
         }
         Relationships: [
           {

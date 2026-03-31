@@ -30,9 +30,15 @@ public:
                        String& failureReason);
   bool applyHistoryDraft(const HistoryDraftUpdate* updates,
                          size_t updateCount,
+                         const String& weekTargetsJson,
+                         const WeekDate* weekTargetsCurrentWeekStart,
                          const tm& nowDate,
                          uint32_t expectedRevision,
                          String& failureReason);
+  bool applyWeeklyTargetChange(uint8_t minimum,
+                               const WeekDate& effectiveWeekStart,
+                               const tm& nowDate,
+                               String& failureReason);
   bool bumpRuntimeRevision();
   bool checkWeekBoundary(const tm& nowDate);
   bool clearToDefaults(const tm& nowDate);
@@ -42,9 +48,11 @@ public:
   bool isInitialized() const { return initialized_; }
   uint8_t minimum() const { return minimum_; }
   uint32_t runtimeRevision() const { return runtimeRevision_; }
+  uint8_t weekTarget(uint8_t weekIdx) const;
   bool queueLocalToggleToday(const tm& nowDate, bool& outIsDone);
   bool resetHistory(const tm& nowDate, uint8_t minimum, uint32_t expectedRevision, String& failureReason);
   bool restoreFromSnapshot(const String& boardDaysJson,
+                           const String& weekTargetsJson,
                            const WeekDate& weekStart,
                            uint8_t minimum,
                            uint32_t nextRevision,
@@ -58,23 +66,33 @@ private:
   static constexpr const char* kGridKey = "grid";
   static constexpr const char* kWeekStartKey = "weekStart";
   static constexpr const char* kMinimumKey = "minimum";
+  static constexpr const char* kWeekTargetsKey = "weekTgts";
   static constexpr const char* kFirstWeekKey = "firstWeek";
   static constexpr const char* kRevisionKey = "revision";
 
   static int dayOfWeekMondayBased_(const tm& date);
   static bool isValidWeekDate_(const WeekDate& date);
   static bool parseLocalDate_(const String& localDate, tm& outDate);
+  static bool parseWeekTargetsJson_(const String& weekTargetsJson, uint8_t* outTargets);
   static WeekDate toWeekDate_(const tm& date);
   static WeekDate mondayOfWeek_(const tm& date);
+  static WeekDate offsetWeekDate_(const WeekDate& date, int weekDelta);
   static int weeksBetween_(const WeekDate& from, const WeekDate& to);
 
+  bool applyVisibleWeekTargets_(const String& weekTargetsJson,
+                                const WeekDate& snapshotWeekStart,
+                                const tm& nowDate,
+                                bool& outChanged,
+                                String& failureReason);
   bool ensureInitialized_(const tm& nowDate);
+  void evaluateCurrentWeek_();
   bool persist_() const;
   void evaluateWeek_(uint8_t weekIdx);
   int8_t findEarliestRecordedDay_(uint8_t weekIdx) const;
   void initEmpty_(const tm& nowDate);
   void load_();
   bool readDayStateForDate_(const tm& targetDate, const tm& nowDate, bool& outIsDone) const;
+  void seedWeekTargets_(uint8_t minimum);
   bool setDayStateForDate_(const tm& targetDate, bool isDone, const tm& nowDate, bool* outChanged = nullptr);
   void shiftWeeks_(int weeks);
 
@@ -84,4 +102,5 @@ private:
   WeekDate lastWeekStart_{};
   uint32_t runtimeRevision_ = 0;
   uint8_t minimum_ = Config::kDefaultWeeklyMinimum;
+  uint8_t weekTargets_[Config::kWeeks]{};
 };

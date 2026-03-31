@@ -182,6 +182,7 @@ void populateSettingsSyncPayload(JsonObjectConst settingsObject, DeviceSettingsS
   payload.hasRewardType = !settingsObject["reward_type"].isNull();
   payload.hasTimezone = !settingsObject["timezone"].isNull();
   payload.hasWeeklyTarget = !settingsObject["weekly_target"].isNull();
+  payload.hasWeeklyTargetEffectiveWeekStart = !settingsObject["weekly_target_effective_week_start"].isNull();
 
   payload.ambientAuto = payload.hasAmbientAuto ? settingsObject["ambient_auto"].as<bool>() : true;
   payload.rewardEnabled = payload.hasRewardEnabled ? settingsObject["reward_enabled"].as<bool>() : false;
@@ -196,6 +197,7 @@ void populateSettingsSyncPayload(JsonObjectConst settingsObject, DeviceSettingsS
   payload.rewardTrigger = settingsObject["reward_trigger"] | "";
   payload.rewardType = settingsObject["reward_type"] | "";
   payload.timezone = settingsObject["timezone"] | "";
+  payload.weeklyTargetEffectiveWeekStart = settingsObject["weekly_target_effective_week_start"] | "";
   payload.brightness = payload.hasBrightness ? settingsObject["brightness"].as<uint8_t>() : 70;
   payload.weeklyTarget = payload.hasWeeklyTarget ? settingsObject["weekly_target"].as<uint8_t>() : Config::kDefaultWeeklyMinimum;
 }
@@ -266,6 +268,19 @@ String buildBoardDaysJson(const HabitTracker::WeeklyGrid& grid) {
 
   String json;
   serializeJson(weeks, json);
+  return json;
+}
+
+String buildWeekTargetsJson(const uint8_t* weekTargets) {
+  DynamicJsonDocument doc(1024);
+  JsonArray targets = doc.to<JsonArray>();
+
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    targets.add(weekTargets ? weekTargets[week] : Config::kDefaultWeeklyMinimum);
+  }
+
+  String json;
+  serializeJson(targets, json);
   return json;
 }
 
@@ -885,6 +900,7 @@ bool FirmwareApp::tryEmitFriendCelebration_() {
   String paletteCustomJson;
   String palettePreset;
   String sourceLocalDate;
+  String weekTargetsJson;
   HabitTracker::WeekDate currentWeekStart{};
   uint8_t todayRow = 0;
   uint8_t weeklyTarget = Config::kDefaultWeeklyMinimum;
@@ -906,6 +922,11 @@ bool FirmwareApp::tryEmitFriendCelebration_() {
         HabitTracker::WeekDate weekStart{};
         if (habitTracker_.currentWeekStart(weekStart)) {
           boardDaysJson = buildBoardDaysJson(habitTracker_.grid());
+          uint8_t weekTargets[Config::kWeeks]{};
+          for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+            weekTargets[week] = habitTracker_.weekTarget(week);
+          }
+          weekTargetsJson = buildWeekTargetsJson(weekTargets);
           emittedAt = timeService_.currentUtcIsoTimestamp();
           paletteCustomJson = settings.paletteCustomJson;
           palettePreset = settings.palettePreset;
@@ -938,6 +959,7 @@ bool FirmwareApp::tryEmitFriendCelebration_() {
         todayRow,
         weeklyTarget,
         boardDaysJson,
+        weekTargetsJson,
         palettePreset,
         paletteCustomJson,
         emittedAt);
@@ -950,6 +972,7 @@ bool FirmwareApp::tryEmitFriendCelebration_() {
         todayRow,
         weeklyTarget,
         boardDaysJson,
+        weekTargetsJson,
         palettePreset,
         paletteCustomJson,
         emittedAt);
@@ -1175,6 +1198,7 @@ void FirmwareApp::enterWifiRecoveryMode_() {
 }
 
 bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
+                                              String& weekTargetsJson,
                                               String& settingsJson,
                                               HabitTracker::WeekDate& currentWeekStart,
                                               uint8_t& todayRow,
@@ -1191,6 +1215,7 @@ bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
 
   HabitTracker::WeeklyGrid board{};
   DeviceSettingsState settings{};
+  uint8_t weekTargets[Config::kWeeks]{};
   bool haveWeekStart = false;
 
   if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
@@ -1202,6 +1227,9 @@ bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
   revision = habitTracker_.runtimeRevision();
   todayRow = habitTracker_.todayRow(logicalNow);
   haveWeekStart = habitTracker_.currentWeekStart(currentWeekStart);
+  for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+    weekTargets[week] = habitTracker_.weekTarget(week);
+  }
 
   if (stateMutex_) {
     xSemaphoreGive(stateMutex_);
@@ -1212,6 +1240,7 @@ bool FirmwareApp::copyRuntimeSnapshotPayload_(String& boardDaysJson,
   }
 
   boardDaysJson = buildBoardDaysJson(board);
+  weekTargetsJson = buildWeekTargetsJson(weekTargets);
   settingsJson = buildSettingsJson(settings);
   generatedAt = timeService_.currentUtcIsoTimestamp();
   return true;
@@ -1294,16 +1323,34 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
 
     JsonArrayConst updatesJson = doc["updates"].as<JsonArrayConst>();
-    if (updatesJson.isNull() || updatesJson.size() == 0) {
-      failureReason = "History draft payload missing updates.";
+    const bool hasWeekTargets = doc["week_targets"].is<JsonArrayConst>();
+    const bool hasUpdates = !updatesJson.isNull() && updatesJson.size() > 0;
+    if (!hasUpdates && !hasWeekTargets) {
+      failureReason = "History draft payload missing updates or week_targets.";
       return false;
     }
 
-    HabitTracker::HistoryDraftUpdate* updates = new HabitTracker::HistoryDraftUpdate[updatesJson.size()];
+    HabitTracker::HistoryDraftUpdate* updates =
+        hasUpdates ? new HabitTracker::HistoryDraftUpdate[updatesJson.size()] : nullptr;
     for (size_t index = 0; index < updatesJson.size(); ++index) {
       JsonObjectConst update = updatesJson[index];
       updates[index].localDate = update["local_date"] | "";
       updates[index].isDone = update["is_done"].as<bool>();
+    }
+
+    String weekTargetsJson;
+    HabitTracker::WeekDate payloadWeekStart{};
+    HabitTracker::WeekDate* payloadWeekStartPtr = nullptr;
+    if (hasWeekTargets) {
+      const String payloadCurrentWeekStart = doc["current_week_start"] | "";
+      if (!parseWeekDateString(payloadCurrentWeekStart, payloadWeekStart)) {
+        delete[] updates;
+        failureReason = "History draft payload is missing a valid current_week_start.";
+        return false;
+      }
+
+      serializeJson(doc["week_targets"], weekTargetsJson);
+      payloadWeekStartPtr = &payloadWeekStart;
     }
 
     if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) != pdTRUE) {
@@ -1313,7 +1360,7 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
 
     const bool applied = habitTracker_.applyHistoryDraft(
-        updates, updatesJson.size(), nowLogical, command.baseRevision, failureReason);
+        updates, updatesJson.size(), weekTargetsJson, payloadWeekStartPtr, nowLogical, command.baseRevision, failureReason);
     if (stateMutex_) {
       xSemaphoreGive(stateMutex_);
     }
@@ -1349,7 +1396,39 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
       return false;
     }
 
-    habitTracker_.setMinimum(deviceSettings_.current().weeklyTarget);
+    if (command.settingsSync.hasWeeklyTarget) {
+      HabitTracker::WeekDate effectiveWeekStart{};
+      if (command.settingsSync.hasWeeklyTargetEffectiveWeekStart &&
+          parseWeekDateString(command.settingsSync.weeklyTargetEffectiveWeekStart, effectiveWeekStart)) {
+        // Use the explicit effective week supplied by the app/backend.
+      } else if (!habitTracker_.currentWeekStart(effectiveWeekStart)) {
+        if (stateMutex_) {
+          xSemaphoreGive(stateMutex_);
+        }
+        failureReason = "Current week is unavailable.";
+        return false;
+      }
+
+      tm nowLogical{};
+      if (!timeService_.nowLogical(nowLogical)) {
+        if (stateMutex_) {
+          xSemaphoreGive(stateMutex_);
+        }
+        failureReason = "Logical time is unavailable.";
+        return false;
+      }
+
+      if (!habitTracker_.applyWeeklyTargetChange(deviceSettings_.current().weeklyTarget, effectiveWeekStart, nowLogical, failureReason)) {
+        if (stateMutex_) {
+          xSemaphoreGive(stateMutex_);
+        }
+        if (failureReason.isEmpty()) {
+          failureReason = "Failed to apply the updated weekly target.";
+        }
+        return false;
+      }
+    }
+
     if (!habitTracker_.bumpRuntimeRevision()) {
       if (stateMutex_) {
         xSemaphoreGive(stateMutex_);
@@ -1498,6 +1577,10 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
 
     String restoredBoardDaysJson;
     serializeJson(boardDaysJsonVariant, restoredBoardDaysJson);
+    String restoredWeekTargetsJson;
+    if (doc["week_targets"].is<JsonArrayConst>()) {
+      serializeJson(doc["week_targets"], restoredWeekTargetsJson);
+    }
 
     DeviceSettingsSyncPayload restoreSettings{};
     populateSettingsSyncPayload(settingsObject, restoreSettings);
@@ -1522,6 +1605,7 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     timeService_.applySettings(deviceSettings_.current());
     const bool restored = habitTracker_.restoreFromSnapshot(
         restoredBoardDaysJson,
+        restoredWeekTargetsJson,
         restoredWeekStart,
         deviceSettings_.current().weeklyTarget,
         nextRevision,
@@ -1576,6 +1660,7 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     }
 
     const int weeklyTarget = doc["weekly_target"] | 0;
+    String weekTargetsJson;
     const char* palettePreset = doc["palette_preset"] | "classic";
     const FriendCelebrationSpeed transitionSpeed =
         parseFriendCelebrationSpeed(doc["transition_speed"] | "balanced");
@@ -1590,6 +1675,9 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
 
     String boardDaysJson;
     serializeJson(boardDaysVariant, boardDaysJson);
+    if (doc["week_targets"].is<JsonArrayConst>()) {
+      serializeJson(doc["week_targets"], weekTargetsJson);
+    }
 
     String paletteCustomJson = "{}";
     if (doc["palette_custom"].is<JsonObjectConst>()) {
@@ -1609,6 +1697,7 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
     if (!boardRenderer_.buildSnapshotFrame(
             boardDaysJson,
             static_cast<uint8_t>(weeklyTarget),
+            weekTargetsJson,
             palettePreset,
             paletteCustomJson,
             friendCelebrationPlayback_.friendFrame)) {
@@ -1651,18 +1740,19 @@ bool FirmwareApp::flushRuntimeSnapshot_() {
   uint8_t todayRow = 0;
   uint32_t revision = 0;
   String boardDaysJson;
+  String weekTargetsJson;
   String settingsJson;
   String generatedAt;
-  if (!copyRuntimeSnapshotPayload_(boardDaysJson, settingsJson, weekStart, todayRow, revision, generatedAt)) {
+  if (!copyRuntimeSnapshotPayload_(boardDaysJson, weekTargetsJson, settingsJson, weekStart, todayRow, revision, generatedAt)) {
     return false;
   }
 
   const bool uploaded =
       (realtimeClient_.isConnected() &&
        realtimeClient_.publishRuntimeSnapshot(
-           cloudClient_.deviceAuthToken(), revision, weekStart, todayRow, boardDaysJson, settingsJson, generatedAt)) ||
+           cloudClient_.deviceAuthToken(), revision, weekStart, todayRow, boardDaysJson, weekTargetsJson, settingsJson, generatedAt)) ||
       cloudClient_.uploadRuntimeSnapshot(
-          revision, weekStart, todayRow, boardDaysJson, settingsJson, generatedAt);
+          revision, weekStart, todayRow, boardDaysJson, weekTargetsJson, settingsJson, generatedAt);
   if (uploaded) {
     uint32_t currentRevision = revision;
     if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {

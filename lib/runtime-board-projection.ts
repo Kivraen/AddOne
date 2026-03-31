@@ -4,6 +4,7 @@ export interface RuntimeSnapshotProjectionInput {
   boardDays: unknown;
   currentWeekStart: string;
   todayRow: number;
+  weekTargets?: unknown;
 }
 
 export interface RuntimeBoardProjection {
@@ -17,6 +18,7 @@ export interface RuntimeBoardProjection {
     dayIndex: number;
     weekIndex: 0;
   };
+  weekTargets: number[] | null;
 }
 
 function stripSeconds(value: string | null | undefined, fallback = "00:00") {
@@ -168,6 +170,24 @@ function parseSnapshotBoardDays(boardDays: unknown) {
   return days.every(Boolean) ? (days as boolean[][]) : null;
 }
 
+function normalizeWeeklyTarget(value: unknown) {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return Math.max(1, Math.min(7, Math.round(numeric)));
+}
+
+function parseSnapshotWeekTargets(weekTargets: unknown) {
+  if (!Array.isArray(weekTargets) || weekTargets.length !== 21) {
+    return null;
+  }
+
+  const parsed = weekTargets.map((value) => normalizeWeeklyTarget(value));
+  return parsed.every((value) => value !== null) ? (parsed as number[]) : null;
+}
+
 function buildRecordedDateMap(snapshot: RuntimeSnapshotProjectionInput | null | undefined) {
   if (!snapshot || typeof snapshot.todayRow !== "number" || snapshot.todayRow < 0 || snapshot.todayRow > 6) {
     return new Map<string, boolean>();
@@ -191,10 +211,54 @@ function buildRecordedDateMap(snapshot: RuntimeSnapshotProjectionInput | null | 
   return recordedDates;
 }
 
+function buildWeekTargetMap(snapshot: RuntimeSnapshotProjectionInput | null | undefined) {
+  const snapshotWeekTargets = snapshot ? parseSnapshotWeekTargets(snapshot.weekTargets) : null;
+  if (!snapshotWeekTargets || !snapshot) {
+    return null;
+  }
+
+  const snapshotDateGrid = buildDateGrid(snapshot.currentWeekStart);
+  const targets = new Map<string, number>();
+
+  for (let weekIndex = 0; weekIndex < snapshotDateGrid.length; weekIndex += 1) {
+    const weekStart = snapshotDateGrid[weekIndex]?.[0];
+    if (!weekStart) {
+      continue;
+    }
+
+    targets.set(weekStart, snapshotWeekTargets[weekIndex]);
+  }
+
+  return targets;
+}
+
+function buildVisibleWeekTargetMap(currentWeekStart: string, weekTargets: unknown) {
+  const parsedWeekTargets = parseSnapshotWeekTargets(weekTargets);
+  if (!parsedWeekTargets) {
+    return null;
+  }
+
+  const visibleDateGrid = buildDateGrid(currentWeekStart);
+  const targets = new Map<string, number>();
+
+  for (let weekIndex = 0; weekIndex < visibleDateGrid.length; weekIndex += 1) {
+    const weekStart = visibleDateGrid[weekIndex]?.[0];
+    if (!weekStart) {
+      continue;
+    }
+
+    targets.set(weekStart, parsedWeekTargets[weekIndex]);
+  }
+
+  return targets;
+}
+
 export function buildRuntimeBoardProjection(input: {
+  fallbackWeeklyTarget: number;
   now?: Date;
   resetTime: string;
   snapshot?: RuntimeSnapshotProjectionInput | null;
+  visibleWeekTargets?: unknown;
   timezone: string;
   weekStart: WeekStart;
 }): RuntimeBoardProjection {
@@ -203,7 +267,12 @@ export function buildRuntimeBoardProjection(input: {
   const todayDayIndex = diffDays(currentWeekStart, logicalToday);
   const dateGrid = buildDateGrid(currentWeekStart);
   const recordedDates = buildRecordedDateMap(input.snapshot);
+  const weekTargetMap = buildVisibleWeekTargetMap(currentWeekStart, input.visibleWeekTargets) ?? buildWeekTargetMap(input.snapshot);
+  const fallbackWeeklyTarget = Math.max(1, Math.min(7, Math.round(input.fallbackWeeklyTarget)));
   const days = dateGrid.map((week) => week.map((localDate) => recordedDates.get(localDate) ?? false));
+  const weekTargets = weekTargetMap
+    ? dateGrid.map((week, weekIndex) => (weekIndex === 0 ? fallbackWeeklyTarget : weekTargetMap.get(week[0] ?? "") ?? fallbackWeeklyTarget))
+    : null;
 
   const snapshotExists = Boolean(input.snapshot);
   const isProjectedBeyondSnapshot =
@@ -221,6 +290,7 @@ export function buildRuntimeBoardProjection(input: {
       dayIndex: todayDayIndex,
       weekIndex: 0,
     },
+    weekTargets,
   };
 }
 

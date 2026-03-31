@@ -287,6 +287,7 @@ void BoardRenderer::buildTrackingFrame(const HabitTracker& tracker, const Device
 
 bool BoardRenderer::buildSnapshotFrame(const String& boardDaysJson,
                                        uint8_t weeklyTarget,
+                                       const String& weekTargetsJson,
                                        const char* palettePreset,
                                        const String& paletteCustomJson,
                                        BoardFrame& outFrame) const {
@@ -306,12 +307,36 @@ bool BoardRenderer::buildSnapshotFrame(const String& boardDaysJson,
   }
 
   const uint8_t normalizedWeeklyTarget = constrain(weeklyTarget, 1, Config::kDaysPerWeek);
+  uint8_t parsedWeekTargets[Config::kWeeks]{};
+  const bool hasWeekTargets = !weekTargetsJson.isEmpty();
+  if (hasWeekTargets) {
+    DynamicJsonDocument weekTargetsDoc(1024);
+    DeserializationError weekTargetsError = deserializeJson(weekTargetsDoc, weekTargetsJson);
+    if (weekTargetsError) {
+      return false;
+    }
+
+    JsonArrayConst weekTargets = weekTargetsDoc.as<JsonArrayConst>();
+    if (weekTargets.isNull() || weekTargets.size() != Config::kWeeks) {
+      return false;
+    }
+
+    for (uint8_t week = 0; week < Config::kWeeks; ++week) {
+      const int target = weekTargets[week] | 0;
+      if (target < 1 || target > Config::kDaysPerWeek) {
+        return false;
+      }
+      parsedWeekTargets[week] = static_cast<uint8_t>(target);
+    }
+  }
+
   for (uint8_t week = 0; week < Config::kWeeks; ++week) {
     JsonArrayConst weekDays = weeks[week].as<JsonArrayConst>();
     if (weekDays.isNull() || weekDays.size() != Config::kDaysPerWeek) {
       return false;
     }
 
+    const uint8_t resolvedWeekTarget = hasWeekTargets ? parsedWeekTargets[week] : normalizedWeeklyTarget;
     uint8_t count = 0;
     for (uint8_t day = 0; day < Config::kDaysPerWeek; ++day) {
       if (weekDays[day].as<bool>()) {
@@ -321,7 +346,7 @@ bool BoardRenderer::buildSnapshotFrame(const String& boardDaysJson,
     }
 
     if (week == 0) {
-      if (count >= normalizedWeeklyTarget) {
+      if (count >= resolvedWeekTarget) {
         setFramePixel_(outFrame, Config::kPanelRows - 1, week, palette.weekSuccess);
       }
       continue;
@@ -331,7 +356,7 @@ bool BoardRenderer::buildSnapshotFrame(const String& boardDaysJson,
         outFrame,
         Config::kPanelRows - 1,
         week,
-        count >= normalizedWeeklyTarget ? palette.weekSuccess : palette.weekFail);
+        count >= resolvedWeekTarget ? palette.weekSuccess : palette.weekFail);
   }
 
   return true;

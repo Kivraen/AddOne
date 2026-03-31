@@ -64,6 +64,7 @@ type DeviceHistoryMetricRow = {
   history_era_started_at: string | null;
   recorded_days_total: number | null;
   successful_weeks_total: number | null;
+  visible_week_targets: Json | null;
 };
 
 const lastKnownOwnedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
@@ -346,18 +347,40 @@ function mapDeviceRowToAppDevice(input: {
 }): AddOneDevice {
   const { currentUserName, device, membership, metrics, snapshot } = input;
   const normalizedWeekStart = normalizeWeekStart(device.week_start);
+  const liveWeeklyTarget = Number(metrics?.current_weekly_target ?? device.weekly_target);
+  const previousDevice = lastKnownOwnedDevicesById[device.id];
   const projection = buildRuntimeBoardProjection({
+    fallbackWeeklyTarget: liveWeeklyTarget,
     resetTime: device.day_reset_time,
     snapshot: snapshot
       ? {
           boardDays: snapshot.board_days,
           currentWeekStart: snapshot.current_week_start,
           todayRow: snapshot.today_row,
+          weekTargets: snapshot.week_targets,
         }
       : null,
+    visibleWeekTargets: metrics?.visible_week_targets ?? previousDevice?.weekTargets ?? null,
     timezone: device.timezone,
     weekStart: normalizedWeekStart,
   });
+
+  if (__DEV__) {
+    const previousWeekTargets = previousDevice?.weekTargets?.slice(0, 6) ?? null;
+    const snapshotWeekTargets =
+      snapshot && Array.isArray(snapshot.week_targets) ? (snapshot.week_targets as unknown[]).slice(0, 6) : snapshot?.week_targets ?? null;
+    const metricWeekTargets =
+      metrics && Array.isArray(metrics.visible_week_targets) ? (metrics.visible_week_targets as unknown[]).slice(0, 6) : metrics?.visible_week_targets ?? null;
+    const projectedWeekTargets = projection.weekTargets?.slice(0, 6) ?? null;
+    console.log("[weekly-target-debug]", {
+      currentWeeklyTarget: liveWeeklyTarget,
+      deviceId: device.id,
+      metricWeekTargets,
+      previousWeekTargets,
+      projectedWeekTargets,
+      snapshotWeekTargets,
+    });
+  }
 
   return {
     accountRemovalDeadlineAt: device.account_removal_deadline_at ?? null,
@@ -380,7 +403,8 @@ function mapDeviceRowToAppDevice(input: {
     runtimeRevision: Number(snapshot?.revision ?? device.last_runtime_revision ?? 0),
     successfulWeeksTotal: Number(metrics?.successful_weeks_total ?? 0),
     syncState: deriveSyncState(device),
-    weeklyTarget: Number(metrics?.current_weekly_target ?? device.weekly_target),
+    weeklyTarget: liveWeeklyTarget,
+    weekTargets: projection.weekTargets,
     weekStart: normalizedWeekStart,
     timezone: device.timezone,
     resetTime: stripSeconds(device.day_reset_time),
@@ -416,12 +440,14 @@ function mapDeviceRowToSharedBoard(input: {
 }): SharedBoard {
   const { celebrationEnabled, celebrationDwellSeconds, celebrationTransition, celebrationTransitionSpeed, device, ownerName, snapshot, viewerMembershipId } = input;
   const projection = buildRuntimeBoardProjection({
+    fallbackWeeklyTarget: device.weekly_target,
     resetTime: device.day_reset_time,
     snapshot: snapshot
       ? {
           boardDays: snapshot.board_days,
           currentWeekStart: snapshot.current_week_start,
           todayRow: snapshot.today_row,
+          weekTargets: snapshot.week_targets,
         }
       : null,
     timezone: device.timezone,
@@ -440,6 +466,7 @@ function mapDeviceRowToSharedBoard(input: {
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
     syncState: deriveSyncState(device),
     weeklyTarget: device.weekly_target,
+    weekTargets: projection.weekTargets,
     paletteId: paletteIdForDevice(device),
     days: projection.days,
     dateGrid: projection.dateGrid,
@@ -1221,9 +1248,11 @@ export async function requestRuntimeSnapshotFromApp(params: {
 
 export async function applyHistoryDraftFromApp(params: {
   baseRevision: number;
+  currentWeekStart?: string | null;
   deviceId: string;
   draftId: string;
   updates: HistoryDraftUpdate[];
+  weekTargets?: number[] | null;
 }) {
   const supabase = ensureSupabase();
   const updates = params.updates.map((update) => ({
@@ -1233,9 +1262,11 @@ export async function applyHistoryDraftFromApp(params: {
 
   const { data, error } = await (supabase.rpc as any)("apply_history_draft_from_app", {
     p_base_revision: params.baseRevision,
+    p_current_week_start: params.currentWeekStart ?? null,
     p_device_id: params.deviceId,
     p_updates: updates,
     p_draft_id: params.draftId,
+    p_week_targets: params.weekTargets ?? null,
   });
 
   return assertData(
@@ -1333,10 +1364,13 @@ export async function saveActiveHabitMetadataFromApp(params: {
   return assertData(
     error,
     data as {
+      command_id: string | null;
+      current_week_start: string;
       daily_minimum: string | null;
       device_id: string;
       habit_name: string;
       history_era: number;
+      status: string | null;
       weekly_target: number;
     },
     "Failed to save the current habit details.",
@@ -1540,6 +1574,7 @@ export async function queueFriendCelebrationPreviewFromApp(params: {
   transitionSpeed?: CelebrationTransitionSpeed;
   transitionStyle?: CelebrationTransitionStyle;
   weeklyTarget: number;
+  weekTargets?: number[] | null;
 }) {
   const supabase = ensureSupabase();
   const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
@@ -1556,6 +1591,7 @@ export async function queueFriendCelebrationPreviewFromApp(params: {
       transition_speed: params.transitionSpeed ?? DEFAULT_CELEBRATION_TRANSITION_SPEED,
       transition_style: params.transitionStyle ?? DEFAULT_CELEBRATION_TRANSITION,
       weekly_target: params.weeklyTarget,
+      week_targets: params.weekTargets ?? null,
     },
     p_request_key: params.requestId,
   });

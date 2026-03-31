@@ -26,6 +26,7 @@ struct DeviceSettingsSyncPayload {
   bool hasRewardType = false;
   bool hasTimezone = false;
   bool hasWeeklyTarget = false;
+  bool hasWeeklyTargetEffectiveWeekStart = false;
   bool ambientAuto = true;
   bool rewardEnabled = false;
   String dayResetTime{};
@@ -35,6 +36,7 @@ struct DeviceSettingsSyncPayload {
   String rewardTrigger{};
   String rewardType{};
   String timezone{};
+  String weeklyTargetEffectiveWeekStart{};
   uint8_t brightness = 70;
   uint8_t weeklyTarget = Config::kDefaultWeeklyMinimum;
 };

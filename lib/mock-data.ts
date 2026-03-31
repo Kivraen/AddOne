@@ -25,6 +25,7 @@ export const initialDevices: AddOneDevice[] = [
     successfulWeeksTotal: 73,
     syncState: "online",
     weeklyTarget: 5,
+    weekTargets: null,
     weekStart: "monday",
     timezone: "America/Los_Angeles",
     resetTime: "00:00",

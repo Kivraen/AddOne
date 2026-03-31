@@ -83,6 +83,7 @@ function demoSharedBoards(scenario?: FriendsDemoScenario | null): SharedBoard[] 
       syncState: "online",
       lastSnapshotAt: new Date().toISOString(),
       weeklyTarget: 4,
+      weekTargets: null,
       paletteId: "amber",
       days: emptyBoardDays().map((week, weekIndex) =>
         week.map((_, dayIndex) => weekIndex < 2 && dayIndex <= 3 && (dayIndex + weekIndex) % 2 === 0),

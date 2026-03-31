@@ -187,6 +187,7 @@ type CelebrationPreviewRequest = {
   transitionSpeed?: CelebrationTransitionSpeed;
   transitionStyle?: CelebrationTransitionStyle;
   weeklyTarget?: number;
+  weekTargets?: number[] | null;
 };
 
 export function useDevices() {
@@ -876,7 +877,9 @@ export function useDeviceActions() {
       await invalidateCloudDevices();
 
       const updates = buildRestoreHistoryDraft(source);
-      if (updates.length === 0) {
+      const restoreCurrentWeekStart = source.dateGrid?.[0]?.[0] ?? null;
+      const restoreWeekTargets = source.weekTargets;
+      if (updates.length === 0 && !restoreWeekTargets) {
         void invalidateCloudDevices();
         return;
       }
@@ -885,9 +888,11 @@ export function useDeviceActions() {
         const baseRevision = targetDevice.runtimeRevision;
         const result = await historyDraftMutation.mutateAsync({
           baseRevision,
+          currentWeekStart: restoreCurrentWeekStart,
           deviceId: targetDevice.id,
           draftId: makeClientEventId(),
           updates,
+          weekTargets: restoreWeekTargets,
         });
 
         await waitForDeviceMatch(
@@ -1178,6 +1183,7 @@ export function useDeviceActions() {
         transitionSpeed: normalizedParams.transitionSpeed,
         transitionStyle: normalizedParams.transitionStyle,
         weeklyTarget: normalizedParams.weeklyTarget ?? targetDevice.weeklyTarget,
+        weekTargets: normalizedParams.weekTargets ?? targetDevice.weekTargets,
       });
 
       await waitForCommandApplied(result.id, {
@@ -1245,13 +1251,38 @@ export function useDeviceActions() {
       habitName: string;
       weeklyTarget: number;
     }) => {
-      const targetDevice = await resolveFreshLiveDevice(params.deviceId);
-      await saveHabitMetadataMutation.mutateAsync({
+      const targetDevice = await resolveFreshDevice(params.deviceId);
+      if (!targetDevice) {
+        throw new Error("No AddOne device is active.");
+      }
+
+      const baseRevision = targetDevice.runtimeRevision;
+      const result = await saveHabitMetadataMutation.mutateAsync({
         dailyMinimum: params.dailyMinimum,
         deviceId: targetDevice.id,
         habitName: params.habitName,
         weeklyTarget: params.weeklyTarget,
       });
+
+      if (result.command_id && targetDevice.isLive) {
+        await waitForDeviceMatch(
+          targetDevice.id,
+          {
+            baseRevision,
+            commandId: result.command_id,
+            errorMessage: "The device did not confirm the updated weekly target in time.",
+            requireRevisionAdvance: true,
+          },
+          (device) =>
+            device.weeklyTarget === params.weeklyTarget &&
+            Array.isArray(device.weekTargets) &&
+            device.weekTargets.length === device.days.length &&
+            device.weekTargets[device.today.weekIndex] === params.weeklyTarget,
+        );
+        clearConnectivityIssue(targetDevice.id);
+        clearRuntimeConflictRecovery(targetDevice.id);
+      }
+
       void invalidateCloudDevices();
     },
     setActiveHabitStartDate: async (habitStartedOnLocal: string, deviceId?: string) => {
