@@ -1,21 +1,20 @@
 {
   "schema_version": 1,
-  "release_id": "fw-beta-20260326-01",
-  "firmware_version": "2.0.0-beta.2",
+  "release_id": "fw-beta-20260404-06",
+  "firmware_version": "2.0.0-beta.9",
   "hardware_profile": "addone-v1",
   "partition_layout": "addone-dual-ota-v1",
   "channel": "beta",
   "status": "active",
   "install_policy": "user_triggered",
   "rollout": {
-    "mode": "allowlist",
-    "allowlist": ["AO_B0CBD8CFABB0"]
+    "mode": "all"
   },
   "artifact": {
     "kind": "esp32-application-bin",
-    "url": "https://downloads.addone.studio/firmware/fw-beta-20260326-01/firmware.bin",
-    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "size_bytes": 1048576
+    "url": "https://sqhzaayqacmgxseiqihs.supabase.co/storage/v1/object/public/firmware-artifacts/ota/fw-beta-20260404-06/firmware-70f65073289d7fa3.bin",
+    "sha256": "70f65073289d7fa3e436bb110e4463e975bc6b29a42ae07e97a3d0275a090bae",
+    "size_bytes": 1144720
   },
   "compatibility": {
     "minimum_partition_layout": "addone-dual-ota-v1",
@@ -23,11 +22,11 @@
     "minimum_app_version": null
   },
   "rollback": {
-    "previous_stable_release_id": "fw-beta-20260324-01",
+    "previous_stable_release_id": "fw-beta-20260404-05",
     "allow_downgrade_to_previous_stable": true
   },
   "boot_confirmation": {
-    "confirm_window_seconds": 45,
+    "confirm_window_seconds": 120,
     "require_normal_runtime_state": true,
     "require_cloud_check_in": false
   }

@@ -55,9 +55,12 @@ constexpr unsigned long kWifiReconnectTimeoutMs = 15000;
 constexpr unsigned long kNtpResyncMs = 3600000;
 constexpr unsigned long kRtcWriteIntervalMs = 300000;
 
-// Frozen OTA safety baseline for the first field-update implementation.
+// Keep enough soak time to catch immediate post-boot instability without
+// making healthy boards appear stuck for multiple minutes.
 constexpr const char* kOtaPartitionLayout = "addone-dual-ota-v1";
 constexpr uint32_t kOtaSlotSizeBytes = 0x140000;
-constexpr unsigned long kOtaConfirmWindowMs = 120000;
+constexpr unsigned long kOtaMinSupportedConfirmWindowMs = 30000;
+constexpr unsigned long kOtaMaxSupportedConfirmWindowMs = 120000;
+constexpr unsigned long kOtaConfirmWindowMs = 45000;
 
 } // namespace Config

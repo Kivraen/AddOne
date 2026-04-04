@@ -31,6 +31,7 @@ export default function TabsLayout() {
 
   return (
     <NativeTabs
+      backgroundColor={process.env.EXPO_OS === "android" ? theme.colors.bgCanvas : undefined}
       iconColor={{
         default: theme.colors.textTertiary,
         selected: accentColor,

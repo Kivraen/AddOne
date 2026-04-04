@@ -21,6 +21,15 @@ import {
   DeviceFirmwareUpdateSummary,
 } from "@/types/addone";
 
+const FIRMWARE_PROGRESS_STAGES = [
+  "Queued",
+  "Download",
+  "Verify",
+  "Stage",
+  "Restart",
+  "Safety check",
+];
+
 function FirmwareStatusPill({
   label,
   tone = "default",
@@ -131,6 +140,10 @@ function isInProgressState(state: DeviceFirmwareOtaState | null) {
   return state === "requested" || state === "downloading" || state === "downloaded" || state === "verifying" || state === "staged" || state === "rebooting" || state === "pending_confirm";
 }
 
+function isRetryingDownload(summary: DeviceFirmwareUpdateSummary | null) {
+  return summary?.currentState === "downloading" && (!!summary.lastFailureCode || !!summary.lastFailureDetail);
+}
+
 function isUnsupportedCommandKindFailure(summary: DeviceFirmwareUpdateSummary | null) {
   return (
     summary?.lastFailureCode === "command_rejected" &&
@@ -173,20 +186,139 @@ function stateHeadline(state: DeviceFirmwareOtaState | null) {
     case "rebooting":
       return "Restarting board";
     case "pending_confirm":
-      return "Confirming update";
+      return "Final safety check";
     case "succeeded":
       return "Update complete";
     case "failed_download":
+      return "Download stalled";
     case "failed_verify":
+      return "Verification failed";
     case "failed_stage":
+      return "Staging failed";
+    case "failed_boot":
+      return "Restart failed";
+    case "rolled_back":
+      return "Update rolled back";
+    case "recovery_needed":
+      return "Recovery needed";
+    case "blocked":
+      return "Update blocked";
+    default:
+      return null;
+  }
+}
+
+function firmwareProgressStageIndex(state: DeviceFirmwareOtaState | null) {
+  switch (state) {
+    case "requested":
+      return 0;
+    case "downloading":
+    case "downloaded":
+    case "failed_download":
+      return 1;
+    case "verifying":
+    case "failed_verify":
+      return 2;
+    case "staged":
+    case "failed_stage":
+      return 3;
+    case "rebooting":
     case "failed_boot":
     case "rolled_back":
     case "recovery_needed":
     case "blocked":
-      return "Update needs attention";
+      return 4;
+    case "pending_confirm":
+    case "succeeded":
+      return 5;
     default:
-      return null;
+      return -1;
   }
+}
+
+function firmwareProgressFillRatio(state: DeviceFirmwareOtaState | null) {
+  const stageIndex = firmwareProgressStageIndex(state);
+  if (stageIndex < 0) {
+    return 0;
+  }
+
+  if (state === "succeeded") {
+    return 1;
+  }
+
+  if (isFailureState(state)) {
+    return (stageIndex + 1) / FIRMWARE_PROGRESS_STAGES.length;
+  }
+
+  return (stageIndex + 0.5) / FIRMWARE_PROGRESS_STAGES.length;
+}
+
+function firmwareProgressCaption(state: DeviceFirmwareOtaState | null) {
+  const stageIndex = firmwareProgressStageIndex(state);
+  if (stageIndex < 0) {
+    return null;
+  }
+
+  if (state === "succeeded") {
+    return `Step ${FIRMWARE_PROGRESS_STAGES.length} of ${FIRMWARE_PROGRESS_STAGES.length}`;
+  }
+
+  if (isFailureState(state)) {
+    return `Stopped at step ${stageIndex + 1} of ${FIRMWARE_PROGRESS_STAGES.length}`;
+  }
+
+  return `Step ${stageIndex + 1} of ${FIRMWARE_PROGRESS_STAGES.length}`;
+}
+
+function FirmwareProgress({ state }: { state: DeviceFirmwareOtaState }) {
+  const stageIndex = firmwareProgressStageIndex(state);
+  if (stageIndex < 0) {
+    return null;
+  }
+
+  const fillRatio = firmwareProgressFillRatio(state);
+  const caption = firmwareProgressCaption(state);
+  const accentColor = isFailureState(state)
+    ? theme.colors.statusErrorMuted
+    : state === "succeeded"
+      ? theme.colors.accentSuccess
+      : theme.colors.accentAmber;
+
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={{ gap: 6 }}>
+        <View
+          style={{
+            height: 8,
+            overflow: "hidden",
+            borderRadius: theme.radius.full,
+            backgroundColor: withAlpha(theme.colors.textPrimary, 0.08),
+          }}
+        >
+          <View
+            style={{
+              width: `${Math.max(fillRatio * 100, 8)}%`,
+              height: "100%",
+              borderRadius: theme.radius.full,
+              backgroundColor: accentColor,
+            }}
+          />
+        </View>
+        {caption ? (
+          <Text
+            style={{
+              color: isFailureState(state) ? theme.colors.statusErrorMuted : theme.colors.textSecondary,
+              fontFamily: theme.typography.label.fontFamily,
+              fontSize: theme.typography.label.fontSize,
+              lineHeight: theme.typography.label.lineHeight,
+            }}
+          >
+            {caption}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 function pillState(summary: DeviceFirmwareUpdateSummary | null, hasError: boolean, isLoading: boolean) {
@@ -206,12 +338,12 @@ function pillState(summary: DeviceFirmwareUpdateSummary | null, hasError: boolea
     return { label: "Updating", tone: "warning" as const };
   }
 
-  if (summary.currentState === "succeeded") {
-    return { label: "Updated", tone: "success" as const };
-  }
-
   if (summary.updateAvailable) {
     return { label: "Update ready", tone: "warning" as const };
+  }
+
+  if (summary.currentState === "succeeded") {
+    return { label: "Updated", tone: "success" as const };
   }
 
   if (summary.availableRelease && summary.availabilityReason === "not_in_rollout") {
@@ -258,23 +390,31 @@ function statusCopy(
   }
 
   const availableVersion = summary.availableRelease?.firmwareVersion ?? null;
-  const currentStateHeadline = stateHeadline(summary.currentState);
+  const retryingDownload = isRetryingDownload(summary);
+  const currentStateHeadline = retryingDownload ? "Retrying download" : stateHeadline(summary.currentState);
   if (currentStateHeadline && isInProgressState(summary.currentState)) {
-    return {
-      actionLabel: null,
-      body: availableVersion
-        ? `${availableVersion} is in progress. Keep the board on Wi‑Fi and power while it finishes.`
-        : "Keep the board on Wi‑Fi and power while the update finishes.",
-      headline: currentStateHeadline,
-      tone: "default" as const,
-    };
-  }
+    const body =
+      summary.currentState === "requested"
+        ? availableVersion
+          ? `${availableVersion} is queued for this board. Keep it on Wi‑Fi and power while it begins the update.`
+          : "The update is queued for this board. Keep it on Wi‑Fi and power while it begins."
+        : retryingDownload
+          ? summary.lastFailureDetail ??
+            (availableVersion
+              ? `${availableVersion} hit a temporary download issue. AddOne is retrying automatically while the board stays on Wi‑Fi and power.`
+              : "The download hit a temporary issue. AddOne is retrying automatically while the board stays on Wi‑Fi and power.")
+        : summary.currentState === "pending_confirm"
+          ? availableVersion
+            ? `${availableVersion} already restarted on the board. AddOne is waiting through the final safety window before it marks the update complete. This step usually finishes about 45 seconds after the restart.`
+            : "The board already restarted on the new firmware. AddOne is waiting through the final safety window before it marks the update complete. This step usually finishes about 45 seconds after the restart."
+        : availableVersion
+          ? `${availableVersion} is in progress. Keep the board on Wi‑Fi and power while it finishes.`
+          : "Keep the board on Wi‑Fi and power while the update finishes.";
 
-  if (summary.currentState === "succeeded") {
     return {
       actionLabel: null,
-      body: `${summary.currentFirmwareVersion} finished the confirmation window and is now the active firmware on this board.`,
-      headline: currentStateHeadline ?? "Update complete",
+      body,
+      headline: currentStateHeadline,
       tone: "default" as const,
     };
   }
@@ -306,6 +446,15 @@ function statusCopy(
       actionLabel: summary.canRequestUpdate && !lockedReason ? "Install update" : null,
       body: lockedReason ?? `${availableVersion} is eligible for this board. Start it when the board can stay on Wi‑Fi and power through the restart.`,
       headline: `${availableVersion} is ready`,
+      tone: "default" as const,
+    };
+  }
+
+  if (summary.currentState === "succeeded") {
+    return {
+      actionLabel: null,
+      body: `${summary.currentFirmwareVersion} finished the final safety check and is now the active firmware on this board.`,
+      headline: currentStateHeadline ?? "Update complete",
       tone: "default" as const,
     };
   }
@@ -378,6 +527,11 @@ export function DeviceFirmwareUpdateCard({
   const pill = pillState(summary, error instanceof Error, isLoading);
   const currentVersion = summary?.currentFirmwareVersion ?? device.firmwareVersion;
   const targetVersion = summary?.availableRelease?.firmwareVersion ?? summary?.targetReleaseId ?? null;
+  const showProgress =
+    !!summary?.currentState &&
+    (isInProgressState(summary.currentState) ||
+      isFailureState(summary.currentState) ||
+      (summary.currentState === "succeeded" && !summary.updateAvailable));
 
   const requestUpdate = () => {
     Alert.alert(
@@ -455,10 +609,8 @@ export function DeviceFirmwareUpdateCard({
           <View style={{ gap: SETTINGS_HEADER_GAP }}>
             <SettingsFieldLabel>{copy.headline}</SettingsFieldLabel>
             <SettingsNote tone={copy.tone === "error" ? "error" : "secondary"}>{copy.body}</SettingsNote>
-            {summary?.availableRelease && !summary.updateAvailable && !isInProgressState(summary.currentState) ? (
-              <SettingsNote>
-                Latest eligible target: {summary.availableRelease.firmwareVersion}
-              </SettingsNote>
+            {showProgress && summary?.currentState ? (
+              <FirmwareProgress state={summary.currentState} />
             ) : null}
           </View>
 

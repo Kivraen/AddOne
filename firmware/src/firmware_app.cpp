@@ -429,14 +429,17 @@ unsigned long FirmwareApp::captureBootHoldDurationWithFeedback_() {
 void FirmwareApp::begin() {
   boardRenderer_.begin();
   factoryQa_.inputBuffer.reserve(256);
+  const bool pendingOtaBoot = otaClient_.isPendingBootVerification();
   const unsigned long bootHoldDurationMs = captureBootHoldDurationWithFeedback_();
   factoryQaRequestedAtBoot_ =
+      !pendingOtaBoot &&
       bootHoldDurationMs >= Config::kFactoryQaArmHoldMs &&
       bootHoldDurationMs < Config::kRecoveryHoldMs;
   recoveryRequestedAtBoot_ =
+      !pendingOtaBoot &&
       bootHoldDurationMs >= Config::kRecoveryHoldMs &&
       bootHoldDurationMs < Config::kFactoryResetHoldMs;
-  factoryResetRequestedAtBoot_ = bootHoldDurationMs >= Config::kFactoryResetHoldMs;
+  factoryResetRequestedAtBoot_ = !pendingOtaBoot && bootHoldDurationMs >= Config::kFactoryResetHoldMs;
   buttonInput_.begin();
   deviceSettings_.begin();
   ambientLight_.begin();
@@ -481,6 +484,11 @@ void FirmwareApp::begin() {
   Serial.printf("Current reset epoch: %lu\n", static_cast<unsigned long>(provisioningStore_.resetEpoch()));
   Serial.printf("Confirmed OTA release: %s\n",
                 otaClient_.confirmedReleaseId().isEmpty() ? "(none)" : otaClient_.confirmedReleaseId().c_str());
+  Serial.printf("Pending OTA boot verification: %s\n", pendingOtaBoot ? "yes" : "no");
+
+  if (pendingOtaBoot && bootHoldDurationMs >= Config::kFactoryQaArmHoldMs) {
+    Serial.println("Ignoring boot hold gestures until pending OTA boot verification completes.");
+  }
 
   boardRenderer_.playStartupAnimation(deviceSettings_.resolveBrightness(ambientLight_.normalized01()));
 
@@ -1624,6 +1632,11 @@ bool FirmwareApp::applyCloudCommand_(const CloudClient::DeviceCommand& command, 
   }
 
   if (command.kind == "play_friend_celebration") {
+    if (otaClient_.isPendingBootVerification()) {
+      Serial.println("Ignoring friend celebration during pending OTA boot verification.");
+      return true;
+    }
+
     if (state_ != FirmwareState::Tracking || recoveryVisualActive_ || pendingFactoryReset_ || recoveryRequestedAtRuntime_ ||
         friendCelebrationPlayback_.active) {
       Serial.println("Ignoring friend celebration while tracking is unavailable.");
@@ -2052,8 +2065,12 @@ void FirmwareApp::tickTracking_() {
   buttonInput_.loop();
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
-  if (buttonInput_.consumeLongHold()) {
+  const bool pendingOtaBoot = otaClient_.isPendingBootVerification();
+  if (!pendingOtaBoot && buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;
+  } else if (pendingOtaBoot) {
+    while (buttonInput_.consumeLongHold()) {
+    }
   }
 
   tickWifiReconnectPolicy_(false);
@@ -2117,12 +2134,12 @@ void FirmwareApp::tickTracking_() {
     }
   }
 
-  if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
     enterWifiRecoveryMode_();
     return;
   }
 
-  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && pendingFactoryReset_ && !hasPendingAcks_()) {
     performFactoryReset_("App-triggered factory reset requested.");
   }
 }
@@ -2134,13 +2151,17 @@ void FirmwareApp::tickReward_() {
   tickWifiReconnectPolicy_(false);
   drainIncomingCommands_();
 
-  if (buttonInput_.consumeLongHold()) {
+  const bool pendingOtaBoot = otaClient_.isPendingBootVerification();
+  if (!pendingOtaBoot && buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;
     enterState_(FirmwareState::Tracking);
     return;
+  } else if (pendingOtaBoot) {
+    while (buttonInput_.consumeLongHold()) {
+    }
   }
 
-  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && pendingFactoryReset_ && !hasPendingAcks_()) {
     performFactoryReset_("App-triggered factory reset requested.");
     return;
   }
@@ -2175,8 +2196,12 @@ void FirmwareApp::tickFriendCelebration_() {
   tickWifiReconnectPolicy_(false);
   drainIncomingCommands_();
 
-  if (buttonInput_.consumeLongHold()) {
+  const bool pendingOtaBoot = otaClient_.isPendingBootVerification();
+  if (!pendingOtaBoot && buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;
+  } else if (pendingOtaBoot) {
+    while (buttonInput_.consumeLongHold()) {
+    }
   }
 
   if (!hasAuthoritativeTime_()) {
@@ -2184,12 +2209,12 @@ void FirmwareApp::tickFriendCelebration_() {
     return;
   }
 
-  if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
     enterWifiRecoveryMode_();
     return;
   }
 
-  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && pendingFactoryReset_ && !hasPendingAcks_()) {
     performFactoryReset_("App-triggered factory reset requested.");
     return;
   }
@@ -2251,14 +2276,18 @@ void FirmwareApp::tickTimeInvalid_() {
   ambientLight_.loop();
   timeService_.update(WiFi.status() == WL_CONNECTED);
   drainIncomingCommands_();
+  const bool pendingOtaBoot = otaClient_.isPendingBootVerification();
 
   if (stateMutex_ && xSemaphoreTake(stateMutex_, pdMS_TO_TICKS(25)) == pdTRUE) {
     clearPendingFriendCelebrationSenderStateLocked_();
     xSemaphoreGive(stateMutex_);
   }
 
-  if (buttonInput_.consumeLongHold()) {
+  if (!pendingOtaBoot && buttonInput_.consumeLongHold()) {
     recoveryRequestedAtRuntime_ = true;
+  } else if (pendingOtaBoot) {
+    while (buttonInput_.consumeLongHold()) {
+    }
   }
 
   if (onboardingVisualActive_ && buttonInput_.consumeShortPress()) {
@@ -2297,12 +2326,12 @@ void FirmwareApp::tickTimeInvalid_() {
     boardRenderer_.renderTimeErrorState(apServer_.isRunning(), WiFi.status() == WL_CONNECTED, brightness);
   }
 
-  if (recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && recoveryRequestedAtRuntime_ && !hasPendingAcks_()) {
     enterWifiRecoveryMode_();
     return;
   }
 
-  if (pendingFactoryReset_ && !hasPendingAcks_()) {
+  if (!pendingOtaBoot && pendingFactoryReset_ && !hasPendingAcks_()) {
     performFactoryReset_("App-triggered factory reset requested.");
   }
 }

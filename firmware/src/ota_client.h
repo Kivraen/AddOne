@@ -13,6 +13,7 @@ public:
   void begin(const DeviceIdentity& identity, CloudClient& cloudClient);
   const String& confirmedReleaseId() const;
   bool handleBeginUpdateCommand(const CloudClient::DeviceCommand& command, String& failureReason);
+  bool isPendingBootVerification() const;
   void service(FirmwareState state,
                bool bootReadyForTracking,
                bool recoveryRequested,
@@ -25,7 +26,9 @@ private:
   void clearSession_();
   bool downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& release,
                                 String& failureCode,
-                                String& failureDetail);
+                                String& failureDetail,
+                                const String& progressFailureCode = "",
+                                const String& progressFailureDetail = "");
   void failPendingBoot_(const String& failureCode, const String& failureDetail, bool wifiConnected);
   bool handlePendingConfirmation_(FirmwareState state,
                                   bool bootReadyForTracking,
@@ -37,6 +40,7 @@ private:
                               bool bootReadyForTracking,
                               bool recoveryRequested,
                               bool pendingFactoryReset) const;
+  bool isSupportedBootConfirmation_(const CloudClient::OtaReleaseBootConfirmation& bootConfirmation) const;
   bool isRunningPendingVerify_() const;
   void loadPersistedState_();
   bool maybeCheckForRelease_(FirmwareState state,

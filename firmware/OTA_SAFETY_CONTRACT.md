@@ -68,6 +68,9 @@ Required semantics:
 - `artifact.sha256` and `artifact.size_bytes` are mandatory and must be verified on-device before staging.
 - `rollback.previous_stable_release_id` is mandatory for every `active` release, even if the operator does not expect to use it.
 - `boot_confirmation.confirm_window_seconds` is mandatory and defines the maximum provisional-boot window before the image must confirm or roll back.
+- `boot_confirmation.require_normal_runtime_state` must remain `true`.
+- `boot_confirmation.require_cloud_check_in` must remain `false`.
+- the current forward-release baseline is a `45` second confirm window, while devices may accept any contract window from `30` to `120` seconds so controlled rollback installs remain possible.
 
 An example release envelope is tracked in:
 - [releases/ota-release.example.json](/Users/viktor/Desktop/DevProjects/Codex/AddOne/firmware/releases/ota-release.example.json)
@@ -120,7 +123,7 @@ The new image must remain provisional until all of the following succeed:
 - the main loop remains alive without panic, watchdog reset, or reboot for the confirmation window
 
 Frozen launch values:
-- confirmation window: `120` seconds
+- confirmation window: `45` seconds
 - cloud check-in is best effort only and must not be required for confirmation
 
 The confirm window is local-first because AddOne runtime is offline-first.

@@ -5,7 +5,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { normalizeMinimumGoalForSave } from "@/lib/habit-details";
 
 interface DeviceHabitMetadataState {
-  hasHydrated: boolean;
   minimumGoalByDeviceId: Record<string, string>;
   clearMinimumGoal: (deviceId: string) => void;
   setMinimumGoal: (deviceId: string, value: string) => void;
@@ -14,7 +13,6 @@ interface DeviceHabitMetadataState {
 export const useDeviceHabitMetadataStore = create<DeviceHabitMetadataState>()(
   persist(
     (set) => ({
-      hasHydrated: false,
       minimumGoalByDeviceId: {},
       clearMinimumGoal: (deviceId) =>
         set((state) => {
@@ -38,9 +36,6 @@ export const useDeviceHabitMetadataStore = create<DeviceHabitMetadataState>()(
     }),
     {
       name: "addone-device-habit-metadata",
-      onRehydrateStorage: () => () => {
-        useDeviceHabitMetadataStore.setState({ hasHydrated: true });
-      },
       partialize: (state) => ({
         minimumGoalByDeviceId: state.minimumGoalByDeviceId,
       }),

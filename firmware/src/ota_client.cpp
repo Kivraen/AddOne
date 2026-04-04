@@ -29,7 +29,9 @@ constexpr unsigned long kReleaseCheckIntervalMs = 3600000UL;
 constexpr unsigned long kReleaseCheckFailureRetryMs = 5000UL;
 constexpr unsigned long kDownloadIdleTimeoutMs = 45000UL;
 constexpr unsigned long kDownloadReadChunkTimeoutMs = 1000UL;
+constexpr unsigned long kDownloadRetryDelayMs = 1500UL;
 constexpr size_t kDownloadBufferSize = 2048U;
+constexpr uint8_t kDownloadAttemptCount = 2;
 constexpr uint8_t kProgressReportAttempts = 4;
 constexpr unsigned long kProgressReportRetryDelayMs = 1000UL;
 uint8_t gOtaDownloadBuffer[kDownloadBufferSize];
@@ -64,7 +66,7 @@ String formatEspError(esp_err_t error) {
 }
 
 const char* failureStateForCode(const String& failureCode) {
-  if (failureCode == "artifact_too_large" || failureCode == "download_failed" || failureCode == "download_incomplete") {
+  if (failureCode == "artifact_too_large" || failureCode.startsWith("download_")) {
     return "failed_download";
   }
 
@@ -144,6 +146,66 @@ void interruptedPhaseFailureFor(const String& phase, String& failureState, Strin
   failureState = "failed_download";
   failureCode = "download_failed";
 }
+
+String formatHttpResponseFailure(int responseCode) {
+  if (responseCode < 0) {
+    const String errorMessage = HTTPClient::errorToString(responseCode);
+    if (!errorMessage.isEmpty()) {
+      return String("OTA artifact request failed: ") + errorMessage +
+             " (HTTPClient " + String(responseCode) + ").";
+    }
+
+    return String("OTA artifact request failed with client error ") + String(responseCode) + ".";
+  }
+
+  return String("OTA artifact download returned HTTP ") + String(responseCode) + ".";
+}
+
+bool isRetryableHttpResponseCode(int responseCode) {
+  return responseCode < 0 ||
+         responseCode == HTTP_CODE_REQUEST_TIMEOUT ||
+         responseCode == HTTP_CODE_TOO_MANY_REQUESTS ||
+         responseCode >= 500;
+}
+
+bool isRetryableDownloadFailure(const String& failureCode) {
+  return failureCode == "download_failed" ||
+         failureCode == "download_request_begin_failed" ||
+         failureCode == "download_request_retryable" ||
+         failureCode == "download_stream_closed" ||
+         failureCode == "download_idle_timeout" ||
+         failureCode == "download_incomplete";
+}
+
+String appendDownloadRetryContext(const String& failureDetail, uint8_t retryCount) {
+  if (retryCount == 0) {
+    return failureDetail;
+  }
+
+  const String retrySummary =
+      retryCount == 1 ? "The board retried the download once automatically before giving up."
+                      : String("The board retried the download ") + String(retryCount) +
+                            " times automatically before giving up.";
+  return failureDetail.isEmpty() ? retrySummary : failureDetail + " " + retrySummary;
+}
+
+String buildRetryingDownloadDetail(const String& failureCode,
+                                   const String& failureDetail,
+                                   uint8_t nextAttempt,
+                                   uint8_t maxAttempts) {
+  String detail = failureDetail;
+  if (detail.isEmpty()) {
+    detail = failureCode.isEmpty() ? "The previous download attempt was interrupted."
+                                   : String("The previous download attempt ended with ") + failureCode + ".";
+  }
+
+  detail += " Retrying download automatically (attempt ";
+  detail += String(nextAttempt);
+  detail += " of ";
+  detail += String(maxAttempts);
+  detail += ").";
+  return detail;
+}
 } // namespace
 
 #ifdef CONFIG_APP_ROLLBACK_ENABLE
@@ -178,6 +240,10 @@ void OtaClient::begin(const DeviceIdentity& identity, CloudClient& cloudClient) 
 
 const String& OtaClient::confirmedReleaseId() const {
   return confirmedReleaseId_;
+}
+
+bool OtaClient::isPendingBootVerification() const {
+  return isRunningPendingVerify_();
 }
 
 bool OtaClient::handleBeginUpdateCommand(const CloudClient::DeviceCommand& command, String& failureReason) {
@@ -277,7 +343,9 @@ void OtaClient::clearSession_() {
 
 bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& release,
                                          String& failureCode,
-                                         String& failureDetail) {
+                                         String& failureDetail,
+                                         const String& progressFailureCode,
+                                         const String& progressFailureDetail) {
   failureCode = "";
   failureDetail = "";
 
@@ -296,18 +364,18 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
   }
 
   persistSession_(kPhaseDownloading, release.releaseId);
-  reportProgressBestEffort_(release.releaseId, "downloading");
+  reportProgressBestEffort_(release.releaseId, "downloading", progressFailureCode, progressFailureDetail);
 
   WiFiClientSecure client;
   if (!configureArtifactClient_(client)) {
-    failureCode = "download_failed";
+    failureCode = "download_tls_not_configured";
     failureDetail = "OTA artifact TLS trust is not configured.";
     return false;
   }
 
   HTTPClient http;
   if (!http.begin(client, release.artifact.url)) {
-    failureCode = "download_failed";
+    failureCode = "download_request_begin_failed";
     failureDetail = "HTTP client could not begin the OTA artifact request.";
     return false;
   }
@@ -317,15 +385,15 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
 
   const int responseCode = http.GET();
   if (responseCode != HTTP_CODE_OK) {
-    failureCode = "download_failed";
-    failureDetail = String("OTA artifact download returned HTTP ") + String(responseCode);
+    failureCode = isRetryableHttpResponseCode(responseCode) ? "download_request_retryable" : "download_http_error";
+    failureDetail = formatHttpResponseFailure(responseCode);
     http.end();
     return false;
   }
 
   const int contentLength = http.getSize();
   if (contentLength > 0 && static_cast<uint32_t>(contentLength) != release.artifact.sizeBytes) {
-    failureCode = "download_incomplete";
+    failureCode = "download_length_mismatch";
     failureDetail = "OTA artifact content length does not match the release envelope.";
     http.end();
     return false;
@@ -333,7 +401,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
 
   WiFiClient* stream = http.getStreamPtr();
   if (!stream) {
-    failureCode = "download_failed";
+    failureCode = "download_stream_unavailable";
     failureDetail = "OTA artifact response body stream is unavailable.";
     http.end();
     return false;
@@ -362,7 +430,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
     if (available == 0) {
       if (!http.connected()) {
         success = false;
-        failureCode = "download_incomplete";
+        failureCode = "download_stream_closed";
         failureDetail = String("OTA artifact stream closed after ") + String(totalRead) + "/" +
                         String(release.artifact.sizeBytes) + " bytes.";
         break;
@@ -370,7 +438,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
 
       if (millis() - lastReadAtMs > kDownloadIdleTimeoutMs) {
         success = false;
-        failureCode = "download_failed";
+        failureCode = "download_idle_timeout";
         failureDetail = String("OTA artifact download stalled after ") + String(totalRead) + "/" +
                         String(release.artifact.sizeBytes) + " bytes with a " +
                         String(kDownloadIdleTimeoutMs) + " ms idle timeout.";
@@ -391,7 +459,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
     if (bytesRead == 0) {
       if (!http.connected()) {
         success = false;
-        failureCode = "download_incomplete";
+        failureCode = "download_stream_closed";
         failureDetail = String("OTA artifact stream closed after ") + String(totalRead) + "/" +
                         String(release.artifact.sizeBytes) + " bytes.";
         break;
@@ -399,7 +467,7 @@ bool OtaClient::downloadAndStageRelease_(const CloudClient::OtaReleaseEnvelope& 
 
       if (millis() - lastReadAtMs > kDownloadIdleTimeoutMs) {
         success = false;
-        failureCode = "download_failed";
+        failureCode = "download_idle_timeout";
         failureDetail = String("OTA artifact download stalled after ") + String(totalRead) + "/" +
                         String(release.artifact.sizeBytes) + " bytes with a " +
                         String(kDownloadIdleTimeoutMs) + " ms idle timeout.";
@@ -573,6 +641,15 @@ bool OtaClient::isHealthyRuntimeState_(FirmwareState state,
   }
 
   return state == FirmwareState::Tracking || state == FirmwareState::TimeInvalid;
+}
+
+bool OtaClient::isSupportedBootConfirmation_(const CloudClient::OtaReleaseBootConfirmation& bootConfirmation) const {
+  const uint32_t minSeconds = Config::kOtaMinSupportedConfirmWindowMs / 1000UL;
+  const uint32_t maxSeconds = Config::kOtaMaxSupportedConfirmWindowMs / 1000UL;
+  return bootConfirmation.requireNormalRuntimeState &&
+         !bootConfirmation.requireCloudCheckIn &&
+         bootConfirmation.confirmWindowSeconds >= minSeconds &&
+         bootConfirmation.confirmWindowSeconds <= maxSeconds;
 }
 
 bool OtaClient::isRunningPendingVerify_() const {
@@ -813,7 +890,7 @@ bool OtaClient::startAuthorizedInstall_(const CloudClient::OtaReleaseCheckResult
       release.partitionLayout != Config::kOtaPartitionLayout ||
       release.compatibility.minimumPartitionLayout != Config::kOtaPartitionLayout ||
       release.artifact.kind != "esp32-application-bin" ||
-      release.bootConfirmation.confirmWindowSeconds != (Config::kOtaConfirmWindowMs / 1000UL)) {
+      !isSupportedBootConfirmation_(release.bootConfirmation)) {
     const String failureCode =
         release.hardwareProfile != Config::kHardwareProfile ? "hardware_profile_mismatch" :
         release.partitionLayout != Config::kOtaPartitionLayout ||
@@ -821,7 +898,7 @@ bool OtaClient::startAuthorizedInstall_(const CloudClient::OtaReleaseCheckResult
             ? "partition_layout_mismatch"
             : release.artifact.kind != "esp32-application-bin"
                   ? "image_invalid"
-                  : "version_not_allowed";
+                  : "boot_confirmation_unsupported";
     reportProgressBestEffort_(release.releaseId, "blocked", failureCode, "Release envelope failed the local OTA safety checks.");
     clearSession_();
     return false;
@@ -833,8 +910,44 @@ bool OtaClient::startAuthorizedInstall_(const CloudClient::OtaReleaseCheckResult
 
   String failureCode;
   String failureDetail;
-  if (!downloadAndStageRelease_(release, failureCode, failureDetail)) {
+  String progressFailureCode;
+  String progressFailureDetail;
+  bool stagedRelease = false;
+  uint8_t attemptsUsed = 0;
+  for (uint8_t attempt = 1; attempt <= kDownloadAttemptCount; ++attempt) {
+    attemptsUsed = attempt;
+    if (downloadAndStageRelease_(release,
+                                 failureCode,
+                                 failureDetail,
+                                 progressFailureCode,
+                                 progressFailureDetail)) {
+      stagedRelease = true;
+      break;
+    }
+
+    if (attempt < kDownloadAttemptCount && isRetryableDownloadFailure(failureCode)) {
+      progressFailureCode = failureCode;
+      progressFailureDetail = buildRetryingDownloadDetail(
+          failureCode,
+          failureDetail,
+          static_cast<uint8_t>(attempt + 1),
+          kDownloadAttemptCount);
+      Serial.printf("OTA staging attempt %u/%u for %s failed (%s): %s Retrying.\n",
+                    static_cast<unsigned int>(attempt),
+                    static_cast<unsigned int>(kDownloadAttemptCount),
+                    release.releaseId.c_str(),
+                    failureCode.c_str(),
+                    failureDetail.c_str());
+      delay(kDownloadRetryDelayMs);
+      continue;
+    }
+
+    break;
+  }
+
+  if (!stagedRelease) {
     const String failureState = failureStateForCode(failureCode);
+    failureDetail = appendDownloadRetryContext(failureDetail, attemptsUsed > 0 ? attemptsUsed - 1 : 0);
     persistSession_(failureState, release.releaseId);
     if (reportProgressBestEffort_(release.releaseId, failureState, failureCode, failureDetail)) {
       clearSession_();

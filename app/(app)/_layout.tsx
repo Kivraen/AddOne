@@ -44,7 +44,7 @@ export default function AppLayout() {
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
-          name="onboarding"
+          name="onboarding/index"
           options={{
             animation: "simple_push",
             contentStyle: { backgroundColor: theme.colors.bgBase },

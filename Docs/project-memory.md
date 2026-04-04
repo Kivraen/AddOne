@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: March 27, 2026
+Last updated: April 4, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -58,14 +58,27 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The March 22 setup follow-up stabilized the shared onboarding or recovery controller on real hardware, fixed wrong-password retry behavior, and implemented `Reset history` as `Start new habit` with backend era preservation.
 - The March 22 factory-reset slice is now also live-validated: destructive account removal, fresh post-removal add flow, prereg-required claim behavior, post-reset runtime-state repair, stale-command cancellation on re-claim, and editable earlier habit-start correction all work on real hardware.
 - The March 24 factory-QA slice added a real beta factory station on `codex/s2-factory-qa-plan`, including a release manifest, local Node plus browser operator tool, backend `factory_device_runs` support, firmware manufacturing-QA serial commands, and one successful live ship-ready bench run on a newly built board.
+- The April 4 RC validation checkpoint now lives on `codex/s4-final-rc-review`, based from `0bea496`, and carries the current candidate combination of:
+  - the forward-only weekly-target support slice
+  - RC app polish and settings cleanup
+  - OTA/status-surface UX cleanup
+  - Android startup and native-tab-bar fixes
+  - firmware retry-download telemetry groundwork
+- Fresh immutable validation releases now exist in-repo for the April 4 OTA pass:
+  - `fw-beta-20260404-04`
+  - `fw-beta-20260404-05`
+  - `fw-beta-20260404-06`
+  - `fw-beta-20260404-07`
+  - `fw-beta-20260404-08`
+- The current authoritative OTA proof set now includes a clean simultaneous real-device app-triggered install on Gym and Yoga through `2.0.0-beta.11`.
 
 ## Current Active Stage
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: `T-049` final iOS release-candidate polish and baseline lock
-- Current execution task: continue `T-049` from the checkpoint on `codex/s4-final-ios-rc-polish` to finish the remaining Home today-toggle and KPI consistency regression work, then lock one explicit iOS RC baseline; after that, run `T-050` as the final user-facing polish pass on first-device onboarding and setup before the next build
-- Parallel support slice: `T-054` is now in progress on `codex/s4-weekly-target-semantics-support` because weekly minimum changes widened into a real forward-only history semantics and security-hardening change; it must be validated separately from `T-049`
+- Next brief: re-confirm the March 27 Supabase auth dashboard URL / OTP settings and decide whether `codex/s4-final-rc-review` is the branch to build the final iOS RC/TestFlight artifact from
+- Current execution task: preserve the April 4 checkpoint on `codex/s4-final-rc-review` as the stable RC validation branch, then close the remaining external release check before any final TestFlight-candidate declaration
+- Parallel support slice: `T-054` remains a separate coordinator acceptance decision even though its code is already part of the current candidate branch
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, and `T-048` is now accepted as the Home confirmation-latency follow-up. They are now direct inputs to the final ship baseline rather than side work waiting behind a blocked artifact gate.
 
 ## Current Blockers
@@ -101,9 +114,12 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-046` is now accepted on `codex/s4-rc-easy-ui-cleanup`: the temporary celebration-preview controls were removed from the device settings overview, and the slice stayed within the intended UI-only scope.
 - `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the user-guided Friends controls redesign, the adjacent Home and settings UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are now checkpointed together as a bounded RC UI iteration slice.
 - `T-048` is now accepted on `codex/s4-home-confirmation-latency`: the Home command-confirmation path, stale reload truth, owner realtime invalidation, and Home-only offline refresh behavior are all tightened, and the final unplug-and-pull-to-refresh proof is now complete.
-- `T-049` is now in progress on `codex/s4-final-ios-rc-polish`: substantial sign-in, onboarding, firmware, and Home polish is checkpointed, dependency alignment has been exercised, and the remaining unfinished area is the Home today-toggle and KPI consistency path before the branch can be treated as the locked RC baseline.
-- `T-050` is now queued immediately after `T-049`: the first-device onboarding and setup journey is working, but it is still too raw in pacing, hierarchy, copy, and completion tone for a store-facing release and should be the last major product-facing polish slice before the final iOS RC build.
-- `T-054` is now in progress on `codex/s4-weekly-target-semantics-support`: the weekly target model is being converted to forward-only semantics across backend, firmware, projection, and history-edit behavior, and the new `board_weekly_target_changes` table is hardened; the remaining gate is a focused manual regression matrix before acceptance.
+- `T-049` now has a stronger checkpoint on `codex/s4-final-rc-review`: the current candidate branch includes the earlier sign-in/onboarding/Home polish plus April 4 OTA/status-surface cleanup, Android startup fixes, and fresh simultaneous OTA proof through `2.0.0-beta.11`.
+- `T-049` is not yet the final TestFlight candidate because one external release check is still open: the March 27 Supabase auth dashboard URL / OTP settings must be re-confirmed explicitly.
+- `T-050` remains queued only if the coordinator still wants another dedicated onboarding-polish pass after the April 4 checkpoint rather than building directly from the saved RC branch.
+- `T-054` remains in progress as a separate coordinator acceptance decision: the forward-only weekly-target work is in the branch, but its acceptance should stay distinct from the final RC build decision.
+- The new owner-facing retry-download UI path is implemented, but April 4 hardware runs did not trigger an automatic retry after the updated firmware was installed, so that exact UI state is still unproven on-device.
+- The new host-side migration `20260404201000_allow_shorter_ota_confirm_window.sql` exists locally but was not applied to the hosted beta database during the April 4 checkpoint, so live OTA releases still used `confirm_window_seconds = 120`.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.

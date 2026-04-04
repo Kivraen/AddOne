@@ -22,7 +22,6 @@ function pushRecentColor(history: string[], color: string) {
 
 interface PaletteHistoryState {
   appliedColorsByRole: AppliedColorsByRole;
-  hasHydrated: boolean;
   rememberAppliedPalette: (draft: DeviceSettingsDraft) => void;
 }
 
@@ -30,7 +29,6 @@ export const usePaletteHistoryStore = create<PaletteHistoryState>()(
   persist(
     (set) => ({
       appliedColorsByRole: EMPTY_APPLIED_COLORS_BY_ROLE,
-      hasHydrated: false,
       rememberAppliedPalette: (draft) =>
         set((state) => {
           const next = { ...state.appliedColorsByRole };
@@ -45,9 +43,6 @@ export const usePaletteHistoryStore = create<PaletteHistoryState>()(
     }),
     {
       name: "addone-palette-history",
-      onRehydrateStorage: () => () => {
-        usePaletteHistoryStore.setState({ hasHydrated: true });
-      },
       partialize: (state) => ({
         appliedColorsByRole: state.appliedColorsByRole,
       }),

@@ -27,7 +27,6 @@ interface AppUiState {
       }
     | undefined
   >;
-  hasHydrated: boolean;
   hiddenRemovingDeviceIds: Record<string, true | undefined>;
   pendingBoardEditorOpen: boolean;
   pendingTodayStateByDevice: Record<string, PendingTodayState | undefined>;
@@ -70,7 +69,6 @@ export const useAppUiStore = create<AppUiState>()(
     (set) => ({
       ...PERSISTED_APP_UI_STATE,
       connectivityIssueByDevice: {},
-      hasHydrated: false,
       hiddenRemovingDeviceIds: {},
       pendingBoardEditorOpen: false,
       pendingTodayStateByDevice: {},
@@ -226,9 +224,6 @@ export const useAppUiStore = create<AppUiState>()(
         })),
     }),
     {
-      onRehydrateStorage: () => () => {
-        useAppUiStore.setState({ hasHydrated: true });
-      },
       name: "addone-app-ui",
       partialize: (state) => ({
         activeDeviceId: state.activeDeviceId,
@@ -246,7 +241,6 @@ export async function resetPersistedAppUiState() {
   useAppUiStore.setState({
     ...PERSISTED_APP_UI_STATE,
     connectivityIssueByDevice: {},
-    hasHydrated: true,
     hiddenRemovingDeviceIds: {},
     pendingBoardEditorOpen: false,
     pendingTodayStateByDevice: {},
