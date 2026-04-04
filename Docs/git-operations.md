@@ -1,6 +1,6 @@
 # AddOne Git Operations
 
-Last updated: March 20, 2026
+Last updated: April 4, 2026
 
 This file records the real git and recovery state for AddOne so future agents do not have to reconstruct it from chat.
 
@@ -9,11 +9,11 @@ This file records the real git and recovery state for AddOne so future agents do
 - Canonical working repo:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
 - Current branch:
-  - `main`
+  - `codex/s4-final-rc-review`
 - Current clean branch tip:
-  - `d589cdc` `codex: add testflight build profile`
+  - `c3372db` `codex: checkpoint final rc review and ota stability`
 - Tracking branch:
-  - `origin/main`
+  - `origin/codex/s4-final-rc-review`
 - Current working tree status:
   - clean
 
@@ -64,7 +64,8 @@ This file records the real git and recovery state for AddOne so future agents do
   - confirm whether the current state is already pushed
 - Default workflow from here:
   - `main` stays stable
-  - new implementation work starts from a fresh branch off `main`
+  - `codex/s4-final-rc-review` is the current saved RC candidate branch
+  - new implementation work starts from a fresh branch off `main` unless the user explicitly wants to continue the RC line
   - use worktrees only when we intentionally want two active checkouts at once
 - Avoid force-push and history rewrites unless the user explicitly asks.
 - Keep local backup folders and temporary recovery clones outside the active repo root.
@@ -99,3 +100,4 @@ This file records the real git and recovery state for AddOne so future agents do
 
 - There is no active recovery gap in the canonical repo right now.
 - The broken repo remains useful only as historical quarantine, not as the active source of truth.
+- The current open release question is not a git backup problem. The saved RC branch is now pushed; the remaining explicit gate is the external Supabase auth dashboard settings confirmation recorded in the April 4 RC checkpoint report.
