@@ -216,8 +216,11 @@ export interface SharedBoard {
   viewerMembershipId: string;
   ownerName: string;
   habitName: string;
+  habitStartedOnLocal: string | null;
   syncState: SyncState;
   lastSnapshotAt?: string | null;
+  recordedDaysTotal: number;
+  successfulWeeksTotal: number;
   weeklyTarget: number;
   weekTargets: number[] | null;
   paletteId: string;

@@ -207,21 +207,13 @@ void BoardRenderer::renderResetHoldState(ResetHoldVisualStage stage, uint8_t bri
   const uint8_t centerCol = Config::kPanelCols / 2;
 
   if (stage == ResetHoldVisualStage::FactoryResetReady) {
-    const CRGB center = pulseColor(kResetFactoryReadyColor, 150, 255);
-    const CRGB petals = pulseColor(kResetFactoryReadyColor, 120, 220);
-    setPixel_(centerRow, centerCol, center);
-    setPixel_(centerRow, static_cast<uint8_t>(centerCol - 1), petals);
-    setPixel_(static_cast<uint8_t>(centerRow - 1), centerCol, petals);
-    setPixel_(centerRow, static_cast<uint8_t>(centerCol + 1), petals);
-    setPixel_(static_cast<uint8_t>(centerRow + 1), centerCol, petals);
+    for (const RecoveryPixel& pixel : kStartupCheckPixels) {
+      setPixel_(pixel.row, pixel.col, kResetFactoryReadyColor);
+    }
   } else if (stage == ResetHoldVisualStage::RecoveryReady) {
-    const CRGB center = pulseColor(kResetRecoveryReadyColor, 150, 255);
-    const CRGB petals = pulseColor(kResetRecoveryReadyColor, 120, 220);
-    setPixel_(centerRow, centerCol, center);
-    setPixel_(centerRow, static_cast<uint8_t>(centerCol - 1), petals);
-    setPixel_(static_cast<uint8_t>(centerRow - 1), centerCol, petals);
-    setPixel_(centerRow, static_cast<uint8_t>(centerCol + 1), petals);
-    setPixel_(static_cast<uint8_t>(centerRow + 1), centerCol, petals);
+    for (const RecoveryPixel& pixel : kStartupCheckPixels) {
+      setPixel_(pixel.row, pixel.col, kRecoveryCenterColor);
+    }
   } else {
     setPixel_(centerRow, centerCol, pulseColor(kRecoveryCenterColor, 132, 255));
   }

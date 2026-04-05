@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from "react-native";
 import DragList, { DragListRenderItemInfo } from "react-native-draglist";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FriendsRouteHeader } from "@/components/app/friends-route-header";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useFriends } from "@/hooks/use-friends";
@@ -372,7 +373,7 @@ export function FriendsArrangeScreen() {
     <>
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: Platform.OS !== "android",
           title: "Manage boards",
           headerTitleAlign: "center",
           headerRight: () => null,
@@ -405,15 +406,28 @@ export function FriendsArrangeScreen() {
         }}
       />
 
-      <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
+      <SafeAreaView edges={Platform.OS === "android" ? undefined : ["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
         <View
           style={{
             flex: 1,
             paddingHorizontal: theme.layout.pagePadding,
-            paddingTop: 8,
+            paddingTop: Platform.OS === "android" ? theme.layout.scrollTop : 8,
             paddingBottom: theme.layout.scrollBottom,
           }}
         >
+          {Platform.OS === "android" ? (
+            <FriendsRouteHeader
+              onBack={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+
+                router.replace("/friends");
+              }}
+              title="Manage boards"
+            />
+          ) : null}
           {showLoadingState ? (
             <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 16 }}>
               <ActivityIndicator color={theme.colors.accentAmber} />

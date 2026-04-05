@@ -68,6 +68,7 @@ type DeviceHistoryMetricRow = {
 };
 
 const lastKnownOwnedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
+const lastKnownSharedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
 type DeviceFirmwareUpdateSummaryRow = {
   availability_reason: string | null;
   available_firmware_version: string | null;
@@ -119,27 +120,6 @@ function assertData<T>(error: { message: string } | null, data: T, message: stri
   }
 
   return data;
-}
-
-function displayNameFromEmail(email?: string | null) {
-  if (!email) {
-    return "AddOne User";
-  }
-
-  const [localPart] = email.split("@");
-  const normalizedLocalPart = localPart
-    ?.trim()
-    .replace(/[._-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!normalizedLocalPart) {
-    return "AddOne User";
-  }
-
-  return normalizedLocalPart
-    .split(" ")
-    .map((segment) => segment[0]?.toUpperCase() + segment.slice(1).toLowerCase())
-    .join(" ");
 }
 
 function normalizeOptionalText(value?: string | null) {
@@ -201,6 +181,10 @@ function isMissingRestoreBackendMessage(message: string) {
 
 function isMissingHistoryMetricsBackendMessage(message: string) {
   return /list_device_history_metrics_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
+}
+
+function isMissingSharedHistoryMetricsBackendMessage(message: string) {
+  return /list_shared_board_history_metrics_for_user/i.test(message) && /schema cache|could not find the function/i.test(message);
 }
 
 function isMissingRemovalFinalizerBackendMessage(message: string) {
@@ -416,13 +400,15 @@ function mapDeviceRowToSharedBoard(input: {
   celebrationTransitionSpeed: CelebrationTransitionSpeed;
   celebrationTransition: CelebrationTransitionStyle;
   device: DeviceRow;
+  metrics?: DeviceHistoryMetricRow | null;
   ownerName: string;
   snapshot?: RuntimeSnapshotRow | null;
   viewerMembershipId: string;
 }): SharedBoard {
-  const { celebrationEnabled, celebrationDwellSeconds, celebrationTransition, celebrationTransitionSpeed, device, ownerName, snapshot, viewerMembershipId } = input;
+  const { celebrationEnabled, celebrationDwellSeconds, celebrationTransition, celebrationTransitionSpeed, device, metrics, ownerName, snapshot, viewerMembershipId } = input;
+  const currentWeekTarget = Number(metrics?.current_weekly_target ?? device.weekly_target);
   const projection = buildRuntimeBoardProjection({
-    fallbackWeeklyTarget: device.weekly_target,
+    fallbackWeeklyTarget: currentWeekTarget,
     resetTime: device.day_reset_time,
     snapshot: snapshot
       ? {
@@ -432,6 +418,7 @@ function mapDeviceRowToSharedBoard(input: {
           weekTargets: snapshot.week_targets,
         }
       : null,
+    visibleWeekTargets: metrics?.visible_week_targets ?? null,
     timezone: device.timezone,
     weekStart: normalizeWeekStart(device.week_start),
   });
@@ -444,10 +431,13 @@ function mapDeviceRowToSharedBoard(input: {
     id: device.id,
     viewerMembershipId,
     ownerName,
-    habitName: device.name,
+    habitName: metrics?.current_habit_name?.trim() || device.name,
+    habitStartedOnLocal: metrics?.current_habit_started_on_local ?? null,
     lastSnapshotAt: snapshot?.generated_at ?? device.last_snapshot_at ?? null,
+    recordedDaysTotal: Number(metrics?.recorded_days_total ?? 0),
+    successfulWeeksTotal: Number(metrics?.successful_weeks_total ?? 0),
     syncState: deriveSyncState(device),
-    weeklyTarget: device.weekly_target,
+    weeklyTarget: currentWeekTarget,
     weekTargets: projection.weekTargets,
     paletteId: paletteIdForDevice(device),
     days: projection.days,
@@ -619,6 +609,40 @@ async function fetchOwnedDeviceHistoryMetrics(deviceIds: string[]) {
   return rows;
 }
 
+async function fetchSharedBoardHistoryMetrics(deviceIds: string[]) {
+  if (deviceIds.length === 0) {
+    return [] as DeviceHistoryMetricRow[];
+  }
+
+  const supabase = ensureSupabase();
+  const { data, error } = await (supabase.rpc as any)("list_shared_board_history_metrics_for_user", {
+    p_device_ids: deviceIds,
+  });
+
+  if (error && isMissingSharedHistoryMetricsBackendMessage(error.message)) {
+    return [] as DeviceHistoryMetricRow[];
+  }
+
+  if (error && isTransientNetworkFailureMessage(error.message)) {
+    return deviceIds.flatMap((deviceId) => {
+      const cachedMetrics = lastKnownSharedHistoryMetricsByDevice[deviceId];
+      return cachedMetrics ? [cachedMetrics] : [];
+    });
+  }
+
+  const rows = assertData(
+    error,
+    (data ?? []) as DeviceHistoryMetricRow[],
+    "Failed to load shared board history metrics.",
+  );
+
+  for (const row of rows) {
+    lastKnownSharedHistoryMetricsByDevice[row.device_id] = row;
+  }
+
+  return rows;
+}
+
 async function fetchProfiles(userIds: string[], options?: { allowEmptyOnTransientFailure?: boolean }) {
   if (userIds.length === 0) {
     return [] as ProfileRow[];
@@ -785,10 +809,10 @@ export async function removeProfileAvatar(userId: string) {
 }
 
 export async function fetchOwnedDevices(params: { userEmail?: string | null; userId: string }) {
-  const { userEmail, userId } = params;
+  const { userId } = params;
   const supabase = ensureSupabase();
   const currentUserProfile = await fetchProfile(userId).catch(() => null);
-  const currentUserName = currentUserProfile?.display_name ?? displayNameFromEmail(userEmail);
+  const currentUserName = currentUserProfile?.display_name ?? "AddOne User";
 
   const removalFinalizerResponse = await (supabase.rpc as any)("finalize_stale_device_account_removals_for_user");
   if (removalFinalizerResponse.error && !isMissingRemovalFinalizerBackendMessage(removalFinalizerResponse.error.message)) {
@@ -869,8 +893,9 @@ export async function fetchSharedBoards(userId: string) {
       return [] as SharedBoard[];
     }
 
-    const [snapshots, ownerRowsResponse] = await Promise.all([
+    const [snapshots, metrics, ownerRowsResponse] = await Promise.all([
       fetchLatestRuntimeSnapshots(deviceIds, { allowEmptyOnTransientFailure: false }),
+      fetchSharedBoardHistoryMetrics(deviceIds),
       (supabase.rpc as any)("list_shared_board_owners", {
         p_device_ids: deviceIds,
       }),
@@ -898,6 +923,10 @@ export async function fetchSharedBoards(userId: string) {
       accumulator[ownerRow.device_id] = ownerRow.owner_display_name ?? "AddOne User";
       return accumulator;
     }, {});
+    const metricsByDeviceId = metrics.reduce<Record<string, DeviceHistoryMetricRow>>((accumulator, row) => {
+      accumulator[row.device_id] = row;
+      return accumulator;
+    }, {});
 
     return devices.map((device) =>
       mapDeviceRowToSharedBoard({
@@ -912,6 +941,7 @@ export async function fetchSharedBoards(userId: string) {
           memberships.find((membership) => membership.device_id === device.id)?.celebration_transition_speed ??
           DEFAULT_CELEBRATION_TRANSITION_SPEED,
         device,
+        metrics: metricsByDeviceId[device.id] ?? null,
         ownerName: ownerByDeviceId[device.id] ?? "AddOne User",
         viewerMembershipId: memberships.find((membership) => membership.device_id === device.id)?.id ?? device.id,
         snapshot: resolveAuthoritativeSnapshotForDevice(device, snapshots),

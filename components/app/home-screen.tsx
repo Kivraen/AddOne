@@ -5,9 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Pressable,
+  RefreshControl,
   Text,
   View,
   useWindowDimensions,
@@ -49,8 +48,6 @@ const HOME_INSIGHT_PANEL_HEIGHT = theme.typography.micro.lineHeight + theme.typo
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15_000;
 const HOME_PRIMARY_ACTION_SIZE = 156;
 const HOME_PRIMARY_ACTION_TOP_GAP = 72;
-const HOME_PULL_REFRESH_TRIGGER = 84;
-
 type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline" | "removing";
 type HomeInsight = { eyebrow: string; message: string };
 
@@ -510,7 +507,6 @@ export function HomeScreen() {
   const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
   const staleRefreshKeyRef = useRef<string | null>(null);
   const reachabilityProbeKeyRef = useRef<string | null>(null);
-  const pullRefreshDistanceRef = useRef(0);
 
   useEffect(() => {
     if (!pendingBoardEditorOpen || !activeDevice || !isDeviceControlReady(activeDevice)) {
@@ -660,19 +656,18 @@ export function HomeScreen() {
       setManualRefreshInFlight(false);
     }
   }
-
-  const handleHomeScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    pullRefreshDistanceRef.current = Math.max(-event.nativeEvent.contentOffset.y, 0);
-  };
-
-  const handleHomeScrollEndDrag = () => {
-    const shouldRefresh = pullRefreshDistanceRef.current >= HOME_PULL_REFRESH_TRIGGER;
-    pullRefreshDistanceRef.current = 0;
-
-    if (shouldRefresh) {
-      void handleManualRefresh();
-    }
-  };
+  const homeRefreshControl = (
+    <RefreshControl
+      colors={[deviceAccentColor]}
+      onRefresh={() => {
+        void handleManualRefresh();
+      }}
+      progressBackgroundColor={theme.colors.bgSurface}
+      progressViewOffset={Math.max(insets.top - 6, 0)}
+      refreshing={manualRefreshInFlight}
+      tintColor={deviceAccentColor}
+    />
+  );
 
   if (isLoading || (!effectiveDevice && isOnboardingLoading)) {
     return (
@@ -680,9 +675,7 @@ export function HomeScreen() {
         alwaysBounceVertical
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-        onScroll={handleHomeScroll}
-        onScrollEndDrag={handleHomeScrollEndDrag}
-        scrollEventThrottle={16}
+        refreshControl={homeRefreshControl}
       >
         <View style={{ alignItems: "center", gap: 14, paddingVertical: 36 }}>
           <ActivityIndicator color={theme.colors.textPrimary} />
@@ -708,9 +701,7 @@ export function HomeScreen() {
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         contentMaxWidth={theme.layout.narrowContentWidth}
-        onScroll={handleHomeScroll}
-        onScrollEndDrag={handleHomeScrollEndDrag}
-        scrollEventThrottle={16}
+        refreshControl={homeRefreshControl}
       >
         <View style={{ alignItems: "center", gap: 28, paddingVertical: 24 }}>
           <Pressable
@@ -824,9 +815,7 @@ export function HomeScreen() {
       }
       contentContainerStyle={{ flexGrow: 1 }}
       contentMaxWidth={theme.layout.maxContentWidth}
-      onScroll={handleHomeScroll}
-      onScrollEndDrag={handleHomeScrollEndDrag}
-      scrollEventThrottle={16}
+      refreshControl={homeRefreshControl}
     >
       <View style={{ minHeight: contentMinHeight, gap: 16 }}>
         <View style={{ gap: 8 }}>
