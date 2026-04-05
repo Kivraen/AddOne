@@ -11,6 +11,7 @@ function sleep(ms: number) {
 export function useDeviceAp() {
   const { mode } = useAuth();
   const infoMutation = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (mode === "demo") {
         await sleep(150);
@@ -28,6 +29,7 @@ export function useDeviceAp() {
   });
 
   const provisioningMutation = useMutation({
+    networkMode: "always",
     mutationFn: async (request: ApProvisioningRequest) => {
       if (mode === "demo") {
         await sleep(150);
@@ -45,6 +47,7 @@ export function useDeviceAp() {
   });
 
   const scanNetworksMutation = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (mode === "demo") {
         await sleep(150);

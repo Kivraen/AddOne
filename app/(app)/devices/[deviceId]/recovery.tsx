@@ -34,6 +34,18 @@ import { deviceSettingsPath } from "@/lib/device-routes";
 const RECOVERY_SUCCESS_RETURN_MS = 2400;
 const RECOVERY_FIELD_GAP = 16;
 const RECOVERY_DEVICE_REFRESH_MS = 1500;
+const RECOVERY_JOIN_DEVICE_AP_STEPS =
+  process.env.EXPO_OS === "android"
+    ? [
+        "Open Settings > Wi‑Fi.",
+        "Join the network that starts with AddOne_XXXX, then tap Stay connected if Android asks.",
+        "Come back here when the phone is connected.",
+      ]
+    : [
+        "Open Settings > Wi‑Fi.",
+        "Join the network that starts with AddOne_XXXX.",
+        "Come back here when the phone is connected.",
+      ];
 
 function makeRequestId() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
@@ -325,11 +337,7 @@ export default function DeviceRecoveryRoute() {
                   title="Join AddOne Wi‑Fi"
                 />
                 <NumberedSteps
-                  steps={[
-                    "Open Settings > Wi‑Fi.",
-                    "Join the network that starts with AddOne_XXXX.",
-                    "Come back here when the phone is connected.",
-                  ]}
+                  steps={RECOVERY_JOIN_DEVICE_AP_STEPS}
                 />
               </SetupStageLayout>
             </SetupStageScene>
@@ -344,11 +352,7 @@ export default function DeviceRecoveryRoute() {
                   title="Join AddOne Wi‑Fi"
                 />
                 <NumberedSteps
-                  steps={[
-                    "Open Settings > Wi‑Fi.",
-                    "Join the network that starts with AddOne_XXXX.",
-                    "Come back here when the phone is connected.",
-                  ]}
+                  steps={RECOVERY_JOIN_DEVICE_AP_STEPS}
                 />
               </SetupStageLayout>
             </SetupStageScene>

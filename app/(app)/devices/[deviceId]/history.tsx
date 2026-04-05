@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PixelGrid } from "@/components/board/pixel-grid";
 import { useRoutedDevice } from "@/components/devices/device-route-context";
+import { GlassCard } from "@/components/ui/glass-card";
+import { ChoicePill } from "@/components/ui/choice-pill";
 import { theme } from "@/constants/theme";
 import { useDeviceActions } from "@/hooks/use-devices";
 import {
@@ -23,6 +25,13 @@ import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
 
 const HISTORY_CONNECTION_RECHECK_MS = 2_000;
 const HISTORY_ORIENTATION_SETTLE_MS = 220;
+
+interface PendingBackdateTargetSelection {
+  col: number;
+  localDate: string;
+  previousHabitStartLocalDate: string | null;
+  row: number;
+}
 
 function collectHistoryDraftUpdates(baseDevice: AddOneDevice, draftDevice: AddOneDevice): HistoryDraftUpdate[] {
   if (!baseDevice.dateGrid || !draftDevice.dateGrid) {
@@ -125,6 +134,94 @@ function applyHistoryDraftUpdates(device: AddOneDevice, updates: HistoryDraftUpd
   };
 }
 
+function shiftLocalDate(localDate: string, days: number) {
+  const date = new Date(`${localDate}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function resolveEditorWeekTargets(device: AddOneDevice) {
+  const weekCount = device.dateGrid?.length ?? device.days.length;
+  return Array.from({ length: weekCount }, (_, weekIndex) => device.weekTargets?.[weekIndex] ?? device.weeklyTarget);
+}
+
+function deviceMatchesHistoryEditorSnapshot(device: AddOneDevice, snapshot: AddOneDevice) {
+  if (resolveHabitStartLocalDate(device) !== resolveHabitStartLocalDate(snapshot)) {
+    return false;
+  }
+
+  if (device.days.length !== snapshot.days.length) {
+    return false;
+  }
+
+  for (let weekIndex = 0; weekIndex < snapshot.days.length; weekIndex += 1) {
+    const nextWeek = device.days[weekIndex] ?? [];
+    const snapshotWeek = snapshot.days[weekIndex] ?? [];
+    if (nextWeek.length !== snapshotWeek.length) {
+      return false;
+    }
+
+    for (let dayIndex = 0; dayIndex < snapshotWeek.length; dayIndex += 1) {
+      if (nextWeek[dayIndex] !== snapshotWeek[dayIndex]) {
+        return false;
+      }
+    }
+  }
+
+  const nextWeekTargets = resolveEditorWeekTargets(device);
+  const snapshotWeekTargets = resolveEditorWeekTargets(snapshot);
+  if (nextWeekTargets.length !== snapshotWeekTargets.length) {
+    return false;
+  }
+
+  for (let weekIndex = 0; weekIndex < snapshotWeekTargets.length; weekIndex += 1) {
+    if (nextWeekTargets[weekIndex] !== snapshotWeekTargets[weekIndex]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function applyBackdatedHabitStartTarget(
+  device: AddOneDevice,
+  habitStartedOnLocal: string,
+  weeklyTarget: number,
+  previousHabitStartLocalDateOverride?: string | null,
+) {
+  const previousHabitStartLocalDate = previousHabitStartLocalDateOverride ?? resolveHabitStartLocalDate(device);
+  const nextDevice: AddOneDevice = {
+    ...device,
+    habitStartedOnLocal,
+  };
+
+  if (
+    !previousHabitStartLocalDate ||
+    habitStartedOnLocal >= previousHabitStartLocalDate ||
+    !device.dateGrid
+  ) {
+    return nextDevice;
+  }
+
+  const nextWeekTargets = resolveEditorWeekTargets(device);
+
+  for (let weekIndex = 0; weekIndex < device.dateGrid.length; weekIndex += 1) {
+    const weekDates = device.dateGrid[weekIndex] ?? [];
+    const exposesNewHistoryInWeek = weekDates.some(
+      (localDate) => localDate >= habitStartedOnLocal && localDate < previousHabitStartLocalDate,
+    );
+
+    if (exposesNewHistoryInWeek) {
+      nextWeekTargets[weekIndex] = weeklyTarget;
+    }
+  }
+
+  return {
+    ...nextDevice,
+    weekTargets: nextWeekTargets,
+  };
+}
+
 function formatHistoryDateLabel(localDate: string) {
   return new Date(`${localDate}T00:00:00.000Z`).toLocaleDateString("en-US", {
     month: "long",
@@ -132,6 +229,17 @@ function formatHistoryDateLabel(localDate: string) {
     timeZone: "UTC",
     year: "numeric",
   });
+}
+
+function backdateTargetPromptBody(selection: PendingBackdateTargetSelection) {
+  const previousStart = selection.previousHabitStartLocalDate;
+  if (!previousStart) {
+    return "How many days counted as a good week for the newly added history?";
+  }
+
+  return `How many days counted as a good week from ${formatHistoryDateLabel(selection.localDate)} to ${formatHistoryDateLabel(
+    shiftLocalDate(previousStart, -1),
+  )}?`;
 }
 
 export default function DeviceHistoryRoute() {
@@ -154,6 +262,9 @@ export default function DeviceHistoryRoute() {
   const [isRefreshingAvailability, setIsRefreshingAvailability] = useState(false);
   const [isPersistingHistorySession, setIsPersistingHistorySession] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [pendingBackdateTarget, setPendingBackdateTarget] = useState<PendingBackdateTargetSelection | null>(null);
+  const [selectedBackdateWeeklyTarget, setSelectedBackdateWeeklyTarget] = useState<number | null>(null);
+  const [pendingSavedDevice, setPendingSavedDevice] = useState<AddOneDevice | null>(null);
   const [hasEnteredEditor, setHasEnteredEditor] = useState(false);
   const [boardViewport, setBoardViewport] = useState({ height: 0, width: 0 });
   const refreshDevicesRef = useRef(refreshDevices);
@@ -257,8 +368,11 @@ export default function DeviceHistoryRoute() {
     setBaseDevice(device);
     setDraftDevice(device);
     setIsDirty(false);
+    setPendingSavedDevice(null);
     setStatusError(null);
+  }, [device.id]);
 
+  useEffect(() => {
     if (!canEditHistory) {
       return;
     }
@@ -315,9 +429,17 @@ export default function DeviceHistoryRoute() {
       return;
     }
 
+    if (pendingSavedDevice && !deviceMatchesHistoryEditorSnapshot(device, pendingSavedDevice)) {
+      return;
+    }
+
+    if (pendingSavedDevice) {
+      setPendingSavedDevice(null);
+    }
+
     setBaseDevice(device);
     setDraftDevice(device);
-  }, [deviceSyncKey, device]);
+  }, [deviceSyncKey, device, isDirty, pendingSavedDevice]);
 
   const palette = getMergedPalette(draftDevice.paletteId, draftDevice.customPalette);
   const baseHabitStartLocalDate = resolveHabitStartLocalDate(baseDevice);
@@ -581,31 +703,36 @@ export default function DeviceHistoryRoute() {
 
       if (hasHabitStartChange && draftHabitStartLocalDate) {
         const refreshedDevice = await setActiveHabitStartDate(draftHabitStartLocalDate, device.id);
-        nextBaseDevice = refreshedDevice
-          ? {
-              ...refreshedDevice,
-              habitStartedOnLocal: draftHabitStartLocalDate,
-            }
-          : {
-              ...baseDevice,
-              habitStartedOnLocal: draftHabitStartLocalDate,
-            };
+        nextBaseDevice = refreshedDevice ?? {
+          ...baseDevice,
+          habitStartedOnLocal: draftHabitStartLocalDate,
+        };
       }
 
       const nextExplicitUpdates = collectHistoryDraftUpdates(nextBaseDevice, draftDevice);
       const updates = [...nextExplicitUpdates, ...collectPastWeekBackfillUpdates(draftDevice, nextExplicitUpdates)];
+      const nextWeekTargets =
+        Array.isArray(draftDevice.weekTargets) && draftDevice.weekTargets.length === draftDevice.days.length
+          ? [...draftDevice.weekTargets]
+          : null;
+      const currentWeekStart = nextBaseDevice.dateGrid?.[0]?.[0] ?? null;
 
-      if (updates.length > 0) {
-        await commitHistoryDraft(updates, nextBaseDevice.runtimeRevision, device.id);
+      if (updates.length > 0 || nextWeekTargets) {
+        await commitHistoryDraft(updates, nextBaseDevice.runtimeRevision, device.id, {
+          currentWeekStart,
+          weekTargets: nextWeekTargets,
+        });
       }
 
       const savedDevice = applyHistoryDraftUpdates(
         {
           ...nextBaseDevice,
           habitStartedOnLocal: draftHabitStartLocalDate ?? nextBaseDevice.habitStartedOnLocal,
+          weekTargets: nextWeekTargets,
         },
         updates,
       );
+      setPendingSavedDevice(savedDevice);
       setBaseDevice(savedDevice);
       setDraftDevice(savedDevice);
       setIsDirty(false);
@@ -617,18 +744,17 @@ export default function DeviceHistoryRoute() {
   }
 
   function handleBackdateHabitStart(localDate: string, row: number, col: number) {
+    if (selectedBackdateWeeklyTarget === null) {
+      return;
+    }
+
     setStatusError(null);
     setDraftDevice((current) =>
-      toggleHistoryCellLocal(
-        {
-          ...current,
-          habitStartedOnLocal: localDate,
-        },
-        row,
-        col,
-      ),
+      toggleHistoryCellLocal(applyBackdatedHabitStartTarget(current, localDate, selectedBackdateWeeklyTarget), row, col),
     );
     setIsDirty(true);
+    setPendingBackdateTarget(null);
+    setSelectedBackdateWeeklyTarget(null);
   }
 
   function handleLockedCellPress(row: number, col: number) {
@@ -641,29 +767,148 @@ export default function DeviceHistoryRoute() {
       return;
     }
 
-    const currentStart = resolveHabitStartLocalDate(draftDevice);
-    const currentStartLabel = currentStart ? formatHistoryDateLabel(currentStart) : "the current start date";
-    const targetLabel = formatHistoryDateLabel(localDate);
-
-    Alert.alert(
-      "Move habit start earlier?",
-      `This habit currently starts on ${currentStartLabel}. To edit ${targetLabel}, move the habit start back first.`,
-      [
-        { style: "cancel", text: "Cancel" },
-        {
-          text: `Move start to ${targetLabel}`,
-          onPress: () => {
-            handleBackdateHabitStart(localDate, row, col);
-          },
-        },
-      ],
-    );
+    setPendingBackdateTarget({
+      col,
+      localDate,
+      previousHabitStartLocalDate: resolveHabitStartLocalDate(draftDevice),
+      row,
+    });
+    setSelectedBackdateWeeklyTarget(null);
   }
 
   return (
     <>
       <View style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
         <StatusBar hidden animated style="light" />
+
+        {pendingBackdateTarget ? (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              zIndex: 40,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+            }}
+          >
+            <Pressable
+              onPress={() => {
+                setPendingBackdateTarget(null);
+                setSelectedBackdateWeeklyTarget(null);
+              }}
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                backgroundColor: theme.colors.overlayScrim,
+              }}
+            />
+
+            <View style={{ maxWidth: 460, width: "100%" }}>
+              <GlassCard style={{ gap: 18, paddingHorizontal: 20, paddingVertical: 20, width: "100%" }}>
+                <View style={{ gap: 8 }}>
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontFamily: theme.typography.title.fontFamily,
+                      fontSize: theme.typography.title.fontSize,
+                      lineHeight: theme.typography.title.lineHeight,
+                      textAlign: "center",
+                    }}
+                  >
+                    Weekly target
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.typography.body.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      lineHeight: theme.typography.body.lineHeight,
+                      textAlign: "center",
+                    }}
+                  >
+                    {backdateTargetPromptBody(pendingBackdateTarget)}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                  {Array.from({ length: 7 }, (_, index) => index + 1).map((target) => (
+                    <ChoicePill
+                      key={`history-backdate-weekly-target-${target}`}
+                      label={String(target)}
+                      onPress={() => setSelectedBackdateWeeklyTarget(target)}
+                      selected={selectedBackdateWeeklyTarget === target}
+                    />
+                  ))}
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <Pressable
+                    onPress={() => {
+                      setPendingBackdateTarget(null);
+                      setSelectedBackdateWeeklyTarget(null);
+                    }}
+                    style={[
+                      controlButtonStyle,
+                      {
+                        flex: 1,
+                        backgroundColor: withAlpha(theme.colors.bgSurface, 0.82),
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: theme.colors.textPrimary,
+                        fontFamily: theme.typography.label.fontFamily,
+                        fontSize: theme.typography.label.fontSize,
+                        lineHeight: theme.typography.label.lineHeight,
+                      }}
+                    >
+                      Cancel
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={selectedBackdateWeeklyTarget === null}
+                    onPress={() => {
+                      handleBackdateHabitStart(
+                        pendingBackdateTarget.localDate,
+                        pendingBackdateTarget.row,
+                        pendingBackdateTarget.col,
+                      );
+                    }}
+                    style={[
+                      controlButtonStyle,
+                      {
+                        flex: 1,
+                        backgroundColor: withAlpha(theme.colors.accentAmber, 0.18),
+                        borderColor: withAlpha(theme.colors.accentAmber, 0.28),
+                        opacity: selectedBackdateWeeklyTarget === null ? 0.4 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: theme.colors.accentAmber,
+                        fontFamily: theme.typography.label.fontFamily,
+                        fontSize: theme.typography.label.fontSize,
+                        lineHeight: theme.typography.label.lineHeight,
+                      }}
+                    >
+                      Continue
+                    </Text>
+                  </Pressable>
+                </View>
+              </GlassCard>
+            </View>
+          </View>
+        ) : null}
 
         {!canRenderEditor ? (
           historyConnectionState === "checking" ? (

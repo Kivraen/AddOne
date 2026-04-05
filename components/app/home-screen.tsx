@@ -29,7 +29,7 @@ import { PrimaryActionButton, PrimaryActionState } from "@/components/ui/primary
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
 import { useOnboarding } from "@/hooks/use-onboarding";
-import { buildBoardCells, getMergedPalette } from "@/lib/board";
+import { buildBoardCells, getMergedPalette, resolveHabitStartLocalDate } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { getDeviceAccentColor } from "@/lib/device-accent";
 import { DEVICE_HEARTBEAT_INTERVAL_MS, latestConnectionActivityAt } from "@/lib/device-connection";
@@ -117,8 +117,58 @@ function currentWeekCompletedCount(device: Pick<AddOneDevice, "days" | "today">)
   return device.days[device.today.weekIndex].slice(0, device.today.dayIndex + 1).filter(Boolean).length;
 }
 
-function isCurrentWeekSuccessful(device: Pick<AddOneDevice, "days" | "today" | "weeklyTarget">) {
-  return currentWeekCompletedCount(device) >= device.weeklyTarget;
+function resolvedWeekTarget(device: Pick<AddOneDevice, "weeklyTarget" | "weekTargets">, weekIndex: number) {
+  return device.weekTargets?.[weekIndex] ?? device.weeklyTarget;
+}
+
+function isCurrentWeekSuccessful(device: Pick<AddOneDevice, "days" | "today" | "weeklyTarget" | "weekTargets">) {
+  return currentWeekCompletedCount(device) >= resolvedWeekTarget(device, device.today.weekIndex);
+}
+
+function deriveVisibleHistorySummary(device: AddOneDevice) {
+  const habitStartLocalDate = resolveHabitStartLocalDate(device);
+  const oldestVisibleWeekStart = device.dateGrid?.[device.dateGrid.length - 1]?.[0] ?? null;
+
+  if (!habitStartLocalDate || !device.dateGrid || !oldestVisibleWeekStart || habitStartLocalDate < oldestVisibleWeekStart) {
+    return null;
+  }
+
+  let recordedDaysTotal = 0;
+  let successfulWeeksTotal = 0;
+
+  for (let weekIndex = 0; weekIndex < device.dateGrid.length; weekIndex += 1) {
+    const isPastWeek = weekIndex > device.today.weekIndex;
+    const isCurrentWeek = weekIndex === device.today.weekIndex;
+    const visibleRows = isPastWeek ? 7 : isCurrentWeek ? device.today.dayIndex + 1 : 0;
+    if (visibleRows <= 0) {
+      continue;
+    }
+
+    let visibleInEraDays = 0;
+    let completed = 0;
+
+    for (let dayIndex = 0; dayIndex < visibleRows; dayIndex += 1) {
+      const localDate = device.dateGrid[weekIndex]?.[dayIndex];
+      if (!localDate || localDate < habitStartLocalDate) {
+        continue;
+      }
+
+      visibleInEraDays += 1;
+      if (device.days[weekIndex]?.[dayIndex]) {
+        recordedDaysTotal += 1;
+        completed += 1;
+      }
+    }
+
+    if (visibleInEraDays > 0 && completed >= resolvedWeekTarget(device, weekIndex)) {
+      successfulWeeksTotal += 1;
+    }
+  }
+
+  return {
+    recordedDaysTotal,
+    successfulWeeksTotal,
+  };
 }
 
 function withProjectedSummaryMetrics(
@@ -128,6 +178,23 @@ function withProjectedSummaryMetrics(
   },
 ): AddOneDevice {
   const projectedDevice = withPendingTodayState(device, options?.pendingTodayState);
+  const derivedSummary = deriveVisibleHistorySummary(projectedDevice);
+
+  if (derivedSummary) {
+    if (
+      projectedDevice.recordedDaysTotal === derivedSummary.recordedDaysTotal &&
+      projectedDevice.successfulWeeksTotal === derivedSummary.successfulWeeksTotal
+    ) {
+      return projectedDevice;
+    }
+
+    return {
+      ...projectedDevice,
+      recordedDaysTotal: derivedSummary.recordedDaysTotal,
+      successfulWeeksTotal: derivedSummary.successfulWeeksTotal,
+    };
+  }
+
   const todayWeekIndex = device.today.weekIndex;
   const todayDayIndex = device.today.dayIndex;
   const baseTodayState = device.days[todayWeekIndex]?.[todayDayIndex];
@@ -194,7 +261,7 @@ function totalHabitWeeks(device: AddOneDevice) {
 }
 
 function boardInsight(device: AddOneDevice, stats: { fillPercentage: number }, currentWeekCompleted: number): HomeInsight {
-  const remainingThisWeek = Math.max(device.weeklyTarget - currentWeekCompleted, 0);
+  const remainingThisWeek = Math.max(resolvedWeekTarget(device, device.today.weekIndex) - currentWeekCompleted, 0);
 
   if (isDevicePendingRemoval(device)) {
     return {
@@ -841,6 +908,7 @@ export function HomeScreen() {
   const stats = visibleBoardStats(device);
   const todayWeekday = formatWeekdayFromLocalDate(device.logicalToday);
   const currentWeekCompleted = currentWeekCompletedCount(device);
+  const currentWeekTarget = resolvedWeekTarget(device, device.today.weekIndex);
   const habitWeeksTotal = totalHabitWeeks(device);
   const isTodayAwaitingMirror = activePendingTodayPhase === "confirmed";
   const isTodayAwaitingDeviceConfirmation = activePendingTodayState !== undefined && !isTodayAwaitingMirror;
@@ -1000,7 +1068,7 @@ export function HomeScreen() {
         <View style={{ gap: 14 }}>
           <View style={{ height: 1, backgroundColor: dividerColor }} />
           <View style={{ alignItems: "stretch", flexDirection: "row" }}>
-            <MetricTile label="This week" value={`${currentWeekCompleted}/${device.weeklyTarget}`} />
+            <MetricTile label="This week" value={`${currentWeekCompleted}/${currentWeekTarget}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
             <MetricTile label="Weeks" value={habitWeeksTotal ? `${device.successfulWeeksTotal}/${habitWeeksTotal}` : `${device.successfulWeeksTotal}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />

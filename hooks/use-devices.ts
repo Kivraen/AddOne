@@ -120,6 +120,18 @@ function deviceMatchesHistory(device: AddOneDevice, updates: HistoryDraftUpdate[
   return updates.every((update) => getDayStateByLocalDate(device, update.localDate) === update.isDone);
 }
 
+function deviceMatchesWeekTargets(device: AddOneDevice, weekTargets?: number[] | null) {
+  if (!Array.isArray(weekTargets)) {
+    return true;
+  }
+
+  if (!Array.isArray(device.weekTargets) || device.weekTargets.length !== weekTargets.length) {
+    return false;
+  }
+
+  return weekTargets.every((target, weekIndex) => device.weekTargets?.[weekIndex] === target);
+}
+
 function deviceMatchesSettingsPatch(device: AddOneDevice, patch: DeviceSettingsPatch) {
   if (patch.ambient_auto !== undefined && device.autoBrightness !== patch.ambient_auto) {
     return false;
@@ -985,18 +997,24 @@ export function useDeviceActions() {
       updates: HistoryDraftUpdate[],
       baseRevision: number,
       deviceId?: string,
+      options?: {
+        currentWeekStart?: string | null;
+        weekTargets?: number[] | null;
+      },
     ) => {
       const targetDevice = requireLiveDevice(resolveDevice(deviceId));
-      if (updates.length === 0) {
+      if (updates.length === 0 && !options?.weekTargets) {
         return;
       }
 
       const applyDraft = async (revision: number) => {
         const result = await historyDraftMutation.mutateAsync({
           baseRevision: revision,
+          currentWeekStart: options?.currentWeekStart ?? null,
           deviceId: targetDevice.id,
           draftId: makeClientEventId(),
           updates,
+          weekTargets: options?.weekTargets ?? null,
         });
 
         const mirrorWait = settlePromise(
@@ -1008,7 +1026,7 @@ export function useDeviceActions() {
               errorMessage: "The device did not confirm the saved history draft in time.",
               requireRevisionAdvance: true,
             },
-            (device) => deviceMatchesHistory(device, updates),
+            (device) => deviceMatchesHistory(device, updates) && deviceMatchesWeekTargets(device, options?.weekTargets),
           ),
         );
         const commandAppliedWait = result.command_id
