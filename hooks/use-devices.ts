@@ -19,11 +19,16 @@ import {
 } from "@/lib/supabase/addone-repository";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import { DEVICE_OFFLINE_CONFIRMATION_MS, latestConnectionActivityAt } from "@/lib/device-connection";
+import {
+  deviceMatchesPendingMirror,
+  overlayPendingDeviceMirror,
+} from "@/lib/device-history-view";
 import { areCustomPalettesEqual, sanitizeCustomPalette } from "@/lib/device-settings";
 import { buildRestoreHistoryDraft, buildRestoreSettingsPatch } from "@/lib/onboarding-restore";
 import { useAuth } from "@/hooks/use-auth";
 import { useAddOneStore } from "@/store/addone-store";
 import { ConnectivityIssuePhase, useAppUiStore } from "@/store/app-ui-store";
+import { useDeviceHistorySyncStore } from "@/store/device-history-sync-store";
 import {
   AddOneDevice,
   CelebrationTransitionSpeed,
@@ -31,6 +36,7 @@ import {
   DeviceSettingsPatch,
   HistoryDraftUpdate,
   OnboardingRestoreSource,
+  PendingDeviceMirrorState,
   SyncState,
 } from "@/types/addone";
 
@@ -216,6 +222,8 @@ export function useDevices() {
   const clearRuntimeConflictRecovery = useAppUiStore((state) => state.clearRuntimeConflictRecovery);
   const recoveryNeededRevisionByDevice = useAppUiStore((state) => state.recoveryNeededRevisionByDevice);
   const setCloudActiveDeviceId = useAppUiStore((state) => state.setActiveDeviceId);
+  const pendingMirrorByDevice = useDeviceHistorySyncStore((state) => state.pendingMirrorByDevice);
+  const clearPendingMirror = useDeviceHistorySyncStore((state) => state.clearPendingMirror);
 
   const devicesQuery = useQuery({
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
@@ -232,7 +240,7 @@ export function useDevices() {
   const allDevices = mode === "demo" ? demoDevices : devicesQuery.data ?? [];
   const baseDevices =
     mode === "cloud" ? allDevices.filter((device) => !hiddenRemovingDeviceIds[device.id]) : allDevices;
-  const devices = baseDevices.map((device) => {
+  const devicesWithRecoveryState = baseDevices.map((device) => {
     const recoveryNeededRevision = recoveryNeededRevisionByDevice[device.id];
     if (
       recoveryNeededRevision === undefined ||
@@ -251,7 +259,7 @@ export function useDevices() {
       syncState,
     };
   });
-  const effectiveDevices = devices.map((device) => {
+  const devicesWithConnectionState = devicesWithRecoveryState.map((device) => {
     const connectivityIssue = connectivityIssueByDevice[device.id];
     if (!connectivityIssue || device.accountRemovalState !== "active" || device.recoveryState !== "ready") {
       return device;
@@ -276,6 +284,7 @@ export function useDevices() {
       syncState,
     };
   });
+  const effectiveDevices = devicesWithConnectionState;
   const activeDeviceId = mode === "demo" ? demoActiveDeviceId : cloudActiveDeviceId;
 
   useEffect(() => {
@@ -325,6 +334,33 @@ export function useDevices() {
       }
     }
   }, [baseDevices, clearConnectivityIssue, connectivityIssueByDevice, mode]);
+
+  useEffect(() => {
+    if (mode !== "cloud") {
+      return;
+    }
+
+    for (const [deviceId, pendingMirror] of Object.entries(pendingMirrorByDevice)) {
+      const matchingDevice = effectiveDevices.find((device) => device.id === deviceId);
+      if (!matchingDevice || !pendingMirror) {
+        clearPendingMirror(deviceId);
+        continue;
+      }
+
+      if (
+        pendingMirror.currentWeekStart &&
+        matchingDevice.dateGrid?.[0]?.[0] &&
+        matchingDevice.dateGrid[0][0] !== pendingMirror.currentWeekStart
+      ) {
+        clearPendingMirror(deviceId);
+        continue;
+      }
+
+      if (deviceMatchesPendingMirror(matchingDevice, pendingMirror)) {
+        clearPendingMirror(deviceId);
+      }
+    }
+  }, [clearPendingMirror, effectiveDevices, mode, pendingMirrorByDevice]);
 
   useEffect(() => {
     if (mode !== "cloud") {
@@ -398,6 +434,8 @@ export function useDeviceActions() {
   const markRuntimeConflictRecovery = useAppUiStore((state) => state.markRuntimeConflictRecovery);
   const setPendingTodayState = useAppUiStore((state) => state.setPendingTodayState);
   const setActiveDeviceId = useAppUiStore((state) => state.setActiveDeviceId);
+  const clearPendingMirror = useDeviceHistorySyncStore((state) => state.clearPendingMirror);
+  const setPendingMirror = useDeviceHistorySyncStore((state) => state.setPendingMirror);
   const [isAwaitingSettingsConfirmation, setIsAwaitingSettingsConfirmation] = useState(false);
   const [deviceRemovalState, setDeviceRemovalState] = useState<{
     deadlineAt: string | null;
@@ -871,6 +909,7 @@ export function useDeviceActions() {
   const restoreBoardFromSnapshot = async (source: OnboardingRestoreSource, deviceId?: string) => {
     const issueRestore = async (allowRetry: boolean) => {
       let targetDevice = await resolveFreshLiveDevice(deviceId);
+      clearPendingMirror(targetDevice.id);
       await refreshRuntimeSnapshot(targetDevice.id);
       targetDevice = await resolveFreshLiveDevice(targetDevice.id);
 
@@ -896,8 +935,18 @@ export function useDeviceActions() {
         return;
       }
 
+      const expectedMirror: PendingDeviceMirrorState = {
+        currentWeekStart: restoreCurrentWeekStart,
+        dailyMinimum: source.settings.dailyMinimum,
+        days: source.days,
+        name: source.settings.name,
+        weeklyTarget: source.settings.weeklyTarget,
+        weekTargets: restoreWeekTargets ? [...restoreWeekTargets] : restoreWeekTargets,
+      };
+
       try {
         const baseRevision = targetDevice.runtimeRevision;
+        setPendingMirror(targetDevice.id, expectedMirror);
         const result = await historyDraftMutation.mutateAsync({
           baseRevision,
           currentWeekStart: restoreCurrentWeekStart,
@@ -915,12 +964,13 @@ export function useDeviceActions() {
             errorMessage: "The device did not confirm the restored board in time.",
             requireRevisionAdvance: true,
           },
-          (device) => deviceMatchesHistory(device, updates),
+          (device) => deviceMatchesHistory(device, updates) && deviceMatchesWeekTargets(device, restoreWeekTargets),
         );
         clearConnectivityIssue(targetDevice.id);
         clearRuntimeConflictRecovery(targetDevice.id);
         void invalidateCloudDevices();
       } catch (error) {
+        clearPendingMirror(targetDevice.id);
         const message = error instanceof Error ? error.message : "Failed to restore the saved board.";
         if (allowRetry && isRuntimeRevisionConflictError(message)) {
           try {
@@ -999,6 +1049,7 @@ export function useDeviceActions() {
       deviceId?: string,
       options?: {
         currentWeekStart?: string | null;
+        pendingMirror?: PendingDeviceMirrorState;
         weekTargets?: number[] | null;
       },
     ) => {
@@ -1006,6 +1057,8 @@ export function useDeviceActions() {
       if (updates.length === 0 && !options?.weekTargets) {
         return;
       }
+      clearPendingMirror(targetDevice.id);
+      let isAwaitingMirrorAfterCommandApply = false;
 
       const applyDraft = async (revision: number) => {
         const result = await historyDraftMutation.mutateAsync({
@@ -1046,8 +1099,14 @@ export function useDeviceActions() {
 
         if (firstConfirmation.settled.ok) {
           if (firstConfirmation.kind === "mirror") {
+            clearPendingMirror(targetDevice.id);
             return;
           }
+
+          if (options?.pendingMirror) {
+            setPendingMirror(targetDevice.id, options.pendingMirror);
+          }
+          isAwaitingMirrorAfterCommandApply = true;
 
           void mirrorWait.then((mirrorResult) => {
             if (mirrorResult.ok) {
@@ -1083,11 +1142,13 @@ export function useDeviceActions() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (!isRuntimeRevisionConflictError(message)) {
+          clearPendingMirror(targetDevice.id);
           throw error;
         }
 
         const refreshedDevice = await resolveFreshLiveDevice(targetDevice.id);
         if (refreshedDevice.runtimeRevision === baseRevision) {
+          clearPendingMirror(targetDevice.id);
           throw error;
         }
 
@@ -1095,6 +1156,9 @@ export function useDeviceActions() {
       }
 
       clearConnectivityIssue(targetDevice.id);
+      if (!isAwaitingMirrorAfterCommandApply) {
+        clearPendingMirror(targetDevice.id);
+      }
       clearRuntimeConflictRecovery(targetDevice.id);
       void invalidateCloudDevices();
     },
@@ -1126,6 +1190,7 @@ export function useDeviceActions() {
 
       hideRemovingDevice(targetDevice.id);
       clearConnectivityIssue(targetDevice.id);
+      clearPendingMirror(targetDevice.id);
       clearPendingTodayState(targetDevice.id);
       clearRuntimeConflictRecovery(targetDevice.id);
       setActiveDeviceId(nextActiveDeviceId);
@@ -1216,36 +1281,58 @@ export function useDeviceActions() {
     }) => {
       const targetDevice = await resolveFreshLiveDevice(params?.deviceId);
       const baseRevision = targetDevice.runtimeRevision;
-      clearPendingTodayState(targetDevice.id);
-      const result = await resetHistoryMutation.mutateAsync({
+      const nextWeeklyTarget = params?.weeklyTarget ?? targetDevice.weeklyTarget;
+      const resetWeekTargets = Array.from({ length: targetDevice.days.length }, () => nextWeeklyTarget);
+      const expectedMirror: PendingDeviceMirrorState = {
+        currentWeekStart: targetDevice.dateGrid?.[0]?.[0] ?? null,
         dailyMinimum: params?.dailyMinimum ?? targetDevice.dailyMinimum,
-        deviceId: targetDevice.id,
-        habitName: params?.habitName ?? targetDevice.name,
-        requestId: makeClientEventId(),
-        weeklyTarget: params?.weeklyTarget ?? targetDevice.weeklyTarget,
-      });
-
-      await waitForDeviceMatch(
-        targetDevice.id,
-        {
-          baseRevision,
-          commandId: result.command_id ?? null,
-          errorMessage: "The device did not clear its history in time.",
-          requireRevisionAdvance: true,
-          timeoutMs: 20_000,
-        },
-        (device) =>
-          device.recordedDaysTotal === 0 &&
-          device.successfulWeeksTotal === 0 &&
-          device.days.every((week) => week.every((day) => !day)) &&
-          device.name === (params?.habitName ?? targetDevice.name) &&
-          device.dailyMinimum === (params?.dailyMinimum ?? targetDevice.dailyMinimum) &&
-          device.weeklyTarget === (params?.weeklyTarget ?? targetDevice.weeklyTarget),
-      );
+        days: targetDevice.days.map((week) => week.map(() => false)),
+        habitStartedOnLocal: targetDevice.logicalToday,
+        name: params?.habitName ?? targetDevice.name,
+        recordedDaysTotal: 0,
+        successfulWeeksTotal: 0,
+        weeklyTarget: nextWeeklyTarget,
+        weekTargets: resetWeekTargets,
+      };
+      clearPendingMirror(targetDevice.id);
       clearPendingTodayState(targetDevice.id);
-      clearConnectivityIssue(targetDevice.id);
-      clearRuntimeConflictRecovery(targetDevice.id);
-      void invalidateCloudDevices();
+      setPendingMirror(targetDevice.id, expectedMirror);
+
+      try {
+        const result = await resetHistoryMutation.mutateAsync({
+          dailyMinimum: params?.dailyMinimum ?? targetDevice.dailyMinimum,
+          deviceId: targetDevice.id,
+          habitName: params?.habitName ?? targetDevice.name,
+          requestId: makeClientEventId(),
+          weeklyTarget: nextWeeklyTarget,
+        });
+
+        await waitForDeviceMatch(
+          targetDevice.id,
+          {
+            baseRevision,
+            commandId: result.command_id ?? null,
+            errorMessage: "The device did not clear its history in time.",
+            requireRevisionAdvance: true,
+            timeoutMs: 20_000,
+          },
+          (device) =>
+            device.recordedDaysTotal === 0 &&
+            device.successfulWeeksTotal === 0 &&
+            device.days.every((week) => week.every((day) => !day)) &&
+            device.name === (params?.habitName ?? targetDevice.name) &&
+            device.dailyMinimum === (params?.dailyMinimum ?? targetDevice.dailyMinimum) &&
+            device.weeklyTarget === nextWeeklyTarget &&
+            deviceMatchesWeekTargets(device, resetWeekTargets),
+        );
+        clearPendingTodayState(targetDevice.id);
+        clearConnectivityIssue(targetDevice.id);
+        clearRuntimeConflictRecovery(targetDevice.id);
+        void invalidateCloudDevices();
+      } catch (error) {
+        clearPendingMirror(targetDevice.id);
+        throw error;
+      }
     },
     requestFactoryReset: async (deviceId?: string) => {
       const targetDevice = await resolveFreshLiveDevice(deviceId);
@@ -1273,38 +1360,62 @@ export function useDeviceActions() {
       if (!targetDevice) {
         throw new Error("No AddOne device is active.");
       }
+      clearPendingMirror(targetDevice.id);
+
+      const nextWeekTargets =
+        targetDevice.weekTargets && targetDevice.weekTargets.length === targetDevice.days.length
+          ? [...targetDevice.weekTargets]
+          : Array.from({ length: targetDevice.days.length }, (_, weekIndex) =>
+              weekIndex === targetDevice.today.weekIndex ? params.weeklyTarget : targetDevice.weeklyTarget,
+            );
+      nextWeekTargets[targetDevice.today.weekIndex] = params.weeklyTarget;
+      const expectedMirror: PendingDeviceMirrorState = {
+        currentWeekStart: targetDevice.dateGrid?.[0]?.[0] ?? null,
+        dailyMinimum: params.dailyMinimum,
+        name: params.habitName,
+        weeklyTarget: params.weeklyTarget,
+        weekTargets: nextWeekTargets,
+      };
 
       const baseRevision = targetDevice.runtimeRevision;
-      const result = await saveHabitMetadataMutation.mutateAsync({
-        dailyMinimum: params.dailyMinimum,
-        deviceId: targetDevice.id,
-        habitName: params.habitName,
-        weeklyTarget: params.weeklyTarget,
-      });
+      setPendingMirror(targetDevice.id, expectedMirror);
 
-      if (result.command_id && targetDevice.isLive) {
-        await waitForDeviceMatch(
-          targetDevice.id,
-          {
-            baseRevision,
-            commandId: result.command_id,
-            errorMessage: "The device did not confirm the updated weekly target in time.",
-            requireRevisionAdvance: true,
-          },
-          (device) =>
-            device.weeklyTarget === params.weeklyTarget &&
-            Array.isArray(device.weekTargets) &&
-            device.weekTargets.length === device.days.length &&
-            device.weekTargets[device.today.weekIndex] === params.weeklyTarget,
-        );
-        clearConnectivityIssue(targetDevice.id);
-        clearRuntimeConflictRecovery(targetDevice.id);
+      try {
+        const result = await saveHabitMetadataMutation.mutateAsync({
+          dailyMinimum: params.dailyMinimum,
+          deviceId: targetDevice.id,
+          habitName: params.habitName,
+          weeklyTarget: params.weeklyTarget,
+        });
+
+        if (result.command_id && targetDevice.isLive) {
+          await waitForDeviceMatch(
+            targetDevice.id,
+            {
+              baseRevision,
+              commandId: result.command_id,
+              errorMessage: "The device did not confirm the updated weekly target in time.",
+              requireRevisionAdvance: true,
+            },
+            (device) =>
+              device.weeklyTarget === params.weeklyTarget &&
+              device.dailyMinimum === params.dailyMinimum &&
+              device.name === params.habitName &&
+              deviceMatchesWeekTargets(device, nextWeekTargets),
+          );
+          clearConnectivityIssue(targetDevice.id);
+          clearRuntimeConflictRecovery(targetDevice.id);
+        }
+
+        void invalidateCloudDevices();
+      } catch (error) {
+        clearPendingMirror(targetDevice.id);
+        throw error;
       }
-
-      void invalidateCloudDevices();
     },
     setActiveHabitStartDate: async (habitStartedOnLocal: string, deviceId?: string) => {
       const targetDevice = await resolveFreshLiveDevice(deviceId);
+      clearPendingMirror(targetDevice.id);
       await setHabitStartDateMutation.mutateAsync({
         deviceId: targetDevice.id,
         habitStartedOnLocal,

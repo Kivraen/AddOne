@@ -68,7 +68,6 @@ type DeviceHistoryMetricRow = {
 };
 
 const lastKnownOwnedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
-const lastKnownOwnedDevicesById: Record<string, AddOneDevice | undefined> = {};
 type DeviceFirmwareUpdateSummaryRow = {
   availability_reason: string | null;
   available_firmware_version: string | null;
@@ -348,7 +347,6 @@ function mapDeviceRowToAppDevice(input: {
   const { currentUserName, device, membership, metrics, snapshot } = input;
   const normalizedWeekStart = normalizeWeekStart(device.week_start);
   const liveWeeklyTarget = Number(metrics?.current_weekly_target ?? device.weekly_target);
-  const previousDevice = lastKnownOwnedDevicesById[device.id];
   const projection = buildRuntimeBoardProjection({
     fallbackWeeklyTarget: liveWeeklyTarget,
     resetTime: device.day_reset_time,
@@ -360,27 +358,10 @@ function mapDeviceRowToAppDevice(input: {
           weekTargets: snapshot.week_targets,
         }
       : null,
-    visibleWeekTargets: metrics?.visible_week_targets ?? previousDevice?.weekTargets ?? null,
+    visibleWeekTargets: metrics?.visible_week_targets ?? null,
     timezone: device.timezone,
     weekStart: normalizedWeekStart,
   });
-
-  if (__DEV__) {
-    const previousWeekTargets = previousDevice?.weekTargets?.slice(0, 6) ?? null;
-    const snapshotWeekTargets =
-      snapshot && Array.isArray(snapshot.week_targets) ? (snapshot.week_targets as unknown[]).slice(0, 6) : snapshot?.week_targets ?? null;
-    const metricWeekTargets =
-      metrics && Array.isArray(metrics.visible_week_targets) ? (metrics.visible_week_targets as unknown[]).slice(0, 6) : metrics?.visible_week_targets ?? null;
-    const projectedWeekTargets = projection.weekTargets?.slice(0, 6) ?? null;
-    console.log("[weekly-target-debug]", {
-      currentWeeklyTarget: liveWeeklyTarget,
-      deviceId: device.id,
-      metricWeekTargets,
-      previousWeekTargets,
-      projectedWeekTargets,
-      snapshotWeekTargets,
-    });
-  }
 
   return {
     accountRemovalDeadlineAt: device.account_removal_deadline_at ?? null,
@@ -606,74 +587,6 @@ function overlayProjectedTodayState(device: AddOneDevice, dayStates: DeviceDaySt
   return {
     ...device,
     days,
-  };
-}
-
-function currentWeekCompletedCount(device: Pick<AddOneDevice, "days" | "today">) {
-  return device.days[device.today.weekIndex].slice(0, device.today.dayIndex + 1).filter(Boolean).length;
-}
-
-function isCurrentWeekSuccessful(device: Pick<AddOneDevice, "days" | "today" | "weeklyTarget">) {
-  return currentWeekCompletedCount(device) >= device.weeklyTarget;
-}
-
-function reconcileOwnedDeviceSummaryMetrics(device: AddOneDevice) {
-  const previousDevice = lastKnownOwnedDevicesById[device.id];
-  if (!previousDevice) {
-    lastKnownOwnedDevicesById[device.id] = device;
-    return device;
-  }
-
-  const isSameTodaySlot =
-    previousDevice.logicalToday === device.logicalToday &&
-    previousDevice.today.weekIndex === device.today.weekIndex &&
-    previousDevice.today.dayIndex === device.today.dayIndex;
-
-  if (!isSameTodaySlot) {
-    lastKnownOwnedDevicesById[device.id] = device;
-    return device;
-  }
-
-  const previousTodayState = previousDevice.days[previousDevice.today.weekIndex]?.[previousDevice.today.dayIndex];
-  const currentTodayState = device.days[device.today.weekIndex]?.[device.today.dayIndex];
-
-  if (
-    previousTodayState === undefined ||
-    currentTodayState === undefined ||
-    previousTodayState === currentTodayState
-  ) {
-    lastKnownOwnedDevicesById[device.id] = device;
-    return device;
-  }
-
-  let recordedDaysTotal = device.recordedDaysTotal;
-  let successfulWeeksTotal = device.successfulWeeksTotal;
-  let adjusted = false;
-
-  if (device.recordedDaysTotal === previousDevice.recordedDaysTotal) {
-    recordedDaysTotal = Math.max(0, recordedDaysTotal + (currentTodayState ? 1 : -1));
-    adjusted = true;
-  }
-
-  const previousWeekSuccessful = isCurrentWeekSuccessful(previousDevice);
-  const currentWeekSuccessful = isCurrentWeekSuccessful(device);
-  if (
-    previousWeekSuccessful !== currentWeekSuccessful &&
-    device.successfulWeeksTotal === previousDevice.successfulWeeksTotal
-  ) {
-    successfulWeeksTotal = Math.max(0, successfulWeeksTotal + (currentWeekSuccessful ? 1 : -1));
-    adjusted = true;
-  }
-
-  if (!adjusted) {
-    lastKnownOwnedDevicesById[device.id] = device;
-    return device;
-  }
-
-  return {
-    ...device,
-    recordedDaysTotal,
-    successfulWeeksTotal,
   };
 }
 
@@ -921,26 +834,7 @@ export async function fetchOwnedDevices(params: { userEmail?: string | null; use
   const todayStateDates = Array.from(new Set(provisionalDevices.map((device) => device.logicalToday).filter(Boolean)));
   const dayStates = await fetchDeviceDayStatesForLocalDates(deviceIds, todayStateDates);
 
-  return provisionalDevices.map((device) => {
-    const projectedDevice = overlayProjectedTodayState(device, dayStates);
-    const reconciledDevice = reconcileOwnedDeviceSummaryMetrics(projectedDevice);
-    const previousDevice = lastKnownOwnedDevicesById[device.id];
-    const hasSettledSummaryMetrics =
-      !previousDevice ||
-      previousDevice.logicalToday !== projectedDevice.logicalToday ||
-      previousDevice.today.weekIndex !== projectedDevice.today.weekIndex ||
-      previousDevice.today.dayIndex !== projectedDevice.today.dayIndex ||
-      previousDevice.days[previousDevice.today.weekIndex]?.[previousDevice.today.dayIndex] ===
-        projectedDevice.days[projectedDevice.today.weekIndex]?.[projectedDevice.today.dayIndex] ||
-      previousDevice.recordedDaysTotal !== projectedDevice.recordedDaysTotal ||
-      previousDevice.successfulWeeksTotal !== projectedDevice.successfulWeeksTotal;
-
-    if (hasSettledSummaryMetrics) {
-      lastKnownOwnedDevicesById[device.id] = projectedDevice;
-    }
-
-    return reconciledDevice;
-  });
+  return provisionalDevices.map((device) => overlayProjectedTodayState(device, dayStates));
 }
 
 export async function fetchSharedBoards(userId: string) {

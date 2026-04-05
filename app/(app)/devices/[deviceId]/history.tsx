@@ -20,7 +20,9 @@ import {
   toggleHistoryCell as toggleHistoryCellLocal,
 } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
+import { buildDeviceHistoryView, resolveDeviceWeekTarget } from "@/lib/device-history-view";
 import { connectionGraceState } from "@/lib/device-connection";
+import { useDeviceHistorySyncStore } from "@/store/device-history-sync-store";
 import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
 
 const HISTORY_CONNECTION_RECHECK_MS = 2_000;
@@ -142,45 +144,7 @@ function shiftLocalDate(localDate: string, days: number) {
 
 function resolveEditorWeekTargets(device: AddOneDevice) {
   const weekCount = device.dateGrid?.length ?? device.days.length;
-  return Array.from({ length: weekCount }, (_, weekIndex) => device.weekTargets?.[weekIndex] ?? device.weeklyTarget);
-}
-
-function deviceMatchesHistoryEditorSnapshot(device: AddOneDevice, snapshot: AddOneDevice) {
-  if (resolveHabitStartLocalDate(device) !== resolveHabitStartLocalDate(snapshot)) {
-    return false;
-  }
-
-  if (device.days.length !== snapshot.days.length) {
-    return false;
-  }
-
-  for (let weekIndex = 0; weekIndex < snapshot.days.length; weekIndex += 1) {
-    const nextWeek = device.days[weekIndex] ?? [];
-    const snapshotWeek = snapshot.days[weekIndex] ?? [];
-    if (nextWeek.length !== snapshotWeek.length) {
-      return false;
-    }
-
-    for (let dayIndex = 0; dayIndex < snapshotWeek.length; dayIndex += 1) {
-      if (nextWeek[dayIndex] !== snapshotWeek[dayIndex]) {
-        return false;
-      }
-    }
-  }
-
-  const nextWeekTargets = resolveEditorWeekTargets(device);
-  const snapshotWeekTargets = resolveEditorWeekTargets(snapshot);
-  if (nextWeekTargets.length !== snapshotWeekTargets.length) {
-    return false;
-  }
-
-  for (let weekIndex = 0; weekIndex < snapshotWeekTargets.length; weekIndex += 1) {
-    if (nextWeekTargets[weekIndex] !== snapshotWeekTargets[weekIndex]) {
-      return false;
-    }
-  }
-
-  return true;
+  return Array.from({ length: weekCount }, (_, weekIndex) => resolveDeviceWeekTarget(device, weekIndex));
 }
 
 function applyBackdatedHabitStartTarget(
@@ -246,7 +210,15 @@ export default function DeviceHistoryRoute() {
   const navigation = useNavigation();
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const device = useRoutedDevice();
+  const routedDevice = useRoutedDevice();
+  const pendingMirrorByDevice = useDeviceHistorySyncStore((state) => state.pendingMirrorByDevice);
+  const device = useMemo(
+    () =>
+      buildDeviceHistoryView(routedDevice, {
+        pendingMirror: pendingMirrorByDevice[routedDevice.id] ?? undefined,
+      }).device,
+    [pendingMirrorByDevice, routedDevice],
+  );
   const {
     commitHistoryDraft,
     isUpdatingHabitStartDate,
@@ -264,7 +236,6 @@ export default function DeviceHistoryRoute() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [pendingBackdateTarget, setPendingBackdateTarget] = useState<PendingBackdateTargetSelection | null>(null);
   const [selectedBackdateWeeklyTarget, setSelectedBackdateWeeklyTarget] = useState<number | null>(null);
-  const [pendingSavedDevice, setPendingSavedDevice] = useState<AddOneDevice | null>(null);
   const [hasEnteredEditor, setHasEnteredEditor] = useState(false);
   const [boardViewport, setBoardViewport] = useState({ height: 0, width: 0 });
   const refreshDevicesRef = useRef(refreshDevices);
@@ -368,7 +339,6 @@ export default function DeviceHistoryRoute() {
     setBaseDevice(device);
     setDraftDevice(device);
     setIsDirty(false);
-    setPendingSavedDevice(null);
     setStatusError(null);
   }, [device.id]);
 
@@ -429,17 +399,9 @@ export default function DeviceHistoryRoute() {
       return;
     }
 
-    if (pendingSavedDevice && !deviceMatchesHistoryEditorSnapshot(device, pendingSavedDevice)) {
-      return;
-    }
-
-    if (pendingSavedDevice) {
-      setPendingSavedDevice(null);
-    }
-
     setBaseDevice(device);
     setDraftDevice(device);
-  }, [deviceSyncKey, device, isDirty, pendingSavedDevice]);
+  }, [deviceSyncKey, device, isDirty]);
 
   const palette = getMergedPalette(draftDevice.paletteId, draftDevice.customPalette);
   const baseHabitStartLocalDate = resolveHabitStartLocalDate(baseDevice);
@@ -716,14 +678,6 @@ export default function DeviceHistoryRoute() {
           ? [...draftDevice.weekTargets]
           : null;
       const currentWeekStart = nextBaseDevice.dateGrid?.[0]?.[0] ?? null;
-
-      if (updates.length > 0 || nextWeekTargets) {
-        await commitHistoryDraft(updates, nextBaseDevice.runtimeRevision, device.id, {
-          currentWeekStart,
-          weekTargets: nextWeekTargets,
-        });
-      }
-
       const savedDevice = applyHistoryDraftUpdates(
         {
           ...nextBaseDevice,
@@ -732,7 +686,20 @@ export default function DeviceHistoryRoute() {
         },
         updates,
       );
-      setPendingSavedDevice(savedDevice);
+
+      if (updates.length > 0 || nextWeekTargets) {
+        await commitHistoryDraft(updates, nextBaseDevice.runtimeRevision, device.id, {
+          currentWeekStart,
+          pendingMirror: {
+            currentWeekStart,
+            days: savedDevice.days,
+            habitStartedOnLocal: savedDevice.habitStartedOnLocal,
+            weekTargets: nextWeekTargets ?? undefined,
+          },
+          weekTargets: nextWeekTargets,
+        });
+      }
+
       setBaseDevice(savedDevice);
       setDraftDevice(savedDevice);
       setIsDirty(false);
