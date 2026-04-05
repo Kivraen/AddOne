@@ -893,7 +893,7 @@ export function HomeScreen() {
 
         <View style={{ position: "relative" }}>
           <DeviceBoardStage
-            accentColor={theme.colors.accentAmber}
+            accentColor={deviceAccentColor}
             cells={cells}
             palette={palette}
             pendingPulse={null}

@@ -558,7 +558,7 @@ function SharedBoardShareSnapshot(props: {
       </View>
 
       <DeviceBoardStage
-        accentColor={props.palette.weekSuccess}
+        accentColor={props.palette.dayOn}
         cells={props.cells}
         maxGridWidth={props.boardWidth}
         palette={props.palette}
@@ -715,7 +715,7 @@ function SharedBoardCard({ board, width }: { board: SharedBoard; width: number }
         </View>
 
         <View style={{ paddingHorizontal: 8 }}>
-          <DeviceBoardStage accentColor={palette.weekSuccess} cells={cells} maxGridWidth={boardWidth} palette={palette} />
+          <DeviceBoardStage accentColor={palette.dayOn} cells={cells} maxGridWidth={boardWidth} palette={palette} />
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "stretch", paddingHorizontal: 18 }}>

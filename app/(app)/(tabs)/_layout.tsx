@@ -5,6 +5,7 @@ import { DynamicColorIOS } from "react-native";
 
 import { theme } from "@/constants/theme";
 import { useDevices } from "@/hooks/use-devices";
+import { withAlpha } from "@/lib/color";
 import { getDeviceAccentColor } from "@/lib/device-accent";
 
 export default function TabsLayout() {
@@ -32,11 +33,13 @@ export default function TabsLayout() {
   return (
     <NativeTabs
       backgroundColor={process.env.EXPO_OS === "android" ? theme.colors.bgCanvas : undefined}
+      indicatorColor={process.env.EXPO_OS === "android" ? theme.colors.bgStrong : undefined}
       iconColor={{
         default: theme.colors.textTertiary,
         selected: accentColor,
       }}
       minimizeBehavior="onScrollDown"
+      rippleColor={process.env.EXPO_OS === "android" ? withAlpha(theme.colors.textPrimary, 0.08) : undefined}
       tintColor={tintColor}
     >
       <NativeTabs.Trigger name="index">
