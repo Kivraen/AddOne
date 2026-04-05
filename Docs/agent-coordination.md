@@ -1,6 +1,6 @@
 # AddOne Agent Coordination
 
-Last updated: March 27, 2026
+Last updated: April 4, 2026
 
 This file defines how AddOne uses the coordinator-led stage workflow.
 
@@ -73,6 +73,63 @@ Native proof rule:
   4. capture proof with `xcrun simctl io booted screenshot ...`
 - Use Playwright only if the proof target is a real web surface or an external hosted page.
 - If simulator proof is blocked, say exactly what is blocked instead of switching silently to browser proof.
+```
+
+## Hosted Backend Access Rule
+
+- On this machine, workers should assume hosted backend access is available unless a concrete command proves otherwise.
+- Do not claim "no backend access" or skip backend work preemptively.
+- For `S4`-style work, the normal backend paths are:
+  - linked Supabase migrations from repo-local files in `supabase/migrations/`
+  - read-only or write RPC checks against the hosted beta Supabase project
+  - beta VPS checks or deploys under `deploy/beta-vps/`
+- If a worker needs backend work, the default expectation is to try the real command first and only report lack of access if it actually fails.
+
+### Supabase Workflow
+
+- Create or edit migrations under `supabase/migrations/`.
+- Apply linked hosted migrations with:
+  - `npx supabase db push --linked`
+- Inspect migration state with:
+  - `npx supabase migration list`
+- Use local reset or local debug only when the task actually needs it:
+  - `npx supabase db reset`
+  - `npx supabase start --debug`
+
+### Hosted Beta Env Workflow
+
+- Source hosted beta environment values from:
+  - `.codex-tmp/realtime-gateway.env`
+- Standard shell pattern:
+
+```bash
+set -a
+source .codex-tmp/realtime-gateway.env
+set +a
+```
+
+- After sourcing, use `curl` against:
+  - `$SUPABASE_URL/rest/v1/...`
+  - `$SUPABASE_URL/rest/v1/rpc/...`
+- Use the correct auth headers for the task, typically the service-role key for operator or migration-adjacent checks.
+
+### VPS Workflow
+
+- Beta VPS access from this machine is already part of the established workflow:
+  - `ssh root@72.62.200.12`
+- Hosted broker or gateway deploy files live under:
+  - `deploy/beta-vps/`
+- Do not assume VPS work is blocked unless SSH or the required remote command actually fails.
+
+Copy-paste brief snippet for backend-capable tasks:
+
+```md
+Hosted backend access rule:
+- On this machine, assume hosted backend access is available unless a real command fails.
+- For Supabase schema work, use repo-local migrations in `supabase/migrations/` and apply them with `npx supabase db push --linked`.
+- For hosted beta checks, source `.codex-tmp/realtime-gateway.env` and use `curl` against `$SUPABASE_URL/rest/v1/...` and `$SUPABASE_URL/rest/v1/rpc/...`.
+- For beta VPS work, use `ssh root@72.62.200.12` and the files under `deploy/beta-vps/`.
+- Do not report "no backend access" unless the actual command path fails.
 ```
 
 ## Default Coordinator Loop

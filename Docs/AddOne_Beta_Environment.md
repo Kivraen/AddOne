@@ -1,6 +1,6 @@
 # AddOne Beta Environment
 
-Last locked: March 27, 2026
+Last locked: April 4, 2026
 
 This document defines the first always-on hosted environment for AddOne.
 
@@ -138,6 +138,55 @@ Current beta backend values live locally in:
 - MQTT broker CA PEM
 - one per-device MQTT username and password issued after authenticated claim or on the first post-migration secure sync
 - current hosted beta prefers the live MQTT hostname plus its pinned broker CA PEM; the raw IP path remains only as a fallback
+
+## Hosted Backend Worker Workflow
+
+Use this workflow by default for hosted beta work from this machine. Do not assume backend work is blocked unless a real command fails.
+
+### Supabase schema work
+
+- create or edit migrations in:
+  - `supabase/migrations/`
+- apply them to the linked hosted project with:
+  - `npx supabase db push --linked`
+- inspect migration state with:
+  - `npx supabase migration list`
+- use local debug or reset only when the task actually requires it:
+  - `npx supabase start --debug`
+  - `npx supabase db reset`
+
+### Hosted beta queries and RPCs
+
+- source the standard env file first:
+
+```bash
+set -a
+source .codex-tmp/realtime-gateway.env
+set +a
+```
+
+- after that, use `curl` against:
+  - `$SUPABASE_URL/rest/v1/...`
+  - `$SUPABASE_URL/rest/v1/rpc/...`
+- common hosted checks already used in `S4` include:
+  - `devices`
+  - `device_commands`
+  - `device_firmware_ota_events`
+  - `device_firmware_ota_statuses`
+  - `device_firmware_update_requests`
+  - `firmware_releases`
+  - `firmware_release_rollout_allowlist`
+  - `device_mqtt_credentials`
+  - `device_memberships`
+  - rollout and OTA RPCs such as `begin_firmware_update(...)`, `get_device_firmware_update_summary(...)`, and `queue_device_command(...)`
+
+### Beta VPS operations
+
+- beta VPS access is part of the normal project workflow from this machine:
+  - `ssh root@72.62.200.12`
+- deploy or broker files live under:
+  - `deploy/beta-vps/`
+- do not claim the VPS path is blocked unless SSH or the required remote command actually fails
 
 ## Beta Bring-Up Sequence
 1. Treat the current hosted Supabase project `AddOne` as beta.
