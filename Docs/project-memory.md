@@ -71,7 +71,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - `fw-beta-20260404-07`
   - `fw-beta-20260404-08`
   - `fw-beta-20260404-09`
-- The April 5 recovery line has now been re-homed back into the normal dev-projects folder: `/Users/viktor/Desktop/DevProjects/Codex/AddOne` is again the canonical working repo, while the salvaged pre-re-home Desktop copy is preserved at `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405` plus `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405.tar.zst`.
+- The April 5 recovery line has now been re-homed back into the normal dev-projects folder: `/Users/viktor/Desktop/DevProjects/Codex/AddOne` is again the canonical working repo, while the salvaged pre-re-home Desktop copy is preserved inside the repo at `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405` plus `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405.tar.zst` when the lean archive is present.
 - The latest stable save point includes the April 5 stable baseline plus the follow-up `c515422` UI polish checkpoint, and is recorded under the re-home save tag `s4-stable-main-20260405-post-followups`.
 - The current durable bug-bash checkpoint line on `codex/s4-final-bug-bash` now includes:
   - `8be7c14`

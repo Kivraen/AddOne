@@ -24,10 +24,10 @@ This file records the real git and recovery state for AddOne so future agents do
 - The temporary clean-clone recovery repo at `/Users/viktor/AddOne-clean` was used to reconstruct and stabilize the April 5 baseline.
 - That recovered line is now being re-homed back into the normal dev-projects folder so there is one canonical workspace again.
 - The previous Desktop repo is preserved as salvage in:
-  - `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405`
-  - `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405.tar.zst`
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405`
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405.tar.zst`
 - The old broken March 19 quarantine remains historical context only:
-  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319`
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/legacy/AddOne-broken-20260319`
 
 ## What Went Wrong
 

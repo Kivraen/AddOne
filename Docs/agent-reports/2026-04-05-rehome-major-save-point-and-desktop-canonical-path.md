@@ -27,8 +27,8 @@ This note records the repo normalization after the April 5 recovery line:
 - Canonical repo path after re-home:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
 - Salvage backup paths:
-  - `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405`
-  - `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405.tar.zst`
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405`
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405.tar.zst`
 - Stable restore tag:
   - `s4-stable-main-20260405-post-followups`
 - Active follow-up branch after re-home:
