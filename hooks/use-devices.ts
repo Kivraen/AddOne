@@ -209,7 +209,7 @@ type CelebrationPreviewRequest = {
 };
 
 export function useDevices() {
-  const { isAuthenticated, mode, status, user, userEmail } = useAuth();
+  const { isAuthenticated, mode, status, user } = useAuth();
   const demoDevices = useAddOneStore((state) => state.devices);
   const demoActiveDeviceId = useAddOneStore((state) => state.activeDeviceId);
   const setDemoActiveDevice = useAddOneStore((state) => state.setActiveDevice);
@@ -227,7 +227,7 @@ export function useDevices() {
 
   const devicesQuery = useQuery({
     enabled: mode === "cloud" && status === "signedIn" && !!user?.id,
-    queryFn: () => fetchOwnedDevices({ userEmail, userId: user!.id }),
+    queryFn: () => fetchOwnedDevices({ userId: user!.id }),
     queryKey: addOneQueryKeys.devices(user?.id),
     // Keep a light self-heal refetch even with realtime enabled.
     refetchInterval: mode === "cloud" && status === "signedIn" ? DEVICE_SNAPSHOT_SELF_HEAL_MS : false,
@@ -422,7 +422,7 @@ export function useDevices() {
 
 export function useDeviceActions() {
   const { activeDevice, devices } = useDevices();
-  const { mode, user, userEmail } = useAuth();
+  const { mode, user } = useAuth();
   const queryClient = useQueryClient();
   const clearConnectivityIssue = useAppUiStore((state) => state.clearConnectivityIssue);
   const clearHiddenRemovingDevice = useAppUiStore((state) => state.clearHiddenRemovingDevice);
@@ -464,7 +464,7 @@ export function useDeviceActions() {
 
     try {
       return await queryClient.fetchQuery({
-        queryFn: () => fetchOwnedDevices({ userEmail, userId: user.id }),
+        queryFn: () => fetchOwnedDevices({ userId: user.id }),
         queryKey: addOneQueryKeys.devices(user.id),
       });
     } catch (error) {
@@ -783,7 +783,7 @@ export function useDeviceActions() {
           return;
         }
 
-        const latestDevices = await fetchOwnedDevices({ userEmail, userId: user.id });
+        const latestDevices = await fetchOwnedDevices({ userId: user.id });
         if (!latestDevices.some((device) => device.id === deviceId)) {
           return;
         }
@@ -802,7 +802,7 @@ export function useDeviceActions() {
         return;
       }
 
-      const finalDevices = await fetchOwnedDevices({ userEmail, userId: user.id });
+      const finalDevices = await fetchOwnedDevices({ userId: user.id });
       if (!finalDevices.some((device) => device.id === deviceId)) {
         return;
       }

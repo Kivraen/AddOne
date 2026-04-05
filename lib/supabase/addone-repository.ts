@@ -624,10 +624,20 @@ async function fetchSharedBoardHistoryMetrics(deviceIds: string[]) {
   }
 
   if (error && isTransientNetworkFailureMessage(error.message)) {
-    return deviceIds.flatMap((deviceId) => {
+    const cachedRows = deviceIds.flatMap((deviceId) => {
       const cachedMetrics = lastKnownSharedHistoryMetricsByDevice[deviceId];
       return cachedMetrics ? [cachedMetrics] : [];
     });
+
+    // Shared boards should not render from partial truth. If we do not already have
+    // a full cached metrics set for every requested board, fail closed and let the
+    // query keep its prior data/loading state instead of rebuilding cards from
+    // snapshot-only fallbacks.
+    if (cachedRows.length !== deviceIds.length) {
+      throw new Error(error.message);
+    }
+
+    return cachedRows;
   }
 
   const rows = assertData(
@@ -808,7 +818,7 @@ export async function removeProfileAvatar(userId: string) {
   }
 }
 
-export async function fetchOwnedDevices(params: { userEmail?: string | null; userId: string }) {
+export async function fetchOwnedDevices(params: { userId: string }) {
   const { userId } = params;
   const supabase = ensureSupabase();
   const currentUserProfile = await fetchProfile(userId).catch(() => null);
