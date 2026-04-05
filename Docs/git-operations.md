@@ -1,6 +1,6 @@
 # AddOne Git Operations
 
-Last updated: April 4, 2026
+Last updated: April 5, 2026
 
 This file records the real git and recovery state for AddOne so future agents do not have to reconstruct it from chat.
 
@@ -8,39 +8,37 @@ This file records the real git and recovery state for AddOne so future agents do
 
 - Canonical working repo:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
-- Current branch:
-  - `codex/s4-final-rc-review`
-- Current clean branch tip:
-  - `c3372db` `codex: checkpoint final rc review and ota stability`
-- Tracking branch:
-  - `origin/codex/s4-final-rc-review`
-- Current working tree status:
+- Stable branch:
+  - `main`
+- Stable major-save point:
+  - `s4-stable-main-20260405-post-followups`
+- Latest stable product follow-up included in that save point:
+  - `c515422` `codex: restore board glow and calm android tabs`
+- Active follow-up branch for tomorrow's work:
+  - `codex/s4-post-stable-followups`
+- Expected working tree status after the re-home:
   - clean
 
 ## Recovery Reality
 
-- The clean repo is healthy and should be used for ongoing work.
-- The quarantined repo still exists at:
+- The temporary clean-clone recovery repo at `/Users/viktor/AddOne-clean` was used to reconstruct and stabilize the April 5 baseline.
+- That recovered line is now being re-homed back into the normal dev-projects folder so there is one canonical workspace again.
+- The previous Desktop repo is preserved as salvage in:
+  - `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405`
+  - `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405.tar.zst`
+- The old broken March 19 quarantine remains historical context only:
   - `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319`
-- The newer local-only recovery line was successfully reconstructed and promoted.
-- The recovered latest UI baseline now lives on:
-  - `main`
-  - `origin/main`
-  - `codex/ui-skin-recovered-local-latest`
-- Recovery checkpoint tags now exist on the remote:
-  - `ui-recovered-candidate-20260320`
-  - `main-before-ui-recovered-20260320`
 
 ## What Went Wrong
 
 - Real product work lived too long as local-only state.
 - Some accepted slices were recorded in docs and reports, but the matching code was not always pushed remotely.
 - At least one important repo/worktree operation was done before fully mapping which checkout held the latest state.
-- After the old repo showed git/object-store instability, recovery rebuilt a clean repo from the remote branch tip instead of the newest local-only branch tip.
+- After the old Desktop repo became unreliable for Expo/Metro work, recovery temporarily moved active development into `/Users/viktor/AddOne-clean`.
 - Result:
-  - the clean repo is stable
-  - the old repo is quarantined
-  - the recovered latest UI state is now back inside the canonical repo and on `main`
+  - the recovered line is stable
+  - the old Desktop repo is preserved as salvage only
+  - the canonical repo path is now being restored back to `/Users/viktor/Desktop/DevProjects/Codex/AddOne`
 
 ## Plain Language Rules
 
@@ -64,8 +62,8 @@ This file records the real git and recovery state for AddOne so future agents do
   - confirm whether the current state is already pushed
 - Default workflow from here:
   - `main` stays stable
-  - `codex/s4-final-rc-review` is the current saved RC candidate branch
-  - new implementation work starts from a fresh branch off `main` unless the user explicitly wants to continue the RC line
+  - `codex/s4-post-stable-followups` is the active tomorrow-work branch
+  - new implementation work starts from a fresh branch off `main` unless the user explicitly wants to continue the follow-up line
   - use worktrees only when we intentionally want two active checkouts at once
 - Avoid force-push and history rewrites unless the user explicitly asks.
 - Keep local backup folders and temporary recovery clones outside the active repo root.
@@ -98,6 +96,6 @@ This file records the real git and recovery state for AddOne so future agents do
 
 ## Current Recovery Gap
 
-- There is no active recovery gap in the canonical repo right now.
-- The broken repo remains useful only as historical quarantine, not as the active source of truth.
-- The current open release question is not a git backup problem. The saved RC branch is now pushed; the remaining explicit gate is the external Supabase auth dashboard settings confirmation recorded in the April 4 RC checkpoint report.
+- There is no active recovery gap in the canonical repo after the April 5 re-home.
+- The salvage backup remains useful only as historical recovery material, not as the active source of truth.
+- The current open release question is not a git backup problem. The saved stable line is tagged and pushed; the remaining explicit gate is the external Supabase auth dashboard settings confirmation recorded in the April 4 RC checkpoint report.

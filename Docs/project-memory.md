@@ -71,7 +71,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - `fw-beta-20260404-07`
   - `fw-beta-20260404-08`
   - `fw-beta-20260404-09`
-- The April 5 recovery line now treats `/Users/viktor/AddOne-clean` as the authoritative writable repo after the original Desktop workspace became unreliable for Expo/Metro work; `/Users/viktor/Desktop/DevProjects/Codex/AddOne` is now a read-only salvage source.
+- The April 5 recovery line has now been re-homed back into the normal dev-projects folder: `/Users/viktor/Desktop/DevProjects/Codex/AddOne` is again the canonical working repo, while the salvaged pre-re-home Desktop copy is preserved at `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405` plus `/Users/viktor/Desktop/DevProjects/Codex/_repo-backups/AddOne-salvage-20260405.tar.zst`.
+- The latest stable save point includes the April 5 stable baseline plus the follow-up `c515422` UI polish checkpoint, and is recorded under the re-home save tag `s4-stable-main-20260405-post-followups`.
 - The current durable bug-bash checkpoint line on `codex/s4-final-bug-bash` now includes:
   - `8be7c14`
   - `bd93343`
@@ -88,8 +89,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: re-confirm the March 27 Supabase auth dashboard URL / OTP settings, then decide whether the final RC should build from `codex/s4-final-rc-review` or the recovered `codex/s4-final-bug-bash` line
-- Current execution task: preserve the April 5 recovery and review-fix checkpoint on `codex/s4-final-bug-bash`, then close the remaining external release check before any final TestFlight-candidate declaration
+- Next brief: run tomorrow's final cross-platform pass from `codex/s4-post-stable-followups`, re-confirm the March 27 Supabase auth dashboard URL / OTP settings, then cut the final TestFlight candidate from the stabilized Desktop-path repo
+- Current execution task: preserve the April 5 re-home major save point, keep `main` stable, and use `codex/s4-post-stable-followups` as the only active implementation line for the final launch pass
 - Parallel support slice: `T-054` remains a separate coordinator acceptance decision even though its code is already part of the current candidate branch
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, and `T-048` is now accepted as the Home confirmation-latency follow-up. They are now direct inputs to the final ship baseline rather than side work waiting behind a blocked artifact gate.
 

@@ -1,6 +1,6 @@
 # Active Work
 
-Last updated: April 4, 2026
+Last updated: April 5, 2026
 
 This file is the live registry for coordination work.
 It is the structured companion to [AddOne_Main_Plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/AddOne_Main_Plan.md).
@@ -10,8 +10,11 @@ The coordinator owns this file.
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: re-confirm the March 27 Supabase auth dashboard settings and decide whether `codex/s4-final-rc-review` is the final iOS RC/TestFlight build branch
-- Parallel exception: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. `T-049` now has a stronger April 4 checkpoint on `codex/s4-final-rc-review`, `T-054` remains a separate support-slice acceptance decision, and `T-050` stays queued only if more onboarding polish is still desired after the current checkpoint.
+- Next brief: run tomorrow's final iPhone and Android bug-bash from `codex/s4-post-stable-followups`, re-confirm the March 27 Supabase auth dashboard settings, then decide whether the current stable line is ready for the final TestFlight candidate build.
+- Parallel exception: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. `T-049` and the April 5 recovery line are now folded into the stabilized Desktop-path repo, `T-054` remains a separate support-slice acceptance decision, and `T-050` stays queued only if more onboarding polish is still desired after the current checkpoint.
+- Canonical repo path is again `/Users/viktor/Desktop/DevProjects/Codex/AddOne`.
+- Stable restore point is the April 5 re-home save tag `s4-stable-main-20260405-post-followups`.
+- Active follow-up branch for tomorrow is `codex/s4-post-stable-followups`.
 - Rule: only `S4` work should be actively delegated until the coordinator accepts, blocks, or revises the stage.
 - `S3` is intentionally deferred, not completed. Remaining polish and timezone backlog stay parked until release-readiness planning is explicit.
 
