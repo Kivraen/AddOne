@@ -98,7 +98,7 @@ Use this as the default workflow:
 - New work should usually happen on:
   - a fresh branch created from `main`
 - Quarantined old repo:
-  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne-broken-20260319`
+  - `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/legacy/AddOne-broken-20260319`
 - Recovery status:
   - the newer local-only UI state has already been recovered and promoted to `main`
 - Worktree rule:
