@@ -118,20 +118,21 @@ export default function DeviceRecoveryRoute() {
     session,
     submitProvisioning,
   });
-  const showRecoveryHomeWifiStage = controller.stage === "scan_home_wifi" || controller.stage === "choose_home_wifi";
+  const recoveryStage = controller.stage === "intro" ? "join_device_ap" : controller.stage;
+  const showRecoveryHomeWifiStage = recoveryStage === "scan_home_wifi" || recoveryStage === "choose_home_wifi";
   const selectedWifiSsid = controller.draft.wifiSsid.trim();
   const recoveryHomeWifiStageState =
-    controller.stage === "scan_home_wifi"
+    recoveryStage === "scan_home_wifi"
       ? "loading"
       : controller.manualWifiEntry || controller.networks.length === 0
         ? "manual"
         : "picker";
   const recoveryHeaderStepLabel =
-    controller.stage === "failure" || controller.stage === "intro" || controller.stage === "join_device_ap"
+    recoveryStage === "failure" || recoveryStage === "join_device_ap"
       ? "Step 1 of 3"
       : showRecoveryHomeWifiStage
         ? "Step 2 of 3"
-        : controller.stage === "reconnecting_board" || controller.stage === "restoring_board" || controller.stage === "success"
+        : recoveryStage === "reconnecting_board" || recoveryStage === "restoring_board" || recoveryStage === "success"
           ? "Step 3 of 3"
           : undefined;
 
@@ -249,7 +250,7 @@ export default function DeviceRecoveryRoute() {
   }
 
   const recoveryBottomAction =
-    controller.stage === "failure"
+    recoveryStage === "failure"
       ? (
           <ActionButton
             disabled={isBusy}
@@ -257,9 +258,7 @@ export default function DeviceRecoveryRoute() {
             onPress={() => void startRecoverySession("restart_recovery")}
           />
         )
-      : controller.stage === "intro"
-        ? <ActionButton disabled label="Preparing…" onPress={() => undefined} />
-        : controller.stage === "join_device_ap"
+      : recoveryStage === "join_device_ap"
           ? (
               <ActionButton
                 disabled
@@ -271,13 +270,13 @@ export default function DeviceRecoveryRoute() {
             ? (
                 <ActionButton
                   disabled={
-                    controller.stage === "scan_home_wifi" ||
+                    recoveryStage === "scan_home_wifi" ||
                     controller.isCheckingAp ||
                     controller.isSubmittingProvisioning ||
                     !controller.preparedRequest
                   }
                   label={
-                    controller.stage === "scan_home_wifi"
+                    recoveryStage === "scan_home_wifi"
                       ? "Scanning…"
                       : controller.isCheckingAp || controller.isSubmittingProvisioning
                         ? "Connecting…"
@@ -316,7 +315,7 @@ export default function DeviceRecoveryRoute() {
         />
 
         <View style={{ gap: 6 }}>
-        {controller.stage === "failure" ? (
+        {recoveryStage === "failure" ? (
             <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_failure">
               <SetupStageLayout>
                 <StepHeader
@@ -328,22 +327,7 @@ export default function DeviceRecoveryRoute() {
             </SetupStageScene>
           ) : null}
 
-          {controller.stage === "intro" ? (
-            <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_intro">
-              <SetupStageLayout>
-                <StepHeader
-                  step={1}
-                  subtitle="Start a recovery session on this phone."
-                  title="Join AddOne Wi‑Fi"
-                />
-                <NumberedSteps
-                  steps={RECOVERY_JOIN_DEVICE_AP_STEPS}
-                />
-              </SetupStageLayout>
-            </SetupStageScene>
-          ) : null}
-
-          {controller.stage === "join_device_ap" ? (
+          {recoveryStage === "join_device_ap" ? (
             <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_join_device_ap">
               <SetupStageLayout>
                 <StepHeader
@@ -363,7 +347,7 @@ export default function DeviceRecoveryRoute() {
               <SetupStageLayout>
                 <StepHeader step={2} subtitle="Choose the Wi‑Fi network your board should use." title="Choose Wi‑Fi" />
                 <SetupStageSwap gap={RECOVERY_FIELD_GAP} swapKey={`recovery_home_wifi_${recoveryHomeWifiStageState}`}>
-                  {controller.stage === "scan_home_wifi" ? (
+                  {recoveryStage === "scan_home_wifi" ? (
                     <SetupWifiScanState />
                   ) : (
                     <>
@@ -441,7 +425,7 @@ export default function DeviceRecoveryRoute() {
             </SetupStageScene>
           ) : null}
 
-          {controller.stage === "reconnecting_board" ? (
+          {recoveryStage === "reconnecting_board" ? (
             <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_reconnecting_board">
               <SetupStageLayout>
                 <StepHeader
@@ -457,7 +441,7 @@ export default function DeviceRecoveryRoute() {
             </SetupStageScene>
           ) : null}
 
-          {controller.stage === "restoring_board" ? (
+          {recoveryStage === "restoring_board" ? (
             <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_restoring_board">
               <SetupStageLayout>
                 <StepHeader
@@ -473,7 +457,7 @@ export default function DeviceRecoveryRoute() {
             </SetupStageScene>
           ) : null}
 
-          {controller.stage === "success" ? (
+          {recoveryStage === "success" ? (
             <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="recovery_success">
               <SetupStageLayout>
                 <StepHeader

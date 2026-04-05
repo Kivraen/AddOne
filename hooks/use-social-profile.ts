@@ -31,27 +31,6 @@ function delay(ms: number) {
   });
 }
 
-function displayNameFromEmail(email?: string | null) {
-  if (!email) {
-    return "AddOne User";
-  }
-
-  const [localPart] = email.split("@");
-  const normalizedLocalPart = localPart
-    ?.trim()
-    .replace(/[._-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!normalizedLocalPart) {
-    return "AddOne User";
-  }
-
-  return normalizedLocalPart
-    .split(" ")
-    .map((segment) => segment[0]?.toUpperCase() + segment.slice(1).toLowerCase())
-    .join(" ");
-}
-
 function normalizeOptionalText(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -62,10 +41,10 @@ function normalizeUsername(value?: string | null) {
   return normalized ? normalized : null;
 }
 
-function buildFallbackProfile(params: { userEmail?: string | null; userId: string }): SocialProfile {
+function buildFallbackProfile(params: { userId: string }): SocialProfile {
   return {
     avatarUrl: null,
-    displayName: displayNameFromEmail(params.userEmail),
+    displayName: "AddOne User",
     firstName: null,
     lastName: null,
     updatedAt: null,
@@ -140,11 +119,10 @@ export function hasCompletedSocialProfile(
 }
 
 export function useSocialProfile() {
-  const { isAuthenticated, mode, status, user, userEmail } = useAuth();
+  const { isAuthenticated, mode, status, user } = useAuth();
   const queryClient = useQueryClient();
   const resolvedUserId = mode === "demo" ? DEMO_PROFILE_USER_ID : user?.id ?? null;
   const fallbackProfile = buildFallbackProfile({
-    userEmail,
     userId: resolvedUserId ?? DEMO_PROFILE_USER_ID,
   });
 

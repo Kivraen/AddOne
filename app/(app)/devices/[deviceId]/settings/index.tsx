@@ -216,12 +216,34 @@ export default function DeviceSettingsOverviewRoute() {
           </View>
 
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>
-            <SettingsSectionTitle>Configuration</SettingsSectionTitle>
+            <SettingsSectionTitle>Habit</SettingsSectionTitle>
             <SettingsListSurface>
               <SettingsRow
                 detail={settings.summary.routine}
                 onPress={() => router.push(deviceSettingsSectionPath(device.id, "routine"))}
                 title="Routine"
+              />
+              <SettingsDivider />
+              <SettingsRow
+                detail={
+                  controlReady
+                    ? "Edit earlier days only when a manual fix is needed"
+                    : "History edits unlock again after the board is online and recovery is complete."
+                }
+                onPress={controlReady ? () => router.push(deviceHistoryPath(device.id)) : undefined}
+                title="History"
+              />
+              <SettingsDivider />
+              <SettingsRow
+                detail={
+                  controlReady
+                    ? isResettingHistory
+                      ? "Starting a new habit…"
+                      : "Closes the current habit era, clears the board, and starts a new habit without removing this device."
+                    : "Starting a new habit is only available while the board is online and ready."
+                }
+                onPress={controlReady && !isResettingHistory ? handleResetHistory : undefined}
+                title="Start new habit"
               />
               <SettingsDivider />
               <SettingsRow
@@ -234,7 +256,7 @@ export default function DeviceSettingsOverviewRoute() {
           </View>
 
           <View style={{ gap: OVERVIEW_SECTION_GAP }}>
-            <SettingsSectionTitle>Tools</SettingsSectionTitle>
+            <SettingsSectionTitle>Device</SettingsSectionTitle>
             <SettingsListSurface>
               <SettingsRow
                 detail={
@@ -248,33 +270,6 @@ export default function DeviceSettingsOverviewRoute() {
                 }
                 onPress={() => router.push(deviceRecoveryPath(device.id))}
                 title="Recovery"
-              />
-              <SettingsDivider />
-              <SettingsRow
-                detail={
-                  controlReady
-                    ? "Edit earlier days only when a manual fix is needed"
-                    : "History edits unlock again after the board is online and recovery is complete."
-                }
-                onPress={controlReady ? () => router.push(deviceHistoryPath(device.id)) : undefined}
-                title="History"
-              />
-            </SettingsListSurface>
-          </View>
-
-          <View style={{ gap: OVERVIEW_SECTION_GAP }}>
-            <SettingsSectionTitle>Danger zone</SettingsSectionTitle>
-            <SettingsListSurface>
-              <SettingsRow
-                detail={
-                  controlReady
-                    ? isResettingHistory
-                      ? "Resetting history…"
-                      : "Clears the current habit era and starts a blank board without removing this device."
-                    : "History reset is only available while the board is online and ready."
-                }
-                onPress={controlReady && !isResettingHistory ? handleResetHistory : undefined}
-                title="Reset history"
               />
               <SettingsDivider />
               <SettingsRow

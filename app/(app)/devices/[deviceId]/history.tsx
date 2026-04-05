@@ -147,6 +147,16 @@ function resolveEditorWeekTargets(device: AddOneDevice) {
   return Array.from({ length: weekCount }, (_, weekIndex) => resolveDeviceWeekTarget(device, weekIndex));
 }
 
+function preserveCurrentWeekTarget(device: AddOneDevice, weekTargets: number[] | null) {
+  if (!Array.isArray(weekTargets) || weekTargets.length === 0) {
+    return weekTargets;
+  }
+
+  const nextWeekTargets = [...weekTargets];
+  nextWeekTargets[0] = resolveDeviceWeekTarget(device, 0);
+  return nextWeekTargets;
+}
+
 function applyBackdatedHabitStartTarget(
   device: AddOneDevice,
   habitStartedOnLocal: string,
@@ -169,7 +179,7 @@ function applyBackdatedHabitStartTarget(
 
   const nextWeekTargets = resolveEditorWeekTargets(device);
 
-  for (let weekIndex = 0; weekIndex < device.dateGrid.length; weekIndex += 1) {
+  for (let weekIndex = 1; weekIndex < device.dateGrid.length; weekIndex += 1) {
     const weekDates = device.dateGrid[weekIndex] ?? [];
     const exposesNewHistoryInWeek = weekDates.some(
       (localDate) => localDate >= habitStartedOnLocal && localDate < previousHabitStartLocalDate,
@@ -182,7 +192,7 @@ function applyBackdatedHabitStartTarget(
 
   return {
     ...nextDevice,
-    weekTargets: nextWeekTargets,
+    weekTargets: preserveCurrentWeekTarget(device, nextWeekTargets),
   };
 }
 
@@ -673,10 +683,12 @@ export default function DeviceHistoryRoute() {
 
       const nextExplicitUpdates = collectHistoryDraftUpdates(nextBaseDevice, draftDevice);
       const updates = [...nextExplicitUpdates, ...collectPastWeekBackfillUpdates(draftDevice, nextExplicitUpdates)];
-      const nextWeekTargets =
+      const nextWeekTargets = preserveCurrentWeekTarget(
+        nextBaseDevice,
         Array.isArray(draftDevice.weekTargets) && draftDevice.weekTargets.length === draftDevice.days.length
           ? [...draftDevice.weekTargets]
-          : null;
+          : null,
+      );
       const currentWeekStart = nextBaseDevice.dateGrid?.[0]?.[0] ?? null;
       const savedDevice = applyHistoryDraftUpdates(
         {
@@ -731,6 +743,19 @@ export default function DeviceHistoryRoute() {
 
     const localDate = draftDevice.dateGrid?.[col]?.[row];
     if (!localDate) {
+      return;
+    }
+
+    if (col === 0) {
+      setStatusError(null);
+      setDraftDevice((current) =>
+        toggleHistoryCellLocal(
+          applyBackdatedHabitStartTarget(current, localDate, resolveDeviceWeekTarget(current, 0)),
+          row,
+          col,
+        ),
+      );
+      setIsDirty(true);
       return;
     }
 
