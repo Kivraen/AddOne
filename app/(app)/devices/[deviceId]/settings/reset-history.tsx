@@ -117,7 +117,7 @@ export default function ResetHistoryRoute() {
         weeklyTarget,
       });
 
-      Alert.alert("History reset", "History reset. Start your new habit today.", [
+      Alert.alert("New habit started", "The board is ready for the new habit.", [
         {
           text: "OK",
           onPress: () => {
@@ -137,7 +137,7 @@ export default function ResetHistoryRoute() {
     <>
       <Stack.Screen
         options={{
-          title: "Reset history",
+          title: "Start new habit",
         }}
       />
       <ScreenScrollView
@@ -255,7 +255,7 @@ export default function ResetHistoryRoute() {
 
           <PrimaryButton
             disabled={!canSubmit}
-            label={isResettingHistory ? "Resetting…" : "Reset and start new habit"}
+            label={isResettingHistory ? "Starting…" : "Start new habit"}
             onPress={() => {
               void handleSubmit();
             }}

@@ -15,6 +15,7 @@ constexpr unsigned long kCloudFallbackQuietPeriodMs = 1500;
 constexpr unsigned long kRecoveryCommandCooldownMs = 15000;
 constexpr unsigned long kRecoveryVisualCompletionMs = 1800;
 constexpr unsigned long kRecoveryVisualFailureMs = 1100;
+constexpr unsigned long kPendingOtaStartupBlackHoldMs = 320;
 constexpr unsigned long kFactoryResetReconnectTimeoutMs = 6000;
 constexpr unsigned long kFactoryResetReconnectPollMs = 100;
 constexpr uint8_t kWifiReconnectMaxAttempts = 3;
@@ -491,6 +492,9 @@ void FirmwareApp::begin() {
   }
 
   boardRenderer_.playStartupAnimation(deviceSettings_.resolveBrightness(ambientLight_.normalized01()));
+  if (pendingOtaBoot) {
+    delay(kPendingOtaStartupBlackHoldMs);
+  }
 
   if (recoveryRequestedAtBoot_ || provisioningStore_.hasPendingClaim() || !bootReadyForTracking_()) {
     enterState_(FirmwareState::SetupRecovery);

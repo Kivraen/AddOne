@@ -1,6 +1,6 @@
 # Stage Register
 
-Last updated: April 4, 2026
+Last updated: April 5, 2026
 
 ## Current Stage Map
 
@@ -14,8 +14,8 @@ Last updated: April 4, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: re-confirm the external Supabase auth dashboard settings from March 27 and decide whether `codex/s4-final-rc-review` is the final iOS RC/TestFlight build branch
-- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. `T-049` now has an April 4 checkpoint on `codex/s4-final-rc-review` with fresh OTA proof and OTA/status-surface polish. `T-054` remains an in-progress parallel support slice on forward-only weekly target semantics and security hardening. `T-050` stays queued only if another dedicated onboarding-polish pass is still desired after this checkpoint.
+- Next brief: re-confirm the external Supabase auth dashboard settings from March 27, then decide whether `codex/s4-final-rc-review` or the recovered `codex/s4-final-bug-bash` line is the final iOS RC/TestFlight build branch
+- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now intended inputs to the final iOS RC baseline. `T-049` now has an April 4 checkpoint on `codex/s4-final-rc-review`, while `codex/s4-final-bug-bash` now has an April 5 recovery and review-fix checkpoint through `68e679b`. `T-054` remains an in-progress parallel support slice on forward-only weekly target semantics and security hardening. `T-050` stays queued only if another dedicated onboarding-polish pass is still desired after this checkpoint.
 
 ## Stage Notes
 
@@ -54,6 +54,7 @@ Last updated: April 4, 2026
 - `T-047` is now accepted on `codex/s4-friends-controls-ui-iteration`: the Friends actions redesign, adjacent RC UI cleanup, and one small confirmation-path stabilization in `hooks/use-devices.ts` are preserved together as a bounded user-guided slice.
 - `T-048` is now accepted on `codex/s4-home-confirmation-latency`: the Home command-confirmation path is materially tighter, the stale-refresh truth gap is fixed, and the unplug-and-pull-to-refresh proof is complete.
 - `T-049` now has a broader April 4 checkpoint on `codex/s4-final-rc-review`: the branch carries the RC polish baseline plus OTA/status-surface cleanup, Android startup fixes, and multiple fresh immutable OTA proofs through `2.0.0-beta.11`; the remaining explicit release blocker is external confirmation of the Supabase auth dashboard settings from March 27.
+- April 5 recovery and review-fix checkpoint is now preserved on `codex/s4-final-bug-bash`: the recovered clean repo at `/Users/viktor/AddOne-clean` is the authoritative writable workspace, the salvaged post-`b1587f5` bug-bash fixes are repushed, and the latest follow-up fix `68e679b` corrects the board-era week-target backfill logic plus fail-closed shared-board metrics behavior.
 - `T-054` remains in progress as a separate support-slice acceptance decision even though its code is already part of `codex/s4-final-rc-review`.
 - `T-050` remains ready behind the current checkpoint: use it only if the coordinator still wants another dedicated onboarding-polish pass before building from the saved RC branch.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.

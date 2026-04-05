@@ -41,12 +41,18 @@ async function loadProjectionModule() {
     ["@/lib/runtime-board-projection", "./runtime-board-projection.mjs"],
     ["@/types/addone", "./types-addone.mjs"],
   ]);
+  const deviceHistoryViewPath = await transpileIntoTemp(path.resolve("lib/device-history-view.ts"), "device-history-view.mjs", [
+    ["@/lib/board", "./board.mjs"],
+    ["@/lib/runtime-board-projection", "./runtime-board-projection.mjs"],
+    ["@/types/addone", "./types-addone.mjs"],
+  ]);
 
   const module = await import(pathToFileURL(runtimeProjectionPath).href);
   const boardModule = await import(pathToFileURL(boardPath).href);
+  const deviceHistoryViewModule = await import(pathToFileURL(deviceHistoryViewPath).href);
   return {
     cleanup: async () => rm(tempDir, { force: true, recursive: true }),
-    module: { ...module, ...boardModule },
+    module: { ...module, ...boardModule, ...deviceHistoryViewModule },
   };
 }
 
@@ -124,6 +130,45 @@ test("preserves recorded history across a three-week offline gap", () => {
   assert.equal(projection.currentWeekStart, "2026-03-16");
   assert.equal(findProjectedState(projection, "2026-02-25"), true);
   assert.equal(findProjectedState(projection, "2026-03-16"), false);
+});
+
+test("replaces a projected stale board with the fresh runtime snapshot after reconnect", () => {
+  const staleBoardDays = emptyBoardDays();
+  staleBoardDays[0][2] = true;
+  const staleProjection = buildRuntimeBoardProjection({
+    fallbackWeeklyTarget: 4,
+    now: new Date("2026-03-16T19:00:00.000Z"),
+    resetTime: "00:00:00",
+    snapshot: {
+      boardDays: staleBoardDays,
+      currentWeekStart: "2026-02-23",
+      todayRow: 2,
+      weekTargets: Array.from({ length: 21 }, () => 4),
+    },
+    timezone: "America/Los_Angeles",
+    weekStart: "monday",
+  });
+  const freshBoardDays = emptyBoardDays();
+  freshBoardDays[0][0] = true;
+  const freshProjection = buildRuntimeBoardProjection({
+    fallbackWeeklyTarget: 4,
+    now: new Date("2026-03-16T19:00:00.000Z"),
+    resetTime: "00:00:00",
+    snapshot: {
+      boardDays: freshBoardDays,
+      currentWeekStart: "2026-03-16",
+      todayRow: 0,
+      weekTargets: Array.from({ length: 21 }, () => 4),
+    },
+    timezone: "America/Los_Angeles",
+    weekStart: "monday",
+  });
+
+  assert.equal(staleProjection.isProjectedBeyondSnapshot, true);
+  assert.equal(findProjectedState(staleProjection, "2026-02-25"), true);
+  assert.equal(freshProjection.isProjectedBeyondSnapshot, false);
+  assert.equal(findProjectedState(freshProjection, "2026-03-16"), true);
+  assert.equal(findProjectedState(freshProjection, "2026-02-25"), false);
 });
 
 test("drops history that falls outside the visible 21-week window", () => {
@@ -213,6 +258,25 @@ test("prefers authoritative visible week targets over stale snapshot week target
       currentWeekStart: "2026-03-16",
       todayRow: 3,
       weekTargets: Array.from({ length: 21 }, () => 1),
+    },
+    timezone: "America/Los_Angeles",
+    visibleWeekTargets: [1, 3, 4, ...Array.from({ length: 18 }, () => 5)],
+    weekStart: "monday",
+  });
+
+  assert.deepEqual(projection.weekTargets?.slice(0, 4), [1, 3, 4, 5]);
+});
+
+test("uses authoritative visible week targets for the current week when present", () => {
+  const projection = buildRuntimeBoardProjection({
+    fallbackWeeklyTarget: 5,
+    now: new Date("2026-03-19T19:00:00.000Z"),
+    resetTime: "00:00:00",
+    snapshot: {
+      boardDays: emptyBoardDays(),
+      currentWeekStart: "2026-03-16",
+      todayRow: 3,
+      weekTargets: Array.from({ length: 21 }, () => 5),
     },
     timezone: "America/Los_Angeles",
     visibleWeekTargets: [1, 3, 4, ...Array.from({ length: 18 }, () => 5)],
@@ -354,6 +418,139 @@ test("uses the current visible week target in the home status label", () => {
   });
 
   assert.equal(label, "2/5 this week");
+});
+
+test("keeps lifetime totals backend-authoritative in the shared history view", () => {
+  const days = emptyBoardDays();
+  days[0][0] = true;
+  days[0][1] = true;
+
+  const historyView = module.buildDeviceHistoryView({
+    autoBrightness: true,
+    boardId: "board-1",
+    brightness: 80,
+    dailyMinimum: "15 minutes",
+    days,
+    id: "device-1",
+    isLive: true,
+    isProjectedBeyondSnapshot: false,
+    lastSnapshotAt: null,
+    logicalToday: "2026-03-19",
+    name: "Exercise",
+    nextResetLabel: "Tonight",
+    ownerName: "Viktor",
+    paletteId: "classic",
+    recordedDaysTotal: 42,
+    recoveryState: "ready",
+    resetTime: "00:00",
+    rewardEnabled: false,
+    rewardTrigger: "daily",
+    rewardType: "clock",
+    runtimeRevision: 1,
+    successfulWeeksTotal: 12,
+    syncState: "online",
+    today: {
+      dayIndex: 3,
+      weekIndex: 0,
+    },
+    timezone: "America/Los_Angeles",
+    weekStart: "monday",
+    weekTargets: [5, ...Array.from({ length: 20 }, () => 3)],
+    weeklyTarget: 3,
+    habitStartedOnLocal: null,
+    historyEraStartedAt: null,
+    customPalette: undefined,
+    reminderEnabled: false,
+    reminderTime: "09:00",
+    firmwareVersion: "beta",
+    accountRemovalDeadlineAt: null,
+    accountRemovalMode: null,
+    accountRemovalRequestedAt: null,
+    accountRemovalState: "active",
+    dateGrid: undefined,
+    lastSeenAt: null,
+    lastSyncAt: null,
+    needsSnapshotRefresh: false,
+  });
+
+  assert.equal(historyView.recordedDaysTotal, 42);
+  assert.equal(historyView.successfulWeeksTotal, 12);
+  assert.equal(historyView.currentWeekTarget, 5);
+  assert.equal(historyView.currentWeekCompleted, 2);
+});
+
+test("reports mirror-pending freshness and overlays expected board changes", () => {
+  const days = emptyBoardDays();
+  const historyView = module.buildDeviceHistoryView(
+    {
+      autoBrightness: true,
+      boardId: "board-1",
+      brightness: 80,
+      dailyMinimum: "15 minutes",
+      days,
+      id: "device-1",
+      isLive: true,
+      isProjectedBeyondSnapshot: false,
+      lastSnapshotAt: null,
+      logicalToday: "2026-03-19",
+      name: "Exercise",
+      nextResetLabel: "Tonight",
+      ownerName: "Viktor",
+      paletteId: "classic",
+      recordedDaysTotal: 10,
+      recoveryState: "ready",
+      resetTime: "00:00",
+      rewardEnabled: false,
+      rewardTrigger: "daily",
+      rewardType: "clock",
+      runtimeRevision: 1,
+      successfulWeeksTotal: 2,
+      syncState: "online",
+      today: {
+        dayIndex: 3,
+        weekIndex: 0,
+      },
+      timezone: "America/Los_Angeles",
+      weekStart: "monday",
+      weekTargets: [3, ...Array.from({ length: 20 }, () => 3)],
+      weeklyTarget: 3,
+      habitStartedOnLocal: "2026-03-10",
+      historyEraStartedAt: null,
+      customPalette: undefined,
+      reminderEnabled: false,
+      reminderTime: "09:00",
+      firmwareVersion: "beta",
+      accountRemovalDeadlineAt: null,
+      accountRemovalMode: null,
+      accountRemovalRequestedAt: null,
+      accountRemovalState: "active",
+      dateGrid: Array.from({ length: 21 }, (_, weekIndex) =>
+        Array.from({ length: 7 }, (_, dayIndex) => `2026-03-${String(19 - weekIndex * 7 - (3 - dayIndex)).padStart(2, "0")}`),
+      ),
+      lastSeenAt: null,
+      lastSyncAt: null,
+      needsSnapshotRefresh: false,
+    },
+    {
+      pendingMirror: {
+        days: (() => {
+          const nextDays = emptyBoardDays();
+          nextDays[0][0] = true;
+          nextDays[0][1] = true;
+          nextDays[0][2] = true;
+          return nextDays;
+        })(),
+        habitStartedOnLocal: "2026-03-01",
+        weekTargets: [4, ...Array.from({ length: 20 }, () => 3)],
+      },
+    },
+  );
+
+  assert.equal(historyView.freshnessState, "mirror_pending");
+  assert.equal(historyView.device.habitStartedOnLocal, "2026-03-01");
+  assert.equal(historyView.device.weekTargets[0], 4);
+  assert.equal(historyView.currentWeekCompleted, 3);
+  assert.equal(historyView.currentWeekTarget, 4);
 });
 
 process.on("exit", () => {

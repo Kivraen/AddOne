@@ -8,6 +8,7 @@ import {
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
+import { LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -17,6 +18,10 @@ import { theme } from "@/constants/theme";
 import { AppProviders } from "@/providers/app-providers";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// Supabase auth-js logs a non-retryable stale-session refresh failure before it clears
+// the local session, which surfaces as a noisy startup LogBox in development.
+LogBox.ignoreLogs(["AuthApiError: Invalid Refresh Token"]);
 
 export default function RootLayout() {
   const [loaded] = useFonts({

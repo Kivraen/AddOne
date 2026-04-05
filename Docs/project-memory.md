@@ -1,6 +1,6 @@
 # AddOne Project Memory
 
-Last updated: April 4, 2026
+Last updated: April 5, 2026
 
 This file is durable coordinator memory for AddOne.
 Use it for stable facts, accepted coordination decisions, active stage context, and recovery notes for fresh agents with no chat history.
@@ -70,14 +70,26 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - `fw-beta-20260404-06`
   - `fw-beta-20260404-07`
   - `fw-beta-20260404-08`
+  - `fw-beta-20260404-09`
+- The April 5 recovery line now treats `/Users/viktor/AddOne-clean` as the authoritative writable repo after the original Desktop workspace became unreliable for Expo/Metro work; `/Users/viktor/Desktop/DevProjects/Codex/AddOne` is now a read-only salvage source.
+- The current durable bug-bash checkpoint line on `codex/s4-final-bug-bash` now includes:
+  - `8be7c14`
+  - `bd93343`
+  - `68e679b`
+- The April 5 follow-up review fixes are now checkpointed on `68e679b`, including:
+  - fail-closed shared-board history metrics on cold transient backend failures
+  - removal of dead `userEmail` plumbing in owned-device fetches
+  - a board-era-scoped week-target backfill repair migration
+- The live hosted week-target repair for the active board eras was applied through the existing `persist_visible_week_targets_for_history_era(...)` RPC because the current account could not use `supabase link` / `db push --linked` against the hosted project-admin endpoint.
 - The current authoritative OTA proof set now includes a clean simultaneous real-device app-triggered install on Gym and Yoga through `2.0.0-beta.11`.
+- The hosted beta backend now also has the April 4 history/week-target sync migration plus the shorter confirm-window schema migration applied, and `fw-beta-20260404-09` is active as an allowlisted beta.12 bug-bash release for `AO_A4F00F767008` and `AO_B0CBD8CFABB0`.
 
 ## Current Active Stage
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: re-confirm the March 27 Supabase auth dashboard URL / OTP settings and decide whether `codex/s4-final-rc-review` is the branch to build the final iOS RC/TestFlight artifact from
-- Current execution task: preserve the April 4 checkpoint on `codex/s4-final-rc-review` as the stable RC validation branch, then close the remaining external release check before any final TestFlight-candidate declaration
+- Next brief: re-confirm the March 27 Supabase auth dashboard URL / OTP settings, then decide whether the final RC should build from `codex/s4-final-rc-review` or the recovered `codex/s4-final-bug-bash` line
+- Current execution task: preserve the April 5 recovery and review-fix checkpoint on `codex/s4-final-bug-bash`, then close the remaining external release check before any final TestFlight-candidate declaration
 - Parallel support slice: `T-054` remains a separate coordinator acceptance decision even though its code is already part of the current candidate branch
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, and `T-048` is now accepted as the Home confirmation-latency follow-up. They are now direct inputs to the final ship baseline rather than side work waiting behind a blocked artifact gate.
 
@@ -119,7 +131,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-050` remains queued only if the coordinator still wants another dedicated onboarding-polish pass after the April 4 checkpoint rather than building directly from the saved RC branch.
 - `T-054` remains in progress as a separate coordinator acceptance decision: the forward-only weekly-target work is in the branch, but its acceptance should stay distinct from the final RC build decision.
 - The new owner-facing retry-download UI path is implemented, but April 4 hardware runs did not trigger an automatic retry after the updated firmware was installed, so that exact UI state is still unproven on-device.
-- The new host-side migration `20260404201000_allow_shorter_ota_confirm_window.sql` exists locally but was not applied to the hosted beta database during the April 4 checkpoint, so live OTA releases still used `confirm_window_seconds = 120`.
+- The April 4 host-side migrations `20260404174500_fix_history_week_target_sync_and_current_week_truth.sql` and `20260404201000_allow_shorter_ota_confirm_window.sql` are now applied to the hosted beta database. The live bug-bash release `fw-beta-20260404-09` still intentionally uses `confirm_window_seconds = 120` for safer continuity.
+- The April 5 follow-up migration `20260405001500_fix_history_week_target_backfill_board_scope.sql` exists in-repo and its live board-era correction has been applied through RPC, but the hosted project does not yet have the migration formally recorded through Supabase CLI migration history because current CLI project-link admin access is blocked.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.

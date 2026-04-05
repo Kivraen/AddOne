@@ -28,9 +28,13 @@ export function DeviceBoardStage({
   const [stageWidth, setStageWidth] = useState(0);
   const boardFrameInsetX = 6;
   const boardFrameInsetY = 8;
+  const estimatedStageWidth = Math.max(
+    0,
+    width - theme.layout.pagePadding * 2 - 8 - boardFrameInsetX * 2,
+  );
   const availableGridWidth = Math.max(
     0,
-    Math.min((stageWidth || width - 40) - boardFrameInsetX * 2, maxGridWidth),
+    Math.min(stageWidth || estimatedStageWidth, maxGridWidth),
   );
 
   function handleStageLayout(event: LayoutChangeEvent) {

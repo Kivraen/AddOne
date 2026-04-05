@@ -1,4 +1,5 @@
 export type SyncState = "online" | "syncing" | "offline";
+export type DeviceHistoryFreshnessState = "fully_settled" | "mirror_pending" | "projected_stale";
 export type RewardType = "clock" | "paint";
 export type RewardTrigger = "daily" | "weekly";
 export type PixelGridMode = "display" | "edit" | "preview" | "shared";
@@ -116,6 +117,18 @@ export interface AddOneDevice {
   today: TodayPointer;
 }
 
+export interface PendingDeviceMirrorState {
+  currentWeekStart?: string | null;
+  dailyMinimum?: string;
+  days?: boolean[][];
+  habitStartedOnLocal?: string | null;
+  name?: string;
+  recordedDaysTotal?: number;
+  successfulWeeksTotal?: number;
+  weeklyTarget?: number;
+  weekTargets?: number[] | null;
+}
+
 export interface Board {
   id: string;
   ownerUserId: string;
@@ -203,8 +216,11 @@ export interface SharedBoard {
   viewerMembershipId: string;
   ownerName: string;
   habitName: string;
+  habitStartedOnLocal: string | null;
   syncState: SyncState;
   lastSnapshotAt?: string | null;
+  recordedDaysTotal: number;
+  successfulWeeksTotal: number;
   weeklyTarget: number;
   weekTargets: number[] | null;
   paletteId: string;

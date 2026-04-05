@@ -302,7 +302,7 @@ function formatShareCodeInput(value: string) {
   }
 
   const grouped = normalized.match(/.{1,3}/g)?.join("-") ?? normalized;
-  if (normalized.length < 12 && normalized.length % 3 === 0) {
+  if (normalized.length < 6 && normalized.length % 3 === 0) {
     return `${grouped}-`;
   }
 
@@ -343,6 +343,12 @@ function makePreviewBoard(
   activeByWeek: number[][],
   syncState: SharedBoard["syncState"] = "online",
 ): SharedBoard {
+  const days = Array.from({ length: 21 }, (_, weekIndex) =>
+    Array.from({ length: 7 }, (_, dayIndex) => activeByWeek[weekIndex]?.includes(dayIndex) ?? false),
+  );
+  const recordedDaysTotal = days.flat().filter(Boolean).length;
+  const successfulWeeksTotal = days.filter((week) => week.filter(Boolean).length >= 4).length;
+
   return {
     celebrationEnabled: true,
     celebrationDwellSeconds: DEFAULT_CELEBRATION_DWELL_SECONDS,
@@ -352,14 +358,15 @@ function makePreviewBoard(
     viewerMembershipId: `${id}-viewer-membership`,
     ownerName,
     habitName,
+    habitStartedOnLocal: new Date().toISOString().slice(0, 10),
     syncState,
     lastSnapshotAt: new Date().toISOString(),
+    recordedDaysTotal,
+    successfulWeeksTotal,
     weeklyTarget: 4,
     weekTargets: null,
     paletteId,
-    days: Array.from({ length: 21 }, (_, weekIndex) =>
-      Array.from({ length: 7 }, (_, dayIndex) => activeByWeek[weekIndex]?.includes(dayIndex) ?? false),
-    ),
+    days,
     logicalToday: new Date().toISOString().slice(0, 10),
     today: {
       weekIndex: 4,
@@ -403,27 +410,12 @@ function previewViewer(): DeviceViewer {
 }
 
 function sharedBoardStats(board: SharedBoard) {
-  let completed = 0;
-  let successfulWeeks = 0;
-
-  for (let col = 0; col < board.days.length; col += 1) {
-    const isPastWeek = col > board.today.weekIndex;
-    const isCurrentWeek = col === board.today.weekIndex;
-    const visibleDays = isPastWeek ? 7 : isCurrentWeek ? board.today.dayIndex + 1 : 0;
-    const completedThisWeek = board.days[col].slice(0, visibleDays).filter(Boolean).length;
-
-    completed += completedThisWeek;
-    if (visibleDays > 0 && completedThisWeek >= board.weeklyTarget) {
-      successfulWeeks += 1;
-    }
-  }
-
   const currentWeekCompleted = board.days[board.today.weekIndex].slice(0, board.today.dayIndex + 1).filter(Boolean).length;
 
   return {
-    completed,
+    completed: board.recordedDaysTotal,
     currentWeekCompleted,
-    successfulWeeks,
+    successfulWeeks: board.successfulWeeksTotal,
   };
 }
 

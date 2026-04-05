@@ -529,9 +529,7 @@ export function DeviceFirmwareUpdateCard({
   const targetVersion = summary?.availableRelease?.firmwareVersion ?? summary?.targetReleaseId ?? null;
   const showProgress =
     !!summary?.currentState &&
-    (isInProgressState(summary.currentState) ||
-      isFailureState(summary.currentState) ||
-      (summary.currentState === "succeeded" && !summary.updateAvailable));
+    (isInProgressState(summary.currentState) || isFailureState(summary.currentState));
 
   const requestUpdate = () => {
     Alert.alert(

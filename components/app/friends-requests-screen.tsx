@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from "react-native";
 
+import { FriendsRouteHeader } from "@/components/app/friends-route-header";
 import { ScreenScrollView, ScreenSection } from "@/components/layout/screen-frame";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
@@ -372,7 +373,7 @@ export function FriendsRequestsScreen() {
     <>
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: Platform.OS !== "android",
           title: "Requests",
           headerTitleAlign: "center",
           headerShadowVisible: false,
@@ -407,7 +408,22 @@ export function FriendsRequestsScreen() {
         bottomInset={theme.layout.scrollBottom}
         contentContainerStyle={{ gap: 18, paddingTop: 8 }}
         contentInsetAdjustmentBehavior="never"
-        safeAreaEdges={["left", "right", "bottom"]}
+        header={
+          Platform.OS === "android" ? (
+            <FriendsRouteHeader
+              onBack={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+
+                router.replace("/friends");
+              }}
+              title="Requests"
+            />
+          ) : undefined
+        }
+        safeAreaEdges={Platform.OS === "android" ? undefined : ["left", "right", "bottom"]}
       >
         <ScreenSection style={{ gap: 18 }}>
           {shouldHoldEmptyState ? (

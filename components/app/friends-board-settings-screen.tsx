@@ -2,7 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FriendsRouteHeader } from "@/components/app/friends-route-header";
 import { GlassCard } from "@/components/ui/glass-card";
 import { theme } from "@/constants/theme";
 import { useDeviceActions, useDevices } from "@/hooks/use-devices";
@@ -334,7 +336,7 @@ export function FriendsBoardSettingsScreen() {
       <Stack.Screen
         options={{
           title: board ? makeBoardTitle(board.ownerName) : "Board reveal",
-          headerShown: true,
+          headerShown: Platform.OS !== "android",
           headerTitleAlign: "center",
           headerShadowVisible: false,
           headerStyle: { backgroundColor: theme.colors.bgBase },
@@ -366,17 +368,31 @@ export function FriendsBoardSettingsScreen() {
           ),
         }}
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{
-          gap: 18,
-          paddingBottom: theme.layout.scrollBottom,
-          paddingHorizontal: theme.layout.pagePadding,
-          paddingTop: 12,
-        }}
-        style={{ flex: 1, backgroundColor: theme.colors.bgBase }}
-      >
-        {isLoadingViewerBoards && !board ? (
+      <SafeAreaView edges={Platform.OS === "android" ? undefined : ["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: theme.colors.bgBase }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            gap: 18,
+            paddingBottom: theme.layout.scrollBottom,
+            paddingHorizontal: theme.layout.pagePadding,
+            paddingTop: Platform.OS === "android" ? theme.layout.scrollTop : 12,
+          }}
+          style={{ flex: 1, backgroundColor: theme.colors.bgBase }}
+        >
+          {Platform.OS === "android" ? (
+            <FriendsRouteHeader
+              onBack={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+
+                router.replace("/friends-arrange");
+              }}
+              title={board ? makeBoardTitle(board.ownerName) : "Board reveal"}
+            />
+          ) : null}
+          {isLoadingViewerBoards && !board ? (
           <GlassCard style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 18 }}>
             <ActivityIndicator color={theme.colors.accentAmber} />
             <Text
@@ -390,7 +406,7 @@ export function FriendsBoardSettingsScreen() {
               Loading board settings…
             </Text>
           </GlassCard>
-        ) : null}
+          ) : null}
 
         {!isLoadingViewerBoards && !board ? (
           <GlassCard style={{ gap: 10, paddingHorizontal: 18, paddingVertical: 18 }}>
@@ -556,7 +572,8 @@ export function FriendsBoardSettingsScreen() {
             </GlassCard>
           </>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 }

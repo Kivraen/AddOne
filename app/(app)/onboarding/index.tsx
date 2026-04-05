@@ -62,6 +62,18 @@ const ONBOARDING_FIELD_GAP = 16;
 const ONBOARDING_DEVICE_REFRESH_MS = 1500;
 const ONBOARDING_TOTAL_STEPS = 4;
 const ONBOARDING_HANDOFF_EXIT_DELAY_MS = 180;
+const ONBOARDING_JOIN_DEVICE_AP_STEPS =
+  process.env.EXPO_OS === "android"
+    ? [
+        "Open Settings > Wi‑Fi.",
+        "Join the network that starts with AddOne_XXXX, then tap Stay connected if Android asks.",
+        "Come back here when the phone is connected.",
+      ]
+    : [
+        "Open Settings > Wi‑Fi.",
+        "Join the network that starts with AddOne_XXXX.",
+        "Come back here when the phone is connected.",
+      ];
 
 type ClaimedFlowStep = "habit" | "board" | "welcome";
 type OnboardingStage = Exclude<SetupFlowStage, "success"> | "restore" | "habit" | "board" | "welcome" | "finishing_board";
@@ -799,11 +811,7 @@ export default function OnboardingScreen() {
                 totalSteps={ONBOARDING_TOTAL_STEPS}
               />
               <View style={{ gap: 18 }}>
-                {[
-                  "Open Settings > Wi‑Fi.",
-                  "Join the network that starts with AddOne_XXXX.",
-                  "Come back here when the phone is connected.",
-                ].map((step, index) => (
+                {ONBOARDING_JOIN_DEVICE_AP_STEPS.map((step, index) => (
                   <View key={`${index + 1}-${step}`} style={{ alignItems: "flex-start", flexDirection: "row", gap: 14 }}>
                     <View
                       style={{

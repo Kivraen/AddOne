@@ -5,9 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Pressable,
+  RefreshControl,
   Text,
   View,
   useWindowDimensions,
@@ -33,26 +32,29 @@ import { buildBoardCells, getMergedPalette } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { getDeviceAccentColor } from "@/lib/device-accent";
 import { DEVICE_HEARTBEAT_INTERVAL_MS, latestConnectionActivityAt } from "@/lib/device-connection";
+import { resolveDeviceHistoryView } from "@/lib/device-history-view";
 import { isDevicePendingRemoval } from "@/lib/device-removal";
 import { isDeviceControlReady, isDeviceRecovering, needsDeviceRecovery } from "@/lib/device-recovery";
 import { deviceHistoryPath, deviceRecoveryPath, deviceSettingsPath } from "@/lib/device-routes";
 import { homeMinimumGoalLabel } from "@/lib/habit-details";
 import { triggerPrimaryActionFailureHaptic, triggerPrimaryActionSuccessHaptic } from "@/lib/haptics";
-import { formatWeekdayFromLocalDate, startOfWeek } from "@/lib/runtime-board-projection";
+import { formatWeekdayFromLocalDate } from "@/lib/runtime-board-projection";
 import { useAppUiStore } from "@/store/app-ui-store";
-import { AddOneDevice } from "@/types/addone";
+import { useDeviceHistorySyncStore } from "@/store/device-history-sync-store";
+import { AddOneDevice, DeviceHistoryFreshnessState } from "@/types/addone";
 
 const HOME_INSIGHT_MAX_LINES = 3;
 const HOME_INSIGHT_PANEL_HEIGHT = theme.typography.micro.lineHeight + theme.typography.body.lineHeight * HOME_INSIGHT_MAX_LINES + 18;
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15_000;
 const HOME_PRIMARY_ACTION_SIZE = 156;
 const HOME_PRIMARY_ACTION_TOP_GAP = 72;
-const HOME_PULL_REFRESH_TRIGGER = 84;
-
 type HomeHeaderConnectionState = "online" | "verifying-board" | "recovering" | "needs-recovery" | "checking-connection" | "offline" | "removing";
 type HomeInsight = { eyebrow: string; message: string };
 
-function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState {
+function headerConnectionState(
+  device: AddOneDevice,
+  freshnessState: DeviceHistoryFreshnessState,
+): HomeHeaderConnectionState {
   if (isDevicePendingRemoval(device)) {
     return "removing";
   }
@@ -73,7 +75,7 @@ function headerConnectionState(device: AddOneDevice): HomeHeaderConnectionState 
     return "checking-connection";
   }
 
-  return device.needsSnapshotRefresh ? "verifying-board" : "online";
+  return freshnessState === "fully_settled" ? "online" : "verifying-board";
 }
 
 function boardButtonState(
@@ -99,103 +101,7 @@ function boardButtonState(
   return device.days[device.today.weekIndex][device.today.dayIndex] ? "done" : "notDone";
 }
 
-function withPendingTodayState(device: AddOneDevice, pendingTodayState?: boolean): AddOneDevice {
-  if (pendingTodayState === undefined) {
-    return device;
-  }
-
-  const days = device.days.map((week) => [...week]);
-  days[device.today.weekIndex][device.today.dayIndex] = pendingTodayState;
-
-  return {
-    ...device,
-    days,
-  };
-}
-
-function currentWeekCompletedCount(device: Pick<AddOneDevice, "days" | "today">) {
-  return device.days[device.today.weekIndex].slice(0, device.today.dayIndex + 1).filter(Boolean).length;
-}
-
-function isCurrentWeekSuccessful(device: Pick<AddOneDevice, "days" | "today" | "weeklyTarget">) {
-  return currentWeekCompletedCount(device) >= device.weeklyTarget;
-}
-
-function withProjectedSummaryMetrics(
-  device: AddOneDevice,
-  options?: {
-    pendingTodayState?: boolean;
-  },
-): AddOneDevice {
-  const projectedDevice = withPendingTodayState(device, options?.pendingTodayState);
-  const todayWeekIndex = device.today.weekIndex;
-  const todayDayIndex = device.today.dayIndex;
-  const baseTodayState = device.days[todayWeekIndex]?.[todayDayIndex];
-  const projectedTodayState = projectedDevice.days[todayWeekIndex]?.[todayDayIndex];
-  const baseWeekSuccessful = isCurrentWeekSuccessful(device);
-  const projectedWeekSuccessful = isCurrentWeekSuccessful(projectedDevice);
-
-  let recordedDaysTotal = device.recordedDaysTotal;
-  let successfulWeeksTotal = device.successfulWeeksTotal;
-
-  if (options?.pendingTodayState !== undefined && baseTodayState !== undefined && projectedTodayState !== undefined) {
-    if (baseTodayState !== projectedTodayState) {
-      recordedDaysTotal = Math.max(0, recordedDaysTotal + (projectedTodayState ? 1 : -1));
-    }
-
-    if (baseWeekSuccessful !== projectedWeekSuccessful) {
-      successfulWeeksTotal = Math.max(0, successfulWeeksTotal + (projectedWeekSuccessful ? 1 : -1));
-    }
-  }
-
-  if (
-    projectedDevice.recordedDaysTotal === recordedDaysTotal &&
-    projectedDevice.successfulWeeksTotal === successfulWeeksTotal
-  ) {
-    return projectedDevice;
-  }
-
-  return {
-    ...projectedDevice,
-    recordedDaysTotal,
-    successfulWeeksTotal,
-  };
-}
-
-function visibleBoardStats(device: AddOneDevice) {
-  let visibleCompleted = 0;
-  let visibleDays = 0;
-
-  for (let col = 0; col < device.days.length; col += 1) {
-    const isPastWeek = col > device.today.weekIndex;
-    const isCurrentWeek = col === device.today.weekIndex;
-    const visibleRows = isPastWeek ? 7 : isCurrentWeek ? device.today.dayIndex + 1 : 0;
-    const completedThisWeek = device.days[col].slice(0, visibleRows).filter(Boolean).length;
-
-    visibleDays += visibleRows;
-    visibleCompleted += completedThisWeek;
-  }
-
-  return {
-    fillPercentage: visibleDays === 0 ? 0 : Math.round((visibleCompleted / visibleDays) * 100),
-  };
-}
-
-function totalHabitWeeks(device: AddOneDevice) {
-  if (!device.habitStartedOnLocal) {
-    return null;
-  }
-
-  const habitStartWeek = startOfWeek(device.habitStartedOnLocal, device.weekStart);
-  const currentWeek = startOfWeek(device.logicalToday, device.weekStart);
-  const daysBetween = Math.round((new Date(`${currentWeek}T00:00:00.000Z`).getTime() - new Date(`${habitStartWeek}T00:00:00.000Z`).getTime()) / 86_400_000);
-  const elapsedWeeks = Math.floor(Math.max(daysBetween, 0) / 7) + 1;
-  return Math.max(elapsedWeeks, device.successfulWeeksTotal);
-}
-
-function boardInsight(device: AddOneDevice, stats: { fillPercentage: number }, currentWeekCompleted: number): HomeInsight {
-  const remainingThisWeek = Math.max(device.weeklyTarget - currentWeekCompleted, 0);
-
+function boardInsight(device: AddOneDevice, fillPercentage: number, remainingThisWeek: number): HomeInsight {
   if (isDevicePendingRemoval(device)) {
     return {
       eyebrow: "Removal",
@@ -234,13 +140,13 @@ function boardInsight(device: AddOneDevice, stats: { fillPercentage: number }, c
   if (remainingThisWeek === 1) {
     return {
       eyebrow: "Weekly target",
-      message: `One more check-in reaches this week's target. Visible fill is currently ${stats.fillPercentage}%.`,
+      message: `One more check-in reaches this week's target. Visible fill is currently ${fillPercentage}%.`,
     };
   }
 
   return {
     eyebrow: "This week",
-    message: `${remainingThisWeek} more check-ins reaches the weekly target. The board is currently ${stats.fillPercentage}% filled.`,
+    message: `${remainingThisWeek} more check-ins reaches the weekly target. The board is currently ${fillPercentage}% filled.`,
   };
 }
 
@@ -587,9 +493,11 @@ export function HomeScreen() {
   const { activeDevice, activeDeviceId, isLoading } = useDevices();
   const { clearLocalOnboardingSession, isLoading: isOnboardingLoading, session: onboardingSession } = useOnboarding();
   const { isApplyingToday, refreshDevices, refreshRuntimeSnapshot, toggleToday } = useDeviceActions();
+  const pendingMirrorByDevice = useDeviceHistorySyncStore((state) => state.pendingMirrorByDevice);
   const pendingTodayStateByDevice = useAppUiStore((state) => state.pendingTodayStateByDevice);
   const pendingBoardEditorOpen = useAppUiStore((state) => state.pendingBoardEditorOpen);
   const clearBoardEditorOpen = useAppUiStore((state) => state.clearBoardEditorOpen);
+  const activePendingMirror = activeDeviceId ? pendingMirrorByDevice[activeDeviceId] : undefined;
   const activePendingTodayEntry = activeDeviceId ? pendingTodayStateByDevice[activeDeviceId] : undefined;
   const activePendingTodayState = activePendingTodayEntry?.isDone;
   const activePendingTodayPhase = activePendingTodayEntry?.phase ?? null;
@@ -599,7 +507,6 @@ export function HomeScreen() {
   const [staleRefreshInFlight, setStaleRefreshInFlight] = useState(false);
   const staleRefreshKeyRef = useRef<string | null>(null);
   const reachabilityProbeKeyRef = useRef<string | null>(null);
-  const pullRefreshDistanceRef = useRef(0);
 
   useEffect(() => {
     if (!pendingBoardEditorOpen || !activeDevice || !isDeviceControlReady(activeDevice)) {
@@ -610,16 +517,20 @@ export function HomeScreen() {
     router.push(deviceHistoryPath(activeDevice.id));
   }, [activeDevice, clearBoardEditorOpen, pendingBoardEditorOpen, router]);
 
-  const effectiveDevice = useMemo(() => {
+  const historyView = useMemo(() => {
     if (!activeDevice) {
       return null;
     }
 
-    return withProjectedSummaryMetrics(activeDevice, {
+    return resolveDeviceHistoryView(activeDevice, {
+      pendingMirror: activePendingMirror,
       pendingTodayState: activePendingTodayState,
     });
-  }, [activeDevice, activePendingTodayState]);
-  const headerStatusState = effectiveDevice ? headerConnectionState(effectiveDevice) : null;
+  }, [activeDevice, activePendingMirror, activePendingTodayState]);
+  const effectiveDevice = historyView?.device ?? null;
+  const headerStatusState = effectiveDevice
+    ? headerConnectionState(effectiveDevice, historyView?.freshnessState ?? "fully_settled")
+    : null;
   const claimedSessionIsFresh = useMemo(() => {
     if (onboardingSession?.status !== "claimed" || !onboardingSession.claimedAt) {
       return false;
@@ -628,7 +539,6 @@ export function HomeScreen() {
     const claimedAtMs = new Date(onboardingSession.claimedAt).getTime();
     return Number.isFinite(claimedAtMs) && Date.now() - claimedAtMs < CLAIMED_SESSION_DEVICE_GRACE_MS;
   }, [onboardingSession?.claimedAt, onboardingSession?.status]);
-  const safeAreaHeight = height - insets.top - insets.bottom;
   const fallbackBottomPadding = 32;
   const primaryActionBottomPadding = fallbackBottomPadding;
   const homeBottomInset = HOME_PRIMARY_ACTION_SIZE + primaryActionBottomPadding + HOME_PRIMARY_ACTION_TOP_GAP;
@@ -746,19 +656,18 @@ export function HomeScreen() {
       setManualRefreshInFlight(false);
     }
   }
-
-  const handleHomeScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    pullRefreshDistanceRef.current = Math.max(-event.nativeEvent.contentOffset.y, 0);
-  };
-
-  const handleHomeScrollEndDrag = () => {
-    const shouldRefresh = pullRefreshDistanceRef.current >= HOME_PULL_REFRESH_TRIGGER;
-    pullRefreshDistanceRef.current = 0;
-
-    if (shouldRefresh) {
-      void handleManualRefresh();
-    }
-  };
+  const homeRefreshControl = (
+    <RefreshControl
+      colors={[deviceAccentColor]}
+      onRefresh={() => {
+        void handleManualRefresh();
+      }}
+      progressBackgroundColor={theme.colors.bgSurface}
+      progressViewOffset={Math.max(insets.top - 6, 0)}
+      refreshing={manualRefreshInFlight}
+      tintColor={deviceAccentColor}
+    />
+  );
 
   if (isLoading || (!effectiveDevice && isOnboardingLoading)) {
     return (
@@ -766,9 +675,7 @@ export function HomeScreen() {
         alwaysBounceVertical
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-        onScroll={handleHomeScroll}
-        onScrollEndDrag={handleHomeScrollEndDrag}
-        scrollEventThrottle={16}
+        refreshControl={homeRefreshControl}
       >
         <View style={{ alignItems: "center", gap: 14, paddingVertical: 36 }}>
           <ActivityIndicator color={theme.colors.textPrimary} />
@@ -794,9 +701,7 @@ export function HomeScreen() {
         bottomInset={theme.layout.tabScrollBottom}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
         contentMaxWidth={theme.layout.narrowContentWidth}
-        onScroll={handleHomeScroll}
-        onScrollEndDrag={handleHomeScrollEndDrag}
-        scrollEventThrottle={16}
+        refreshControl={homeRefreshControl}
       >
         <View style={{ alignItems: "center", gap: 28, paddingVertical: 24 }}>
           <Pressable
@@ -838,10 +743,10 @@ export function HomeScreen() {
   }
 
   const device = effectiveDevice;
-  const stats = visibleBoardStats(device);
   const todayWeekday = formatWeekdayFromLocalDate(device.logicalToday);
-  const currentWeekCompleted = currentWeekCompletedCount(device);
-  const habitWeeksTotal = totalHabitWeeks(device);
+  const currentWeekCompleted = historyView?.currentWeekCompleted ?? 0;
+  const currentWeekTarget = historyView?.currentWeekTarget ?? device.weeklyTarget;
+  const habitWeeksTotal = historyView?.habitWeeksTotal ?? null;
   const isTodayAwaitingMirror = activePendingTodayPhase === "confirmed";
   const isTodayAwaitingDeviceConfirmation = activePendingTodayState !== undefined && !isTodayAwaitingMirror;
   const isTodayToggleLocked = staleRefreshInFlight || todayActionInFlight || activePendingTodayState !== undefined;
@@ -852,7 +757,8 @@ export function HomeScreen() {
     isLocked: staleRefreshInFlight || todayActionInFlight,
   });
   const dividerColor = withAlpha(theme.colors.textPrimary, 0.08);
-  const insight = boardInsight(device, stats, currentWeekCompleted);
+  const remainingThisWeek = Math.max(currentWeekTarget - currentWeekCompleted, 0);
+  const insight = boardInsight(device, historyView?.visibleFillPercentage ?? 0, remainingThisWeek);
   const headerStatusColor =
     headerStatusState === "online"
       ? theme.colors.accentSuccess
@@ -909,9 +815,7 @@ export function HomeScreen() {
       }
       contentContainerStyle={{ flexGrow: 1 }}
       contentMaxWidth={theme.layout.maxContentWidth}
-      onScroll={handleHomeScroll}
-      onScrollEndDrag={handleHomeScrollEndDrag}
-      scrollEventThrottle={16}
+      refreshControl={homeRefreshControl}
     >
       <View style={{ minHeight: contentMinHeight, gap: 16 }}>
         <View style={{ gap: 8 }}>
@@ -1000,11 +904,18 @@ export function HomeScreen() {
         <View style={{ gap: 14 }}>
           <View style={{ height: 1, backgroundColor: dividerColor }} />
           <View style={{ alignItems: "stretch", flexDirection: "row" }}>
-            <MetricTile label="This week" value={`${currentWeekCompleted}/${device.weeklyTarget}`} />
+            <MetricTile label="This week" value={`${currentWeekCompleted}/${currentWeekTarget}`} />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
-            <MetricTile label="Weeks" value={habitWeeksTotal ? `${device.successfulWeeksTotal}/${habitWeeksTotal}` : `${device.successfulWeeksTotal}`} />
+            <MetricTile
+              label="Weeks"
+              value={
+                habitWeeksTotal
+                  ? `${historyView?.successfulWeeksTotal ?? device.successfulWeeksTotal}/${habitWeeksTotal}`
+                  : `${historyView?.successfulWeeksTotal ?? device.successfulWeeksTotal}`
+              }
+            />
             <View style={{ width: 1, backgroundColor: dividerColor, marginHorizontal: 16 }} />
-            <MetricTile label="Recorded" value={`${device.recordedDaysTotal}d`} />
+            <MetricTile label="Recorded" value={`${historyView?.recordedDaysTotal ?? device.recordedDaysTotal}d`} />
           </View>
         </View>
 

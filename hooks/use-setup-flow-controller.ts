@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import { useApProvisioning } from "@/hooks/use-ap-provisioning";
 import { DeviceApClientError } from "@/lib/device-ap-client";
@@ -28,6 +29,7 @@ const WIFI_RECONNECT_TIMEOUT_MS = 90_000;
 const RESTORE_TIMEOUT_MS = 45_000;
 const RECONNECT_AP_FAILURE_GRACE_MS = 7_000;
 const AP_JOIN_AUTODETECT_POLL_MS = 1_200;
+const AP_FOREGROUND_RECHECK_DELAY_MS = 700;
 const WIFI_SCAN_ATTEMPTS = 3;
 const WIFI_SCAN_RETRY_DELAY_MS = 1_200;
 
@@ -522,6 +524,27 @@ async function startWifiScan(options?: { openPickerOnSuccess?: boolean }) {
 
     return () => clearTimeout(timeoutId);
   }, [hasValidatedAp, isCheckingAp, stage]);
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active" || stage !== "join_device_ap" || hasValidatedAp || isCheckingAp) {
+        return;
+      }
+
+      timeoutId = setTimeout(() => {
+        void confirmJoinedDeviceAp({ silent: true });
+      }, AP_FOREGROUND_RECHECK_DELAY_MS);
+    });
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      subscription.remove();
+    };
+  }, [confirmJoinedDeviceAp, hasValidatedAp, isCheckingAp, stage]);
 
   useEffect(() => {
     const nextSessionId = session?.id ?? null;

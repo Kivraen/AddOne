@@ -56,21 +56,10 @@ function normalizeRouteParam(value: string | string[] | undefined) {
   return value ?? null;
 }
 
-function splitDisplayName(displayName: string) {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
-
-  return {
-    firstName: parts[0] ?? "",
-    lastName: parts.slice(1).join(" "),
-  };
-}
-
 function buildDraft(profile: SocialProfile): ProfileDraft {
-  const fallbackNames = splitDisplayName(profile.displayName);
-
   return {
-    firstName: profile.firstName ?? fallbackNames.firstName,
-    lastName: profile.lastName ?? fallbackNames.lastName,
+    firstName: profile.firstName ?? "",
+    lastName: profile.lastName ?? "",
     username: profile.username ?? "",
   };
 }
@@ -149,6 +138,55 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
+function formatFieldStatus(error?: string) {
+  if (!error) {
+    return null;
+  }
+
+  if (/required/i.test(error)) {
+    return "Required";
+  }
+
+  if (/3-20 lowercase letters, numbers, or underscores/i.test(error)) {
+    return "3-20 chars";
+  }
+
+  return error;
+}
+
+function FieldHeader({ error, label }: { error?: string; label: string }) {
+  const status = formatFieldStatus(error);
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 12,
+        minHeight: theme.typography.label.lineHeight,
+      }}
+    >
+      <FieldLabel>{label}</FieldLabel>
+      {status ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            color: theme.colors.statusErrorMuted,
+            flexShrink: 1,
+            fontFamily: theme.typography.body.fontFamily,
+            fontSize: 12,
+            lineHeight: 16,
+            textAlign: "right",
+          }}
+        >
+          {status}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function HelperCopy({ children, tone = "default" }: { children: ReactNode; tone?: "default" | "error" | "success" }) {
   return (
     <Text
@@ -220,7 +258,7 @@ function FormField(props: {
 }) {
   return (
     <View style={{ gap: 8 }}>
-      <FieldLabel>{props.label}</FieldLabel>
+      <FieldHeader error={props.error} label={props.label} />
       <TextInput
         autoCapitalize={props.autoCapitalize ?? "words"}
         autoCorrect={props.autoCorrect ?? false}
@@ -230,7 +268,9 @@ function FormField(props: {
         style={{
           borderRadius: 12,
           borderWidth: 1,
-          borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+          borderColor: props.error
+            ? withAlpha(theme.colors.statusErrorMuted, 0.28)
+            : withAlpha(theme.colors.textPrimary, 0.08),
           backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
           color: theme.colors.textPrimary,
           fontFamily: theme.typography.body.fontFamily,
@@ -242,7 +282,6 @@ function FormField(props: {
         textContentType={props.textContentType}
         value={props.value}
       />
-      {props.error ? <HelperCopy tone="error">{props.error}</HelperCopy> : null}
     </View>
   );
 }
@@ -722,18 +761,6 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
           ) : null}
         </GlassCard>
 
-        {formError ? (
-          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
-            <InlineFeedback message={formError} tone="error" />
-          </Animated.View>
-        ) : null}
-
-        {formMessage ? (
-          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
-            <InlineFeedback message={formMessage} tone="success" />
-          </Animated.View>
-        ) : null}
-
         {isLoading ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, paddingVertical: 4 }}>
             <ActivityIndicator color={theme.colors.accentAmber} />
@@ -776,7 +803,7 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
               </View>
 
               <View style={{ gap: 8 }}>
-                <FieldLabel>Username</FieldLabel>
+                <FieldHeader error={fieldErrors.username} label="Username" />
                 <View
                   style={{
                     alignItems: "center",
@@ -820,7 +847,9 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                     placeholderTextColor={theme.colors.textMuted}
                     style={{
                       backgroundColor: withAlpha(theme.colors.bgBase, 0.84),
-                      borderColor: withAlpha(theme.colors.textPrimary, 0.08),
+                      borderColor: fieldErrors.username
+                        ? withAlpha(theme.colors.statusErrorMuted, 0.28)
+                        : withAlpha(theme.colors.textPrimary, 0.08),
                       borderRadius: 12,
                       borderWidth: 1,
                       color: theme.colors.textPrimary,
@@ -836,8 +865,9 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                   />
                 </View>
 
-                {fieldErrors.username ? <HelperCopy tone="error">{fieldErrors.username}</HelperCopy> : null}
-                {!fieldErrors.username ? <HelperCopy>Lowercase only. Stable handle for Friends.</HelperCopy> : null}
+                {!fieldErrors.username ? (
+                  <HelperCopy>Lowercase letters, numbers, or underscores. Stable handle for Friends.</HelperCopy>
+                ) : null}
               </View>
             </GlassCard>
 
@@ -868,6 +898,18 @@ export function ProfileTabContent({ bottomInset = theme.layout.tabScrollBottom }
                   />
                 </View>
               </View>
+
+              {formError ? (
+                <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
+                  <InlineFeedback message={formError} tone="error" />
+                </Animated.View>
+              ) : null}
+
+              {formMessage ? (
+                <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)}>
+                  <InlineFeedback message={formMessage} tone="success" />
+                </Animated.View>
+              ) : null}
             </View>
           </>
         )}
