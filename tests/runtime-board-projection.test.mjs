@@ -267,6 +267,25 @@ test("prefers authoritative visible week targets over stale snapshot week target
   assert.deepEqual(projection.weekTargets?.slice(0, 4), [1, 3, 4, 5]);
 });
 
+test("uses authoritative visible week targets for the current week when present", () => {
+  const projection = buildRuntimeBoardProjection({
+    fallbackWeeklyTarget: 5,
+    now: new Date("2026-03-19T19:00:00.000Z"),
+    resetTime: "00:00:00",
+    snapshot: {
+      boardDays: emptyBoardDays(),
+      currentWeekStart: "2026-03-16",
+      todayRow: 3,
+      weekTargets: Array.from({ length: 21 }, () => 5),
+    },
+    timezone: "America/Los_Angeles",
+    visibleWeekTargets: [1, 3, 4, ...Array.from({ length: 18 }, () => 5)],
+    weekStart: "monday",
+  });
+
+  assert.deepEqual(projection.weekTargets?.slice(0, 4), [1, 3, 4, 5]);
+});
+
 test("uses the live target for the current week even before a fresh snapshot lands", () => {
   const projection = buildRuntimeBoardProjection({
     fallbackWeeklyTarget: 5,

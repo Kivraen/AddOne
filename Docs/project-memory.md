@@ -70,7 +70,9 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - `fw-beta-20260404-06`
   - `fw-beta-20260404-07`
   - `fw-beta-20260404-08`
+  - `fw-beta-20260404-09`
 - The current authoritative OTA proof set now includes a clean simultaneous real-device app-triggered install on Gym and Yoga through `2.0.0-beta.11`.
+- The hosted beta backend now also has the April 4 history/week-target sync migration plus the shorter confirm-window schema migration applied, and `fw-beta-20260404-09` is active as an allowlisted beta.12 bug-bash release for `AO_A4F00F767008` and `AO_B0CBD8CFABB0`.
 
 ## Current Active Stage
 
@@ -119,7 +121,7 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-050` remains queued only if the coordinator still wants another dedicated onboarding-polish pass after the April 4 checkpoint rather than building directly from the saved RC branch.
 - `T-054` remains in progress as a separate coordinator acceptance decision: the forward-only weekly-target work is in the branch, but its acceptance should stay distinct from the final RC build decision.
 - The new owner-facing retry-download UI path is implemented, but April 4 hardware runs did not trigger an automatic retry after the updated firmware was installed, so that exact UI state is still unproven on-device.
-- The new host-side migration `20260404201000_allow_shorter_ota_confirm_window.sql` exists locally but was not applied to the hosted beta database during the April 4 checkpoint, so live OTA releases still used `confirm_window_seconds = 120`.
+- The April 4 host-side migrations `20260404174500_fix_history_week_target_sync_and_current_week_truth.sql` and `20260404201000_allow_shorter_ota_confirm_window.sql` are now applied to the hosted beta database. The live bug-bash release `fw-beta-20260404-09` still intentionally uses `confirm_window_seconds = 120` for safer continuity.
 - `T-043` is now accepted on `codex/s4-operator-rollout-tooling`: the repo now has bounded operator tooling for release activation, targeting, rollback, inspection, and optional install nudges without ad hoc edits to `firmware_releases` or rollout tables.
 - `T-008` and `T-011` are intentionally deferred while release planning and hardening take priority.
 - `T-018` is now accepted and no longer a lifecycle blocker.

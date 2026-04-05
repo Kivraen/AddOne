@@ -346,9 +346,10 @@ function mapDeviceRowToAppDevice(input: {
 }): AddOneDevice {
   const { currentUserName, device, membership, metrics, snapshot } = input;
   const normalizedWeekStart = normalizeWeekStart(device.week_start);
-  const liveWeeklyTarget = Number(metrics?.current_weekly_target ?? device.weekly_target);
+  const liveWeeklyTarget = Number(device.weekly_target);
+  const currentWeekTarget = Number(metrics?.current_weekly_target ?? device.weekly_target);
   const projection = buildRuntimeBoardProjection({
-    fallbackWeeklyTarget: liveWeeklyTarget,
+    fallbackWeeklyTarget: currentWeekTarget,
     resetTime: device.day_reset_time,
     snapshot: snapshot
       ? {

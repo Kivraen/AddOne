@@ -267,12 +267,17 @@ export function buildRuntimeBoardProjection(input: {
   const todayDayIndex = diffDays(currentWeekStart, logicalToday);
   const dateGrid = buildDateGrid(currentWeekStart);
   const recordedDates = buildRecordedDateMap(input.snapshot);
-  const weekTargetMap = buildVisibleWeekTargetMap(currentWeekStart, input.visibleWeekTargets) ?? buildWeekTargetMap(input.snapshot);
+  const visibleWeekTargetMap = buildVisibleWeekTargetMap(currentWeekStart, input.visibleWeekTargets);
+  const snapshotWeekTargetMap = buildWeekTargetMap(input.snapshot);
   const fallbackWeeklyTarget = Math.max(1, Math.min(7, Math.round(input.fallbackWeeklyTarget)));
   const days = dateGrid.map((week) => week.map((localDate) => recordedDates.get(localDate) ?? false));
-  const weekTargets = weekTargetMap
-    ? dateGrid.map((week, weekIndex) => (weekIndex === 0 ? fallbackWeeklyTarget : weekTargetMap.get(week[0] ?? "") ?? fallbackWeeklyTarget))
-    : null;
+  const weekTargets = visibleWeekTargetMap
+    ? dateGrid.map((week) => visibleWeekTargetMap.get(week[0] ?? "") ?? fallbackWeeklyTarget)
+    : snapshotWeekTargetMap
+      ? dateGrid.map((week, weekIndex) =>
+          weekIndex === 0 ? fallbackWeeklyTarget : snapshotWeekTargetMap.get(week[0] ?? "") ?? fallbackWeeklyTarget,
+        )
+      : null;
 
   const snapshotExists = Boolean(input.snapshot);
   const isProjectedBeyondSnapshot =

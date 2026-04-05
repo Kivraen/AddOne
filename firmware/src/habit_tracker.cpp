@@ -251,8 +251,6 @@ bool HabitTracker::restoreFromSnapshot(const String& boardDaysJson,
   } else {
     seedWeekTargets_(minimum_);
   }
-  weekTargets_[0] = minimum_;
-
   evaluateCurrentWeek_();
   for (uint8_t week = 1; week < Config::kWeeks; ++week) {
     evaluateWeek_(week);
@@ -278,7 +276,7 @@ bool HabitTracker::checkWeekBoundary(const tm& nowDate) {
 
   if (isFirstWeek_) {
     const int8_t earliest = findEarliestRecordedDay_(0);
-    const int latestAllowed = Config::kDaysPerWeek - minimum_;
+    const int latestAllowed = Config::kDaysPerWeek - weekTarget(0);
     if (earliest < 0 || earliest > latestAllowed) {
       grid_.success[0] = -1;
     } else {
@@ -459,7 +457,6 @@ bool HabitTracker::applyVisibleWeekTargets_(const String& weekTargetsJson,
     }
   }
 
-  nextTargets[0] = minimum_;
   outChanged = false;
   for (uint8_t week = 0; week < Config::kWeeks; ++week) {
     if (weekTargets_[week] == nextTargets[week]) {
@@ -490,7 +487,7 @@ void HabitTracker::evaluateCurrentWeek_() {
     }
   }
 
-  grid_.success[0] = (count >= minimum_) ? 1 : -1;
+  grid_.success[0] = (count >= weekTarget(0)) ? 1 : -1;
 }
 
 void HabitTracker::evaluateWeek_(uint8_t weekIdx) {
@@ -565,7 +562,6 @@ void HabitTracker::load_() {
     for (uint8_t week = 0; week < Config::kWeeks; ++week) {
       weekTargets_[week] = constrain(weekTargets_[week], 1, Config::kDaysPerWeek);
     }
-    weekTargets_[0] = minimum_;
   }
 
   isFirstWeek_ = prefs.getBool(kFirstWeekKey, true);
@@ -577,13 +573,11 @@ void HabitTracker::load_() {
 
 bool HabitTracker::setMinimum(uint8_t minimum) {
   const uint8_t nextMinimum = constrain(minimum, 1, Config::kDaysPerWeek);
-  if (minimum_ == nextMinimum && weekTargets_[0] == nextMinimum) {
+  if (minimum_ == nextMinimum) {
     return true;
   }
 
   minimum_ = nextMinimum;
-  weekTargets_[0] = nextMinimum;
-  evaluateCurrentWeek_();
   return persist_();
 }
 
