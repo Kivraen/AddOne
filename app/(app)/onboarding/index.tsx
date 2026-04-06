@@ -723,7 +723,7 @@ export default function OnboardingScreen() {
                   ? (
                       <ActionButton
                         disabled={isSavingSettings || isRestoringBoard || needsRestoreChoice || isFinishingSetup}
-                        label={isSavingSettings ? "Opening…" : "Open my board"}
+                        label={isSavingSettings ? "Finishing…" : "Finish setup"}
                         onPress={() => void handleFinishSetup()}
                       />
                     )
@@ -1132,7 +1132,13 @@ export default function OnboardingScreen() {
         {activeStage === "board" ? (
           <SetupStageScene disableEnter={suppressInitialSceneAnimation} sceneKey="board">
             <SetupStageLayout>
-              <StepHeader hideTitle step={4} title="Finish the board" totalSteps={ONBOARDING_TOTAL_STEPS} />
+              <StepHeader
+                hideTitle
+                step={4}
+                subtitle="Pick the colors and look that feel right for your board."
+                title="Choose your style"
+                totalSteps={ONBOARDING_TOTAL_STEPS}
+              />
 
               {onboardingPaletteDraft && onboardingPreviewDevice && previewPalette ? (
                 <View style={{ gap: ONBOARDING_FIELD_GAP + 2 }}>

@@ -1,4 +1,3 @@
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -75,7 +74,7 @@ function headerConnectionState(
     return "checking-connection";
   }
 
-  return freshnessState === "fully_settled" ? "online" : "verifying-board";
+  return freshnessState === "mirror_pending" ? "verifying-board" : "online";
 }
 
 function boardButtonState(
@@ -238,50 +237,6 @@ function HomePrimaryActionOverlay(props: {
     >
       <PrimaryActionButton activeColor={props.activeColor} onPress={props.onPress} size={HOME_PRIMARY_ACTION_SIZE} state={props.state} />
     </View>
-  );
-}
-
-function HomeBoardRefreshOverlay({ activeColor }: { activeColor: string }) {
-  return (
-    <BlurView
-      intensity={26}
-      pointerEvents="none"
-      tint="dark"
-      style={{
-        position: "absolute",
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
-        overflow: "hidden",
-        borderRadius: 26,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <View
-        style={{
-          alignItems: "center",
-          gap: 10,
-          borderRadius: theme.radius.hero,
-          backgroundColor: withAlpha(theme.colors.bgBase, 0.38),
-          paddingHorizontal: 20,
-          paddingVertical: 14,
-        }}
-      >
-        <ActivityIndicator color={activeColor} />
-        <Text
-          style={{
-            color: theme.colors.textPrimary,
-            fontFamily: theme.typography.label.fontFamily,
-            fontSize: theme.typography.label.fontSize,
-            lineHeight: theme.typography.label.lineHeight,
-          }}
-        >
-          Refreshing board
-        </Text>
-      </View>
-    </BlurView>
   );
 }
 
@@ -898,7 +853,6 @@ export function HomeScreen() {
             palette={palette}
             pendingPulse={null}
           />
-          {manualRefreshInFlight ? <HomeBoardRefreshOverlay activeColor={deviceAccentColor} /> : null}
         </View>
 
         <View style={{ gap: 14 }}>
