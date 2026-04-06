@@ -16,6 +16,7 @@ The coordinator owns this file.
 - Stable restore point is `main@5abc1e3` with tag `s4-stable-main-20260405-simulator-recovery`.
 - Active follow-up branch for tomorrow is `codex/s4-post-stable-followups`.
 - iPad is out of scope for this launch. Do not carry iPad screenshot or tablet-support work unless the coordinator explicitly reopens it.
+- External designer collaboration is now documented as a planned future workflow in [2026-04-05-external-designer-collaboration-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/plans/2026-04-05-external-designer-collaboration-plan.md). It is not active launch work yet and should not begin mergeable repo work until `T-056` is accepted.
 - Rule: only `S4` work should be actively delegated until the coordinator accepts, blocks, or revises the stage.
 - `S3` is intentionally deferred, not completed. Remaining polish and timezone backlog stay parked until release-readiness planning is explicit.
 

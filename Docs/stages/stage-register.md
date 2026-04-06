@@ -58,6 +58,7 @@ Last updated: April 5, 2026
 - `T-054` remains in progress as a separate support-slice acceptance decision even though its code is already part of the stable branch. The final launch matrix must either sign it off or reopen it as a blocker explicitly.
 - `T-050` remains ready behind the current checkpoint: use it only if the final launch run exposes a real onboarding blocker.
 - `T-055` is now the active release-prep umbrella for both stores: use `T-056` through `T-064` as the execution sequence instead of one mixed branch. iPad remains explicitly out of scope for this launch.
+- External designer contribution is now planned but not active. The collaboration model is checkpointed in `Docs/plans/2026-04-05-external-designer-collaboration-plan.md`, and mergeable designer work should not start until `T-056` is accepted.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

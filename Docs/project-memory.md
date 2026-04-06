@@ -46,6 +46,13 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - Launch web, legal, and support surfaces should live in the same repo unless the coordinator explicitly changes that decision.
 - The default launch instrumentation stack is `PostHog + Sentry`.
 - Email scope for this launch is basic waitlist/launch-ready email, not a full lifecycle automation system.
+- External designer collaboration is now planned in [2026-04-05-external-designer-collaboration-plan.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/plans/2026-04-05-external-designer-collaboration-plan.md). It is not an active execution slice yet.
+- Locked default for future external designer contribution:
+  - start mergeable work only after `T-056`
+  - use fork + PR
+  - same repo, not a duplicate UI repo
+  - strict UI-only scope by default
+  - reuse the app's existing demo/proof foundations rather than inventing a separate preview architecture
 
 ## Current Repo Reality
 
@@ -155,6 +162,10 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
   - `T-062` analytics, crash reporting, feedback, and basic email
   - `T-063` store listing assets and metadata pack
   - `T-064` final closed-testing submission gate
+- External designer onboarding is now a documented future contributor workflow, not an active launch-prep slice:
+  - the planning checkpoint lives in `Docs/plans/2026-04-05-external-designer-collaboration-plan.md`
+  - the first mergeable designer work should begin only after `T-056`
+  - the most natural early designer slices are `T-057`, `T-059`, and later store-facing work tied to `T-063`
 - The new owner-facing retry-download UI path is implemented, but April 4 hardware runs did not trigger an automatic retry after the updated firmware was installed, so that exact UI state is still unproven on-device.
 - The April 4 host-side migrations `20260404174500_fix_history_week_target_sync_and_current_week_truth.sql` and `20260404201000_allow_shorter_ota_confirm_window.sql` are now applied to the hosted beta database. The live bug-bash release `fw-beta-20260404-09` still intentionally uses `confirm_window_seconds = 120` for safer continuity.
 - The April 5 follow-up migration `20260405001500_fix_history_week_target_backfill_board_scope.sql` exists in-repo and its live board-era correction has been applied through RPC, but the hosted project does not yet have the migration formally recorded through Supabase CLI migration history because current CLI project-link admin access is blocked.
