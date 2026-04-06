@@ -7,6 +7,15 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 type AuthStatus = "loading" | "signedOut" | "signedIn" | "demo";
 
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+
+class AuthRequestTimeoutError extends Error {
+  constructor() {
+    super("Timed out contacting AddOne sign-in. Check internet, leave the AddOne Wi-Fi if you are still on it, then try again.");
+    this.name = "AuthRequestTimeoutError";
+  }
+}
+
 interface AuthContextValue {
   mode: AppRuntimeMode;
   status: AuthStatus;
@@ -45,12 +54,35 @@ function parseAuthCallbackUrl(url: string) {
 }
 
 function normalizeAuthRequestError(error: unknown) {
+  if (error instanceof AuthRequestTimeoutError) {
+    return error.message;
+  }
+
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (message.toLowerCase().includes("network request failed")) {
     return "No internet connection. Leave the AddOne Wi-Fi if you are still on it, then try again.";
   }
 
   return message || "The request could not be completed.";
+}
+
+async function withAuthRequestTimeout<T>(request: Promise<T>, timeoutMs = AUTH_REQUEST_TIMEOUT_MS) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      request,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new AuthRequestTimeoutError());
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -136,23 +168,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         if (accessToken && refreshToken) {
-          const { error: setSessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
+          const { error: setSessionError } = await withAuthRequestTimeout(
+            supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            }),
+          );
           return setSessionError?.message ?? null;
         }
 
         if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { error: exchangeError } = await withAuthRequestTimeout(supabase.auth.exchangeCodeForSession(code));
           return exchangeError?.message ?? null;
         }
 
         if (tokenHash && type) {
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: type as "email" | "email_change" | "invite" | "magiclink" | "recovery" | "signup",
-          });
+          const { error: verifyError } = await withAuthRequestTimeout(
+            supabase.auth.verifyOtp({
+              token_hash: tokenHash,
+              type: type as "email" | "email_change" | "invite" | "magiclink" | "recovery" | "signup",
+            }),
+          );
 
           return verifyError?.message ?? null;
         }
@@ -173,13 +209,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         const emailRedirectTo = Linking.createURL("/auth/callback");
 
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo,
-            shouldCreateUser: true,
-          },
-        });
+        const { error } = await withAuthRequestTimeout(
+          supabase.auth.signInWithOtp({
+            email,
+            options: {
+              emailRedirectTo,
+              shouldCreateUser: true,
+            },
+          }),
+        );
 
         if (error) {
           return error.message;
@@ -211,11 +249,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         let lastError: string | null = null;
 
         for (const type of attemptTypes) {
-          const { error } = await supabase.auth.verifyOtp({
-            email: normalizedEmail,
-            token: normalizedToken,
-            type,
-          });
+          const { error } = await withAuthRequestTimeout(
+            supabase.auth.verifyOtp({
+              email: normalizedEmail,
+              token: normalizedToken,
+              type,
+            }),
+          );
 
           if (!error) {
             setPendingEmail(normalizedEmail);
