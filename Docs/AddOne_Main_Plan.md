@@ -86,9 +86,9 @@ See [stage-register.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stag
 - Goal:
   make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
 - Current execution brief:
-  `T-055` final store submission readiness and launch prep
+  `T-055` final store submission readiness and launch prep, executed as ordered slices `T-056` through `T-064`
 - Current execution task:
-  treat `T-035` through `T-049` as the accepted or checkpointed hardened product baseline, keep `T-054` as a separate support-slice acceptance decision, and use `T-055` to convert the current stable branch into a real submission candidate: lock the public iOS and Android release identity, keep iPad out of scope explicitly, re-confirm the March 27 Supabase auth dashboard settings, resolve reviewer-access or privacy-policy or account-deletion blockers, prepare the iPhone-and-Android screenshot and metadata pack, and end with a clear go or no-go decision for App Store and Play Store submission
+  treat `T-035` through `T-049` as the accepted or checkpointed hardened product baseline, keep `T-054` as a separate support-slice acceptance decision, and use `T-055` as the umbrella closed-testing launch-prep program. The ordered execution sequence is: `T-056` baseline freeze and bug gate, `T-057` no-device truth and hardware-companion positioning, `T-058` public release identity and build configuration, `T-059` reviewer/demo access, `T-060` legal/privacy/support/account deletion, `T-061` same-repo launch web surfaces, `T-062` PostHog and Sentry plus feedback/email foundations, `T-063` store screenshots and metadata pack, and `T-064` the final closed-testing readiness gate for iOS and Android.
 - Parallel exception:
   `T-046` is now accepted as a narrow UI-only cleanup slice and is now intended to be part of the final iOS RC baseline; weekly-minimum semantics, offline-sync reliability, and broader Friends-controls redesign remain later follow-up work
   `T-047` is now also accepted as a bounded user-guided RC UI iteration slice on top of `T-046`; it improves the Friends actions surface plus adjacent Home and settings UI, carries one small confirmation-path stabilization in `hooks/use-devices.ts`, and is also intended to be part of the final ship baseline

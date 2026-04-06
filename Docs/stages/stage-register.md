@@ -14,8 +14,8 @@ Last updated: April 5, 2026
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Goal: make AddOne publish-ready by auditing the real deployment path, security posture, and app or firmware update model before more feature or polish work resumes.
-- Next brief: run `T-055` on `/Users/viktor/Desktop/DevProjects/Codex/AddOne` from `codex/s4-post-stable-followups`: lock the public app identity, confirm the March 27 Supabase auth dashboard settings, keep iPad out of scope, close privacy or account-deletion or reviewer-access blockers, and decide whether the stable line is ready for iOS and Android submission candidates.
-- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now part of the stabilized April 5 baseline. `T-049` is now a checkpointed RC app-baseline slice, the current stable Desktop-path save point is tagged `s4-stable-main-20260405-simulator-recovery`, `T-054` remains an in-progress support slice on forward-only weekly target semantics and security hardening, and `T-050` stays queued only if the final launch run finds a real onboarding blocker.
+- Next brief: run `T-056` on `/Users/viktor/Desktop/DevProjects/Codex/AddOne` from `codex/s4-post-stable-followups`: freeze the current product baseline with an explicit iPhone/Android validation matrix before any further launch-prep feature work proceeds.
+- Parallel note: `T-046`, `T-047`, and `T-048` are accepted side slices and are now part of the stabilized April 5 baseline. `T-049` is now a checkpointed RC app-baseline slice, the current stable Desktop-path save point is tagged `s4-stable-main-20260405-simulator-recovery`, `T-054` remains an in-progress support slice on forward-only weekly target semantics and security hardening, and `T-050` stays queued only if the final launch run finds a real onboarding blocker. `T-055` is now the umbrella launch-prep program, broken into `T-056` through `T-064`.
 
 ## Stage Notes
 
@@ -57,7 +57,7 @@ Last updated: April 5, 2026
 - April 5 recovery and review-fix checkpoint remains preserved on `codex/s4-final-bug-bash`, but the repo has now been re-homed back into `/Users/viktor/Desktop/DevProjects/Codex/AddOne` as the canonical working path. The previous Desktop copy is preserved under `/Users/viktor/Desktop/DevProjects/Codex/AddOne/_repo-backups/current/AddOne-salvage-20260405`, and the current stable save point is tagged `s4-stable-main-20260405-simulator-recovery`.
 - `T-054` remains in progress as a separate support-slice acceptance decision even though its code is already part of the stable branch. The final launch matrix must either sign it off or reopen it as a blocker explicitly.
 - `T-050` remains ready behind the current checkpoint: use it only if the final launch run exposes a real onboarding blocker.
-- `T-055` is now the active release-prep gate for both stores: public identifiers, reviewer access, privacy/account-deletion readiness, iPhone/Android screenshot and metadata pack, and final go/no-go submission decisions. iPad is explicitly out of scope for this launch.
+- `T-055` is now the active release-prep umbrella for both stores: use `T-056` through `T-064` as the execution sequence instead of one mixed branch. iPad remains explicitly out of scope for this launch.
 - `T-008` and `T-011` are intentionally deferred while `S4` is active.
 - The March 22 report is now the current accepted checkpoint for recovery stabilization and `Start new habit`.
 - `T-018` is now accepted as the destructive reset plus fresh add checkpoint.

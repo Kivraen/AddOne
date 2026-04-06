@@ -41,6 +41,11 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - The current public launch scope excludes iPad. Do not gather iPad screenshots or carry silent tablet-support requirements into submission; if necessary, disable iPad support explicitly for the public release.
 - User-facing task work is iterative by default. Do not treat the first worker pass as final if the user is still refining the result.
 - A worker report should describe the actual final state after user iteration, not just the first implementation pass.
+- Closed testing is the current release target; treat it as public-grade launch prep rather than casual beta cleanup.
+- The no-device primary CTA is `Join waitlist`, the secondary CTA is `Learn how it works`, and the app should explicitly present itself as a companion to the AddOne board rather than a generic software-only habit tracker.
+- Launch web, legal, and support surfaces should live in the same repo unless the coordinator explicitly changes that decision.
+- The default launch instrumentation stack is `PostHog + Sentry`.
+- Email scope for this launch is basic waitlist/launch-ready email, not a full lifecycle automation system.
 
 ## Current Repo Reality
 
@@ -90,8 +95,8 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 
 - `S4: Beta Hardening And Durable Release Memory`
 - Stage note: [stage-04-beta-hardening-and-durable-release-memory.md](/Users/viktor/Desktop/DevProjects/Codex/AddOne/Docs/stages/stage-04-beta-hardening-and-durable-release-memory.md)
-- Next brief: run `T-055` from `codex/s4-post-stable-followups`: lock the public release identity, re-confirm the March 27 Supabase auth dashboard URL / OTP settings, close reviewer-access or privacy or account-deletion blockers, prepare the iPhone/Android screenshot and metadata pack, and end with explicit iOS and Android submission decisions
-- Current execution task: keep `main` stable at `5abc1e3`, use `codex/s4-post-stable-followups` as the only active implementation line for the final launch pass, and treat the submission checklist itself as the active coordinator work instead of more open-ended polish
+- Next brief: run `T-056` from `codex/s4-post-stable-followups`: freeze the current iPhone/Android product baseline explicitly before adding launch-prep features
+- Current execution task: keep `main` stable at `5abc1e3`, use `codex/s4-post-stable-followups` as the active launch-prep coordination line, and execute `T-055` as the ordered closed-testing program `T-056` through `T-064` instead of one mixed branch
 - Parallel support slice: `T-054` remains a separate coordinator acceptance decision even though its code is already part of the stable branch
 - Accepted parallel slices: `T-046` is now closed as a narrow UI-only cleanup, `T-047` is now accepted as the user-guided Friends-controls and RC UI iteration slice, and `T-048` is now accepted as the Home confirmation-latency follow-up. They are now direct inputs to the final ship baseline rather than side work waiting behind a blocked artifact gate.
 
@@ -134,12 +139,22 @@ Use it for stable facts, accepted coordination decisions, active stage context, 
 - `T-049` is not yet the final TestFlight candidate because one external release check is still open: the March 27 Supabase auth dashboard URL / OTP settings must be re-confirmed explicitly.
 - `T-050` should only reopen if the final launch run finds a real onboarding blocker that is not already covered by the stable branch.
 - `T-054` remains in progress as a separate coordinator acceptance decision: the forward-only weekly-target work is in the branch, but its acceptance should stay distinct from the final release decision.
-- `T-055` is now the active release-prep gate. The current likely store blockers are:
+- `T-055` is now the active release-prep umbrella. The current likely store blockers are:
   - public release identifiers and build profiles still need to be locked explicitly
   - reviewer access for OTP-only auth still needs a concrete plan
   - privacy-policy, support, and account-deletion URLs still need to exist concretely enough for store metadata
   - an in-app account deletion path is not currently obvious in the repo and may still be a real blocker
   - iPad is out of scope and should be disabled explicitly rather than ignored informally
+- `T-055` is now split into the ordered coordinator sequence:
+  - `T-056` baseline freeze and bug gate
+  - `T-057` hardware-companion positioning and no-device UX
+  - `T-058` public release identity and build configuration
+  - `T-059` reviewer access and demo path
+  - `T-060` legal, privacy, support, and account deletion
+  - `T-061` launch web surfaces in the same repo
+  - `T-062` analytics, crash reporting, feedback, and basic email
+  - `T-063` store listing assets and metadata pack
+  - `T-064` final closed-testing submission gate
 - The new owner-facing retry-download UI path is implemented, but April 4 hardware runs did not trigger an automatic retry after the updated firmware was installed, so that exact UI state is still unproven on-device.
 - The April 4 host-side migrations `20260404174500_fix_history_week_target_sync_and_current_week_truth.sql` and `20260404201000_allow_shorter_ota_confirm_window.sql` are now applied to the hosted beta database. The live bug-bash release `fw-beta-20260404-09` still intentionally uses `confirm_window_seconds = 120` for safer continuity.
 - The April 5 follow-up migration `20260405001500_fix_history_week_target_backfill_board_scope.sql` exists in-repo and its live board-era correction has been applied through RPC, but the hosted project does not yet have the migration formally recorded through Supabase CLI migration history because current CLI project-link admin access is blocked.

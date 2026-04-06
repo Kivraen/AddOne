@@ -38,6 +38,19 @@ report_path: Docs/agent-reports/2026-04-05-final-store-submission-readiness-and-
 ## Objective
 Convert the current stable AddOne line into a real public-release submission candidate for both iOS and Android by closing store-facing blockers, locking the public app identity, preparing review and legal materials, and turning the final test run into a complete publish-readiness pass.
 
+## Execution Sequence
+Treat `T-055` as the umbrella coordinator program for the ordered launch-prep slices below, not as one mixed implementation branch:
+
+1. `T-056` final baseline freeze and bug gate
+2. `T-057` hardware-companion positioning and no-device UX
+3. `T-058` public release identity and build configuration
+4. `T-059` reviewer access and demo path
+5. `T-060` legal, privacy, support, and account deletion
+6. `T-061` launch web surfaces in the same repo
+7. `T-062` analytics, crash reporting, feedback, and basic email
+8. `T-063` store listing assets and metadata pack
+9. `T-064` final closed-testing submission gate
+
 ## Why Now
 The app baseline is now stable enough to stop doing vague RC cleanup and start doing explicit submission work. The remaining launch risk is no longer only “does the app work?” It is also whether the public release identity, review access, legal URLs, account deletion path, metadata, screenshots, and console declarations are all ready when the final cross-platform pass succeeds.
 
