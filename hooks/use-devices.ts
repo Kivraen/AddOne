@@ -94,8 +94,10 @@ function settlePromise<T>(promise: Promise<T>): Promise<SettledResult<T>> {
 }
 
 const DEVICE_SNAPSHOT_SELF_HEAL_MS = 30_000;
+const DEVICE_COMMAND_WAIT_TIMEOUT_MS = 12_000;
 const LIVE_WAIT_CACHE_POLL_MS = 100;
 const LIVE_WAIT_REFRESH_MS = 1_500;
+const ONBOARDING_DEVICE_COMMAND_WAIT_TIMEOUT_MS = 30_000;
 const CONNECTIVITY_CHECKING_MS = 10_000;
 
 function logTodayToggleTrace(traceId: string, startedAt: number, stage: string) {
@@ -870,8 +872,22 @@ export function useDeviceActions() {
     throw new Error(options?.errorMessage ?? "The device did not start the test celebration in time.");
   };
 
-  const applySettingsPatch = async (patch: DeviceSettingsPatch, deviceId?: string) => {
-    const targetDevice = await resolveFreshLiveDevice(deviceId);
+  const applySettingsPatch = async (
+    patch: DeviceSettingsPatch,
+    deviceId?: string,
+    options?: {
+      allowPendingConnectivity?: boolean;
+      timeoutMs?: number;
+    },
+  ) => {
+    // Onboarding can reach the final step before MQTT is ready. Queue first, then
+    // wait through that reconnect window instead of rejecting the write immediately.
+    const targetDevice = options?.allowPendingConnectivity
+      ? await resolveFreshDevice(deviceId)
+      : await resolveFreshLiveDevice(deviceId);
+    if (!targetDevice) {
+      throw new Error("No AddOne device is active.");
+    }
     const baseRevision = targetDevice.runtimeRevision;
     const result = await applySettingsMutation.mutateAsync({
       deviceId: targetDevice.id,
@@ -883,8 +899,10 @@ export function useDeviceActions() {
       {
         baseRevision,
         commandId: result.command_id ?? null,
+        connectivityIssuePhase: options?.allowPendingConnectivity ? "checking" : undefined,
         errorMessage: "The device did not confirm the updated settings in time.",
         requireRevisionAdvance: true,
+        timeoutMs: options?.timeoutMs ?? DEVICE_COMMAND_WAIT_TIMEOUT_MS,
       },
       (device) => deviceMatchesSettingsPatch(device, patch),
     );
@@ -893,7 +911,14 @@ export function useDeviceActions() {
     void invalidateCloudDevices();
   };
 
-  const applySettingsDraft = async (patch: DeviceSettingsPatch, deviceId?: string) => {
+  const applySettingsDraft = async (
+    patch: DeviceSettingsPatch,
+    deviceId?: string,
+    options?: {
+      allowPendingConnectivity?: boolean;
+      timeoutMs?: number;
+    },
+  ) => {
     const normalizedPatch = Object.fromEntries(
       Object.entries(patch).filter(([, value]) => value !== undefined),
     ) as DeviceSettingsPatch;
@@ -923,7 +948,7 @@ export function useDeviceActions() {
 
     setIsAwaitingSettingsConfirmation(true);
     try {
-      await applySettingsPatch(normalizedPatch, deviceId);
+      await applySettingsPatch(normalizedPatch, deviceId, options);
     } finally {
       setIsAwaitingSettingsConfirmation(false);
     }
@@ -1373,12 +1398,18 @@ export function useDeviceActions() {
     },
     refreshDevices,
     refreshRuntimeSnapshot,
-    saveActiveHabitMetadata: async (params: {
-      dailyMinimum: string;
-      deviceId?: string;
-      habitName: string;
-      weeklyTarget: number;
-    }) => {
+    saveActiveHabitMetadata: async (
+      params: {
+        dailyMinimum: string;
+        deviceId?: string;
+        habitName: string;
+        weeklyTarget: number;
+      },
+      options?: {
+        allowPendingConnectivity?: boolean;
+        timeoutMs?: number;
+      },
+    ) => {
       const targetDevice = await resolveFreshDevice(params.deviceId);
       if (!targetDevice) {
         throw new Error("No AddOne device is active.");
@@ -1411,14 +1442,16 @@ export function useDeviceActions() {
           weeklyTarget: params.weeklyTarget,
         });
 
-        if (result.command_id && targetDevice.isLive) {
+        if (result.command_id && (targetDevice.isLive || options?.allowPendingConnectivity)) {
           await waitForDeviceMatch(
             targetDevice.id,
             {
               baseRevision,
               commandId: result.command_id,
+              connectivityIssuePhase: options?.allowPendingConnectivity ? "checking" : undefined,
               errorMessage: "The device did not confirm the updated weekly target in time.",
               requireRevisionAdvance: true,
+              timeoutMs: options?.timeoutMs ?? DEVICE_COMMAND_WAIT_TIMEOUT_MS,
             },
             (device) =>
               device.weeklyTarget === params.weeklyTarget &&

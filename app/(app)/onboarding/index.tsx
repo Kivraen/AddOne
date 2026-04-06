@@ -60,6 +60,7 @@ import { AddOneDevice, BoardPalette, RestoreChoice, SetupFlowStage } from "@/typ
 const CLAIMED_SESSION_DEVICE_GRACE_MS = 15000;
 const ONBOARDING_FIELD_GAP = 16;
 const ONBOARDING_DEVICE_REFRESH_MS = 1500;
+const ONBOARDING_COMMAND_WAIT_TIMEOUT_MS = 30_000;
 const ONBOARDING_TOTAL_STEPS = 4;
 const ONBOARDING_HANDOFF_EXIT_DELAY_MS = 180;
 const ONBOARDING_JOIN_DEVICE_AP_STEPS =
@@ -544,14 +545,23 @@ export default function OnboardingScreen() {
       setSetupError(null);
       setIsFinishingSetup(true);
       if (onboardingPatch && Object.keys(onboardingPatch).length > 0) {
-        await applySettingsDraft(onboardingPatch, activeDevice.id);
+        await applySettingsDraft(onboardingPatch, activeDevice.id, {
+          allowPendingConnectivity: true,
+          timeoutMs: ONBOARDING_COMMAND_WAIT_TIMEOUT_MS,
+        });
       }
-      await saveActiveHabitMetadata({
-        dailyMinimum: savedMinimumGoal,
-        deviceId: activeDevice.id,
-        habitName: normalizedHabitName,
-        weeklyTarget,
-      });
+      await saveActiveHabitMetadata(
+        {
+          dailyMinimum: savedMinimumGoal,
+          deviceId: activeDevice.id,
+          habitName: normalizedHabitName,
+          weeklyTarget,
+        },
+        {
+          allowPendingConnectivity: true,
+          timeoutMs: ONBOARDING_COMMAND_WAIT_TIMEOUT_MS,
+        },
+      );
       setIsBoardHandoffSettled(false);
       setIsFinishingSetup(false);
       setClaimedFlowStep("welcome");
