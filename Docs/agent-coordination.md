@@ -48,6 +48,8 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 ## Native App Proof Rule
 
 - For native app visual proof in this repo, default to simulator-first validation, not Playwright-first validation.
+- On this machine, local Expo or Metro work should use Node 22 (`/opt/homebrew/opt/node@22/bin/node`) unless there is a concrete reason not to. Do not default to Node 24 for local AddOne simulator work.
+- If Expo shows a macOS popup saying `React Native DevTools quit unexpectedly`, treat that as external debugger noise first, not as proof that the AddOne app crashed.
 - Preferred proof path for Expo app screens:
   - check whether Metro is already running and reuse it if possible
   - boot or open the iOS Simulator
@@ -60,11 +62,44 @@ This file defines how AddOne uses the coordinator-led stage workflow.
 - Do not default to browser or Chrome automation for native AddOne app proof when the same proof can be captured from the simulator.
 - If simulator proof is blocked, the worker should say exactly what is blocked instead of silently switching to browser proof.
 
+### Local Simulator Startup Rule
+
+Incorrect local actions from the April 5 simulator regression:
+
+- starting Expo or Metro with the shell-default Node 24
+- treating the `React Native DevTools quit unexpectedly` popup as proof that AddOne crashed
+- changing checked-in Expo config files like `app.config.js` or `metro.config.js` before first restoring the known-good runtime path
+- assuming Expo Go is disconnected just because the first cold Hermes bundle is slow after cleanup or repo moves
+
+Correct local setup on this machine:
+
+1. Reset local watcher and Expo state:
+   - `watchman watch-del-all`
+   - `watchman watch-project /Users/viktor/Desktop/DevProjects/Codex/AddOne`
+   - `rm -rf .expo`
+2. Start Metro under Node 22:
+   - `env EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_NO_GIT_STATUS=1 /opt/homebrew/opt/node@22/bin/node node_modules/.bin/expo start --host lan --clear`
+3. Attach iOS Expo Go:
+   - `xcrun simctl launch booted host.exp.Exponent`
+   - `xcrun simctl openurl booted 'exp://<LAN-IP>:8081'`
+4. Attach Android Expo Go:
+   - `adb reverse --remove-all`
+   - `adb reverse tcp:8081 tcp:8081`
+   - `adb shell am start -a android.intent.action.VIEW -d 'exp://<LAN-IP>:8081' host.exp.exponent`
+
+Expected behavior:
+
+- iOS and Android may take time on the first cold bundle after cache resets
+- Android may show `127.0.0.1:8081` inside Expo Go; that is valid when `adb reverse tcp:8081 tcp:8081` is active
+- if Metro stays alive and the bundle continues compiling, wait for the first cold attach before changing repo config
+
 Copy-paste brief snippet for native UI tasks:
 
 ```md
 Native proof rule:
 - For native AddOne app proof, prefer Metro + iOS Simulator, not Playwright/browser automation.
+- For local Expo or Metro runs on this machine, use Node 22 (`/opt/homebrew/opt/node@22/bin/node`) unless a task proves another runtime is safe.
+- If macOS shows `React Native DevTools quit unexpectedly`, do not treat that as an AddOne crash without separate app evidence.
 - Before starting a new dev server, check whether Metro is already running and reuse it if possible.
 - Preferred proof flow:
   1. verify or start Metro

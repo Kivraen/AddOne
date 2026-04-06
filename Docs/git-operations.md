@@ -99,3 +99,47 @@ This file records the real git and recovery state for AddOne so future agents do
 - There is no active recovery gap in the canonical repo after the April 5 re-home.
 - The salvage backup remains useful only as historical recovery material, not as the active source of truth.
 - The current open release question is not a git backup problem. The saved stable line is tagged and pushed; the remaining explicit gate is the external Supabase auth dashboard settings confirmation recorded in the April 4 RC checkpoint report.
+
+## Local Expo Recovery Rule
+
+The April 5 simulator failure was not caused by the repo re-home itself. The actual local failure pattern was:
+
+- Expo or Metro launched under the shell-default Node 24 instead of Node 22
+- stale Watchman or `.expo` state after cleanup and repo moves
+- cold Hermes bundle latency misread as a broken connection
+- temporary local config edits made before restoring the known-good runtime path
+
+Do not repeat that sequence.
+
+Wrong response:
+
+- editing `app.config.js` or `metro.config.js` first
+- assuming `React Native DevTools quit unexpectedly` means the AddOne app crashed
+- assuming Android is misconfigured because Expo Go shows `127.0.0.1:8081`
+
+Correct response:
+
+```bash
+cd /Users/viktor/Desktop/DevProjects/Codex/AddOne
+watchman watch-del-all
+watchman watch-project /Users/viktor/Desktop/DevProjects/Codex/AddOne
+rm -rf .expo
+env EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_NO_GIT_STATUS=1 \
+  /opt/homebrew/opt/node@22/bin/node node_modules/.bin/expo start --host lan --clear
+```
+
+Then attach simulators:
+
+```bash
+xcrun simctl launch booted host.exp.Exponent
+xcrun simctl openurl booted 'exp://<LAN-IP>:8081'
+
+adb reverse --remove-all
+adb reverse tcp:8081 tcp:8081
+adb shell am start -a android.intent.action.VIEW -d 'exp://<LAN-IP>:8081' host.exp.exponent
+```
+
+Notes:
+
+- If macOS shows `React Native DevTools quit unexpectedly`, treat it as external debugger noise unless the app itself is separately failing.
+- A slow first cold bundle after cleanup can still be healthy. Wait for Metro to finish compiling before changing repo config.
