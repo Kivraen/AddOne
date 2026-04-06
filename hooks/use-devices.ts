@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   applyDeviceSettingsFromApp,
@@ -19,6 +19,7 @@ import {
 } from "@/lib/supabase/addone-repository";
 import { addOneQueryKeys } from "@/lib/addone-query-keys";
 import { DEVICE_OFFLINE_CONFIRMATION_MS, latestConnectionActivityAt } from "@/lib/device-connection";
+import { preserveRecoveringDeviceDisplayState } from "@/lib/device-recovery";
 import {
   deviceMatchesPendingMirror,
   overlayPendingDeviceMirror,
@@ -209,6 +210,7 @@ type CelebrationPreviewRequest = {
 };
 
 export function useDevices() {
+  const stableReadyDeviceByIdRef = useRef<Record<string, AddOneDevice>>({});
   const { isAuthenticated, mode, status, user } = useAuth();
   const demoDevices = useAddOneStore((state) => state.devices);
   const demoActiveDeviceId = useAddOneStore((state) => state.activeDeviceId);
@@ -284,8 +286,29 @@ export function useDevices() {
       syncState,
     };
   });
-  const effectiveDevices = devicesWithConnectionState;
+  const effectiveDevices = devicesWithConnectionState.map((device) =>
+    preserveRecoveringDeviceDisplayState(device, stableReadyDeviceByIdRef.current[device.id]),
+  );
   const activeDeviceId = mode === "demo" ? demoActiveDeviceId : cloudActiveDeviceId;
+
+  useEffect(() => {
+    const nextCache = { ...stableReadyDeviceByIdRef.current };
+    const visibleDeviceIds = new Set(devicesWithConnectionState.map((device) => device.id));
+
+    for (const deviceId of Object.keys(nextCache)) {
+      if (!visibleDeviceIds.has(deviceId)) {
+        delete nextCache[deviceId];
+      }
+    }
+
+    for (const device of devicesWithConnectionState) {
+      if (device.accountRemovalState === "active" && device.recoveryState === "ready") {
+        nextCache[device.id] = device;
+      }
+    }
+
+    stableReadyDeviceByIdRef.current = nextCache;
+  }, [devicesWithConnectionState]);
 
   useEffect(() => {
     if (mode !== "cloud") {

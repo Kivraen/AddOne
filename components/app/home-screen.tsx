@@ -118,7 +118,7 @@ function boardInsight(device: AddOneDevice, fillPercentage: number, remainingThi
   if (isDeviceRecovering(device)) {
     return {
       eyebrow: "Board note",
-      message: "Recovery is still finishing. Controls stay locked until the restored board is fully back.",
+      message: "A restore or reset is still syncing. Controls stay locked until the board publishes a fresh live snapshot.",
     };
   }
 
@@ -726,7 +726,7 @@ export function HomeScreen() {
       : headerStatusState === "verifying-board"
       ? "Verifying the current board…"
       : headerStatusState === "recovering"
-        ? "Recovery is finishing. Controls come back after the restored board syncs."
+        ? "A restore or reset is still syncing. Controls come back after the board publishes its next live snapshot."
         : headerStatusState === "needs-recovery"
           ? "This board needs recovery before it can be controlled."
       : headerStatusState === "offline"
