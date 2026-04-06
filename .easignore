@@ -22,5 +22,9 @@ deploy/beta-vps/certs/
 
 # Local-only workspace artifacts not needed in builds
 .claude/
+.codex-tmp/
+node_modules_corrupt_backup_20260318/
+node_modules_sdk54_backup/
 AddOne-Experiments/
 Media/Side Logo.xcs
+_repo-backups/
