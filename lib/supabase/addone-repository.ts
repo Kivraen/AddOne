@@ -69,6 +69,7 @@ type DeviceHistoryMetricRow = {
 
 const lastKnownOwnedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
 const lastKnownSharedHistoryMetricsByDevice: Record<string, DeviceHistoryMetricRow | undefined> = {};
+const DEVICE_APP_RPC_TIMEOUT_MS = 15_000;
 type DeviceFirmwareUpdateSummaryRow = {
   availability_reason: string | null;
   available_firmware_version: string | null;
@@ -203,6 +204,13 @@ function isTransientNetworkFailureMessage(message: string) {
   return /network request failed|network request timed out|timed out|failed to fetch|load failed/i.test(message);
 }
 
+class DeviceAppRpcTimeoutError extends Error {
+  constructor(message = "Timed out contacting AddOne cloud. Check internet, leave the AddOne Wi-Fi if you are still on it, then try again.") {
+    super(message);
+    this.name = "DeviceAppRpcTimeoutError";
+  }
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -228,6 +236,32 @@ async function withTransientNetworkRetry<T>(operation: () => Promise<T>, options
   }
 
   throw lastError instanceof Error ? lastError : new Error("The request failed.");
+}
+
+async function withDeviceAppRpcTimeout<T>(operation: Promise<T>, timeoutMs = DEVICE_APP_RPC_TIMEOUT_MS) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new DeviceAppRpcTimeoutError());
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function callTimedDeviceAppRpc(operation: Promise<unknown>) {
+  return (await withDeviceAppRpcTimeout(operation)) as {
+    data: unknown;
+    error: { message: string } | null;
+  };
 }
 
 function stripSeconds(value: string | null | undefined, fallback = "00:00") {
@@ -1169,10 +1203,12 @@ export async function requestRuntimeSnapshotFromApp(params: {
   requestId: string;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("request_runtime_snapshot_from_app", {
-    p_device_id: params.deviceId,
-    p_request_id: params.requestId,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("request_runtime_snapshot_from_app", {
+      p_device_id: params.deviceId,
+      p_request_id: params.requestId,
+    }),
+  );
 
   return assertData(
     error,
@@ -1195,14 +1231,16 @@ export async function applyHistoryDraftFromApp(params: {
     local_date: update.localDate,
   }));
 
-  const { data, error } = await (supabase.rpc as any)("apply_history_draft_from_app", {
-    p_base_revision: params.baseRevision,
-    p_current_week_start: params.currentWeekStart ?? null,
-    p_device_id: params.deviceId,
-    p_updates: updates,
-    p_draft_id: params.draftId,
-    p_week_targets: params.weekTargets ?? null,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("apply_history_draft_from_app", {
+      p_base_revision: params.baseRevision,
+      p_current_week_start: params.currentWeekStart ?? null,
+      p_device_id: params.deviceId,
+      p_updates: updates,
+      p_draft_id: params.draftId,
+      p_week_targets: params.weekTargets ?? null,
+    }),
+  );
 
   return assertData(
     error,
@@ -1213,10 +1251,12 @@ export async function applyHistoryDraftFromApp(params: {
 
 export async function applyDeviceSettingsFromApp(deviceId: string, patch: DeviceSettingsPatch) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("apply_device_settings_from_app", {
-    p_device_id: deviceId,
-    p_patch: patch,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("apply_device_settings_from_app", {
+      p_device_id: deviceId,
+      p_patch: patch,
+    }),
+  );
 
   return assertData(
     error,
@@ -1230,10 +1270,12 @@ export async function enterWifiRecoveryFromApp(params: {
   requestId: string;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("enter_wifi_recovery_from_app", {
-    p_device_id: params.deviceId,
-    p_request_id: params.requestId,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("enter_wifi_recovery_from_app", {
+      p_device_id: params.deviceId,
+      p_request_id: params.requestId,
+    }),
+  );
 
   return assertData(
     error,
@@ -1247,10 +1289,12 @@ export async function requestDeviceFactoryResetFromApp(params: {
   requestId: string;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("request_device_factory_reset_from_app", {
-    p_device_id: params.deviceId,
-    p_request_id: params.requestId,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("request_device_factory_reset_from_app", {
+      p_device_id: params.deviceId,
+      p_request_id: params.requestId,
+    }),
+  );
 
   return assertData(
     error,
@@ -1267,13 +1311,15 @@ export async function resetDeviceHistoryFromApp(params: {
   weeklyTarget: number;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("reset_device_history_from_app", {
-    p_daily_minimum: params.dailyMinimum,
-    p_device_id: params.deviceId,
-    p_habit_name: params.habitName,
-    p_request_id: params.requestId,
-    p_weekly_target: params.weeklyTarget,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("reset_device_history_from_app", {
+      p_daily_minimum: params.dailyMinimum,
+      p_device_id: params.deviceId,
+      p_habit_name: params.habitName,
+      p_request_id: params.requestId,
+      p_weekly_target: params.weeklyTarget,
+    }),
+  );
 
   return assertData(
     error,
@@ -1289,12 +1335,14 @@ export async function saveActiveHabitMetadataFromApp(params: {
   weeklyTarget: number;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("update_active_habit_metadata_from_app", {
-    p_daily_minimum: params.dailyMinimum,
-    p_device_id: params.deviceId,
-    p_habit_name: params.habitName,
-    p_weekly_target: params.weeklyTarget,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("update_active_habit_metadata_from_app", {
+      p_daily_minimum: params.dailyMinimum,
+      p_device_id: params.deviceId,
+      p_habit_name: params.habitName,
+      p_weekly_target: params.weeklyTarget,
+    }),
+  );
 
   return assertData(
     error,
@@ -1317,10 +1365,12 @@ export async function setActiveHabitStartDateFromApp(params: {
   habitStartedOnLocal: string;
 }) {
   const supabase = ensureSupabase();
-  const { data, error } = await (supabase.rpc as any)("set_active_habit_start_date_from_app", {
-    p_device_id: params.deviceId,
-    p_habit_started_on_local: params.habitStartedOnLocal,
-  });
+  const { data, error } = await callTimedDeviceAppRpc(
+    (supabase.rpc as any)("set_active_habit_start_date_from_app", {
+      p_device_id: params.deviceId,
+      p_habit_started_on_local: params.habitStartedOnLocal,
+    }),
+  );
 
   return assertData(
     error,
