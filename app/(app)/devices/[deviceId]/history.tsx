@@ -21,6 +21,10 @@ import {
 } from "@/lib/board";
 import { withAlpha } from "@/lib/color";
 import { buildDeviceHistoryView, resolveDeviceWeekTarget } from "@/lib/device-history-view";
+import {
+  applyBackdatedHabitStartTarget,
+  finalizeHistoryDraftWeekTargetsForSave,
+} from "@/lib/history-week-targets";
 import { connectionGraceState } from "@/lib/device-connection";
 import { useDeviceHistorySyncStore } from "@/store/device-history-sync-store";
 import { AddOneDevice, HistoryDraftUpdate } from "@/types/addone";
@@ -140,60 +144,6 @@ function shiftLocalDate(localDate: string, days: number) {
   const date = new Date(`${localDate}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
-}
-
-function resolveEditorWeekTargets(device: AddOneDevice) {
-  const weekCount = device.dateGrid?.length ?? device.days.length;
-  return Array.from({ length: weekCount }, (_, weekIndex) => resolveDeviceWeekTarget(device, weekIndex));
-}
-
-function preserveCurrentWeekTarget(device: AddOneDevice, weekTargets: number[] | null) {
-  if (!Array.isArray(weekTargets) || weekTargets.length === 0) {
-    return weekTargets;
-  }
-
-  const nextWeekTargets = [...weekTargets];
-  nextWeekTargets[0] = resolveDeviceWeekTarget(device, 0);
-  return nextWeekTargets;
-}
-
-function applyBackdatedHabitStartTarget(
-  device: AddOneDevice,
-  habitStartedOnLocal: string,
-  weeklyTarget: number,
-  previousHabitStartLocalDateOverride?: string | null,
-) {
-  const previousHabitStartLocalDate = previousHabitStartLocalDateOverride ?? resolveHabitStartLocalDate(device);
-  const nextDevice: AddOneDevice = {
-    ...device,
-    habitStartedOnLocal,
-  };
-
-  if (
-    !previousHabitStartLocalDate ||
-    habitStartedOnLocal >= previousHabitStartLocalDate ||
-    !device.dateGrid
-  ) {
-    return nextDevice;
-  }
-
-  const nextWeekTargets = resolveEditorWeekTargets(device);
-
-  for (let weekIndex = 1; weekIndex < device.dateGrid.length; weekIndex += 1) {
-    const weekDates = device.dateGrid[weekIndex] ?? [];
-    const exposesNewHistoryInWeek = weekDates.some(
-      (localDate) => localDate >= habitStartedOnLocal && localDate < previousHabitStartLocalDate,
-    );
-
-    if (exposesNewHistoryInWeek) {
-      nextWeekTargets[weekIndex] = weeklyTarget;
-    }
-  }
-
-  return {
-    ...nextDevice,
-    weekTargets: preserveCurrentWeekTarget(device, nextWeekTargets),
-  };
 }
 
 function formatHistoryDateLabel(localDate: string) {
@@ -683,8 +633,8 @@ export default function DeviceHistoryRoute() {
 
       const nextExplicitUpdates = collectHistoryDraftUpdates(nextBaseDevice, draftDevice);
       const updates = [...nextExplicitUpdates, ...collectPastWeekBackfillUpdates(draftDevice, nextExplicitUpdates)];
-      const nextWeekTargets = preserveCurrentWeekTarget(
-        nextBaseDevice,
+      const nextWeekTargets = finalizeHistoryDraftWeekTargetsForSave(
+        baseDevice,
         Array.isArray(draftDevice.weekTargets) && draftDevice.weekTargets.length === draftDevice.days.length
           ? [...draftDevice.weekTargets]
           : null,
